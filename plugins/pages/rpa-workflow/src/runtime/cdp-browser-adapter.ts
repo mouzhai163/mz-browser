@@ -54,25 +54,48 @@ export class CdpBrowserAdapter implements BrowserAdapter {
     const waitUntil = options?.waitUntil === 'commit' ? 'commit' : 'load';
     const sessionId = await this.createPageSession();
 
-    const navigation = await this.client.send<CdpNavigateResult>('Page.navigate', { url }, sessionId);
-    if (navigation.errorText) {
-      throw new Error(navigation.errorText);
-    }
+    // Subscribe before sending Page.navigate: a fast page can fire its load event
+    // before the navigate response is processed, and a late subscription would miss it.
+    const waiters = new AbortController();
+    const loaded =
+      waitUntil === 'commit'
+        ? null
+        : Promise.any([
+            this.client.waitForEvent('Page.loadEventFired', {
+              sessionId,
+              timeoutMs: 60000,
+              signal: waiters.signal,
+            }),
+            this.client.waitForEvent('Page.frameStoppedLoading', {
+              sessionId,
+              timeoutMs: 60000,
+              signal: waiters.signal,
+            }),
+          ]);
+    // Never leave a rejected waiter unobserved if navigation fails first.
+    loaded?.catch(() => undefined);
 
-    if (waitUntil === 'commit') {
-      return;
+    try {
+      const navigation = await this.client.send<CdpNavigateResult>(
+        'Page.navigate',
+        { url },
+        sessionId
+      );
+      if (navigation.errorText) {
+        throw new Error(navigation.errorText);
+      }
+      if (loaded) {
+        await loaded;
+      }
+    } catch (error) {
+      if (error instanceof AggregateError) {
+        throw error.errors[0] instanceof Error ? error.errors[0] : error;
+      }
+      throw error;
+    } finally {
+      // Releases whichever waiter did not fire so it cannot leak until its timeout.
+      waiters.abort();
     }
-
-    await Promise.race([
-      this.client.waitForEvent('Page.loadEventFired', {
-        sessionId,
-        timeoutMs: 60000,
-      }),
-      this.client.waitForEvent('Page.frameStoppedLoading', {
-        sessionId,
-        timeoutMs: 60000,
-      }),
-    ]);
   }
 
   async selectTab(index: number): Promise<void> {

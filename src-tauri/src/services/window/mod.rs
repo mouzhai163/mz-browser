@@ -281,8 +281,10 @@ impl WindowService {
                 .center()
                 .decorations(false)
                 .visible(false)
-                .drag_and_drop(false)
                 .devtools(devtools_enabled);
+        // `drag_and_drop` is only provided by Tauri on Windows.
+        #[cfg(windows)]
+        let builder = builder.drag_and_drop(false);
         #[cfg(all(target_os = "windows", feature = "desktop-e2e"))]
         let builder = builder.additional_browser_args(
             &crate::app::e2e::browser_args().map_err(crate::core::error::Error::from)?,
@@ -313,16 +315,18 @@ impl WindowService {
         #[cfg(not(feature = "production"))]
         let devtools_enabled = true;
 
-        let window =
+        let builder =
             WebviewWindowBuilder::new(app_handle, "syncer", WebviewUrl::App("syncer.html".into()))
                 .data_directory(Self::get_webview_data_dir()?)
                 .title("同步器")
                 .inner_size(400.0, 600.0)
                 .resizable(true)
                 .decorations(false)
-                .drag_and_drop(false)
-                .devtools(devtools_enabled)
-                .build()?;
+                .devtools(devtools_enabled);
+        // `drag_and_drop` is only provided by Tauri on Windows.
+        #[cfg(windows)]
+        let builder = builder.drag_and_drop(false);
+        let window = builder.build()?;
 
         window.show()?;
         window.set_focus()?;

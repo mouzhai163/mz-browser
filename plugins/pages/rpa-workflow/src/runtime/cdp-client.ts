@@ -156,22 +156,39 @@ export class CdpClient {
 
   async waitForEvent<T = unknown>(
     method: string,
-    options?: { sessionId?: string; timeoutMs?: number }
+    options?: { sessionId?: string; timeoutMs?: number; signal?: AbortSignal }
   ): Promise<T> {
     const timeoutMs = options?.timeoutMs ?? 10000;
+    const signal = options?.signal;
+    if (signal?.aborted) {
+      throw new Error('CDP_REQUEST_ABORTED');
+    }
 
     return new Promise<T>((resolve, reject) => {
+      const onAbort = () => {
+        this.eventWaiters.delete(waiter);
+        clearTimeout(waiter.timeoutId);
+        reject(new Error('CDP_REQUEST_ABORTED'));
+      };
       const waiter: CdpEventWaiter = {
         method,
         sessionId: options?.sessionId,
-        resolve: (value) => resolve(value as T),
-        reject,
+        resolve: (value) => {
+          signal?.removeEventListener('abort', onAbort);
+          resolve(value as T);
+        },
+        reject: (reason) => {
+          signal?.removeEventListener('abort', onAbort);
+          reject(reason);
+        },
         timeoutId: setTimeout(() => {
           this.eventWaiters.delete(waiter);
+          signal?.removeEventListener('abort', onAbort);
           reject(new Error(`Timed out waiting for CDP event: ${method}`));
         }, timeoutMs),
       };
 
+      signal?.addEventListener('abort', onAbort, { once: true });
       this.eventWaiters.add(waiter);
     });
   }

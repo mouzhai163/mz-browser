@@ -61,6 +61,12 @@ export function AccountImportDrawer({
   const [page, setPage] = useState<number>(1);
 
   // 统计
+  // DataTable calls getRowKey(row) with a single argument, so derive a stable key
+  // from each item's position in the full import list rather than a callback index.
+  const rowIndexByItem = useMemo(
+    () => new Map<ImportAccountItem, number>(items.map((item, index) => [item, index])),
+    [items]
+  );
   const validCount = useMemo(() => items.filter((item) => item.valid).length, [items]);
   const invalidCount = useMemo(() => items.filter((item) => !item.valid).length, [items]);
 
@@ -260,7 +266,7 @@ export function AccountImportDrawer({
             <DataTable
               data={pagedItems}
               columns={columns}
-              getRowKey={(_, index) => `import-${index}`}
+              getRowKey={(row) => `import-${rowIndexByItem.get(row) ?? -1}`}
               skeletonRows={pageSize}
               emptyText="没有数据"
               className="m-0 border-0 rounded-none flex-1 min-h-0 [&_td]:py-2 [&_th]:py-3 [&_tbody_tr:last-child]:border-b-0"
