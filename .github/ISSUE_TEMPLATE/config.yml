@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Contribution guide
+    url: https://github.com/Simprint/simprint/blob/main/CONTRIBUTING.md
+    about: Read the contribution workflow, development setup, and PR expectations.
+  - name: Project README
+    url: https://github.com/Simprint/simprint/blob/main/README.md
+    about: Read project overview, local run instructions, and current status.

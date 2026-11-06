@@ -1,0 +1,10 @@
+{
+  "id": "browser-extensions",
+  "name": "Browser Extensions",
+  "version": "1.0.0",
+  "description": "浏览器插件管理页面",
+  "author": "Simprint Team",
+  "entry": "./src/index.tsx",
+  "slots": [],
+  "enabled": true
+}

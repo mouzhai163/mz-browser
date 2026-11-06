@@ -1,0 +1,10 @@
+{
+  "id": "environment-manager",
+  "name": "Environment Manager",
+  "version": "1.0.0",
+  "description": "环境列表页面插件",
+  "author": "Simprint Team",
+  "entry": "./src/index.tsx",
+  "slots": [],
+  "enabled": true
+}

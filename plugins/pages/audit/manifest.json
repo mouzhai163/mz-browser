@@ -1,0 +1,10 @@
+{
+  "id": "audit",
+  "name": "Audit",
+  "version": "1.0.0",
+  "description": "审计页面插件",
+  "author": "Simprint Team",
+  "entry": "./src/index.tsx",
+  "slots": [],
+  "enabled": true
+}

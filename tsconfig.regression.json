@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "incremental": false
+  },
+  "include": [
+    "src/lib/update-policy.ts",
+    "src/lib/app-updater.ts",
+    "plugins/pages/api-ai/src/components/ApiConsolePage.tsx",
+    "plugins/pages/api-ai/src/components/McpServicePanel.tsx",
+    "plugins/pages/api-ai/src/components/McpAccessSettings.tsx",
+    "plugins/pages/api-ai/src/hooks/useMcpService.ts",
+    "plugins/layouts/app-layout/src/stores/download-store.ts",
+    "plugins/services/store/src/stores/workspace/workspace-store.ts",
+    "plugins/pages/rpa-workflow/src/runtime/cdp-client.ts"
+  ]
+}

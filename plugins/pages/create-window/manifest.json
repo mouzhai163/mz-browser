@@ -1,0 +1,10 @@
+{
+  "id": "create-window",
+  "name": "Create Window",
+  "version": "1.0.0",
+  "description": "创建窗口（环境）页面插件",
+  "author": "Simprint Team",
+  "entry": "./src/index.tsx",
+  "slots": [],
+  "enabled": true
+}

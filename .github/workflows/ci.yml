@@ -1,0 +1,85 @@
+name: ci
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "deploy/**"
+      - "src/**"
+      - "src-tauri/**"
+      - "plugins/**"
+      - "tests/**"
+      - "scripts/windows/**"
+      - "automation/**"
+      - "scripts/smoke-browser.mjs"
+      - "tsconfig.regression.json"
+      - "index.html"
+      - "vite.config.ts"
+      - "build.cjs"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "deploy/**"
+      - "src/**"
+      - "src-tauri/**"
+      - "plugins/**"
+      - "tests/**"
+      - "scripts/windows/**"
+      - "automation/**"
+      - "scripts/smoke-browser.mjs"
+      - "tsconfig.regression.json"
+      - "index.html"
+      - "vite.config.ts"
+      - "build.cjs"
+      - "package.json"
+      - "pnpm-lock.yaml"
+
+jobs:
+  check:
+    runs-on: windows-latest
+    env:
+      ENV_NAME: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Regression tests
+        run: pnpm test
+
+      - name: Regression typecheck
+        run: pnpm typecheck:regression
+
+      - name: Build frontend
+        run: node build.cjs
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust check
+        working-directory: src-tauri
+        run: cargo check --locked
+
+      - name: Rust unit and MCP transport tests
+        working-directory: src-tauri
+        run: cargo test --locked --lib
+
+      - name: Browser runtime policy tests
+        working-directory: src-tauri
+        run: cargo test --locked -p runtime

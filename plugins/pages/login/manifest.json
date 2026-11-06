@@ -1,0 +1,10 @@
+{
+  "id": "login",
+  "name": "Login",
+  "version": "1.0.0",
+  "description": "登录页面插件",
+  "author": "Simprint Team",
+  "entry": "./src/index.tsx",
+  "slots": [],
+  "enabled": true
+}

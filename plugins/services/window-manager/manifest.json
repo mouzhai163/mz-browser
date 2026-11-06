@@ -1,0 +1,10 @@
+{
+  "id": "window-manager",
+  "name": "Window Manager Service",
+  "version": "1.0.0",
+  "description": "窗口管理服务插件，负责主窗口显示控制",
+  "author": "Simprint Team",
+  "entry": "./src/index.tsx",
+  "slots": [],
+  "enabled": true
+}

@@ -1,0 +1,96 @@
+name: Bug report
+description: Report a reproducible bug in Simprint
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug.
+
+        Please fill in the details below so the issue can be reproduced and investigated efficiently.
+
+        You may respond in English or Chinese.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which area is most closely related to the problem?
+      options:
+        - Frontend / UI
+        - Desktop shell / Tauri
+        - Build / CI / Packaging
+        - Local development
+        - Server-backed workflow
+        - Runtime process related
+        - Browser-kernel related
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Provide the app version, tag, or commit hash if known.
+      placeholder: e.g. v0.2.13 or ba25397
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Where did you encounter this issue?
+      options:
+        - Local development build
+        - Packaged desktop app
+        - CI / GitHub Actions
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      description: Include OS name and version.
+      placeholder: e.g. Windows 11 24H2
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: List the exact steps needed to reproduce the issue.
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: Describe what you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: Describe what actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, screenshots, or additional context
+      description: Paste relevant logs or attach screenshots if available.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and did not find an obvious duplicate.
+          required: true
+        - label: I included enough detail for someone else to try reproducing the problem.
+          required: true

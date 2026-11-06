@@ -1,0 +1,8 @@
+{
+  "name": "@simprint/plugin-i18n",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {}
+}

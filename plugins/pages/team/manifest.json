@@ -1,0 +1,10 @@
+{
+  "id": "team",
+  "name": "Team Management",
+  "version": "1.0.0",
+  "description": "团队管理页面",
+  "author": "Simprint Team",
+  "entry": "./src/index.tsx",
+  "slots": [],
+  "enabled": true
+}

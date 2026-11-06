@@ -1,0 +1,42 @@
+{
+  "channels": {
+    "embedBootstrapper": {
+      "file": "latest.json"
+    },
+    "fixed-runtime": {
+      "file": "latest-fixed.json"
+    }
+  },
+  "targets": [
+    {
+      "channel": "embedBootstrapper",
+      "keys": ["windows-x86_64", "windows-x86_64-nsis"],
+      "asset": "Simprint_{version}_x64-setup.exe"
+    },
+    {
+      "channel": "embedBootstrapper",
+      "keys": ["windows-aarch64", "windows-aarch64-nsis"],
+      "asset": "Simprint_{version}_arm64-setup.exe"
+    },
+    {
+      "channel": "embedBootstrapper",
+      "keys": ["windows-i686", "windows-i686-nsis"],
+      "asset": "Simprint_{version}_x86-setup.exe"
+    },
+    {
+      "channel": "fixed-runtime",
+      "keys": ["windows-x86_64", "windows-x86_64-nsis"],
+      "asset": "Simprint_{version}_x64-full-setup.exe"
+    },
+    {
+      "channel": "fixed-runtime",
+      "keys": ["windows-aarch64", "windows-aarch64-nsis"],
+      "asset": "Simprint_{version}_arm64-full-setup.exe"
+    },
+    {
+      "channel": "fixed-runtime",
+      "keys": ["windows-i686", "windows-i686-nsis"],
+      "asset": "Simprint_{version}_x86-full-setup.exe"
+    }
+  ]
+}

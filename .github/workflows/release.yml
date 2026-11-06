@@ -1,0 +1,96 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.release.outputs.release_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Create or refresh draft release
+        id: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node deploy/prepare-github-release.mjs "${{ github.repository }}" "${{ github.ref_name }}"
+
+  build-windows:
+    needs: prepare-release
+    uses: ./.github/workflows/build-windows.yml
+    with:
+      release_id: ${{ needs.prepare-release.outputs.release_id }}
+      release_tag: ${{ github.ref_name }}
+    secrets: inherit
+
+  finalize-release:
+    needs:
+      - prepare-release
+      - build-windows
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Generate updater manifests from completed release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ needs.prepare-release.outputs.release_id }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          $releaseDir = Join-Path $env:RUNNER_TEMP "simprint-release"
+          $signatureDir = Join-Path $releaseDir "signatures"
+          $manifestDir = Join-Path $releaseDir "manifests"
+          New-Item -ItemType Directory -Path $signatureDir -Force | Out-Null
+          New-Item -ItemType Directory -Path $manifestDir -Force | Out-Null
+
+          $releaseMetadataPath = Join-Path $releaseDir "release.json"
+          $releaseAssetsPath = Join-Path $releaseDir "assets.json"
+          gh api "repos/$env:REPOSITORY/releases/$env:RELEASE_ID" |
+            Out-File -FilePath $releaseMetadataPath -Encoding utf8
+          gh api --paginate --slurp "repos/$env:REPOSITORY/releases/$env:RELEASE_ID/assets?per_page=100" |
+            Out-File -FilePath $releaseAssetsPath -Encoding utf8
+          gh release download $env:RELEASE_TAG --pattern "*.sig" --dir $signatureDir
+
+          node deploy/generate-updater-manifests.mjs `
+            $releaseMetadataPath `
+            $releaseAssetsPath `
+            $signatureDir `
+            $manifestDir `
+            $env:REPOSITORY
+
+          gh release upload $env:RELEASE_TAG `
+            (Join-Path $manifestDir "latest.json") `
+            (Join-Path $manifestDir "latest-fixed.json") `
+            --clobber
+
+      - name: Publish completed release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ github.ref_name }}" --draft=false --latest

@@ -1,0 +1,10 @@
+{
+  "id": "register",
+  "name": "Register",
+  "version": "1.0.0",
+  "description": "注册页面插件",
+  "author": "Simprint Team",
+  "entry": "./src/index.tsx",
+  "slots": [],
+  "enabled": true
+}

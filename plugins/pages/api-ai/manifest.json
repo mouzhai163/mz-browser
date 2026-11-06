@@ -1,0 +1,10 @@
+{
+  "id": "api-console",
+  "name": "API & AI",
+  "version": "1.0.0",
+  "description": "API & AI 页面插件",
+  "author": "Simprint Team",
+  "entry": "./src/index.tsx",
+  "slots": [],
+  "enabled": true
+}

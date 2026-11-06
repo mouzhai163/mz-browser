@@ -1,0 +1,10 @@
+{
+  "id": "i18n",
+  "name": "I18n Service",
+  "version": "1.0.0",
+  "description": "Provide i18n resource contributions (zh-CN/en-US) for plugins",
+  "author": "Simprint Team",
+  "entry": "./src/index.ts",
+  "slots": [],
+  "enabled": true
+}

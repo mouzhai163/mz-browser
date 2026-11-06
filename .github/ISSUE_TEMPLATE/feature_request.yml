@@ -1,0 +1,72 @@
+name: Feature request
+description: Suggest an improvement or new feature for Simprint
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement.
+
+        Please describe the problem and the desired outcome as concretely as possible.
+
+        You may respond in English or Chinese.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or limitation
+      description: What problem are you trying to solve?
+      placeholder: Describe the current limitation, friction, or missing capability.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like Simprint to do instead?
+      placeholder: Describe your preferred solution.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: List any alternatives or workarounds you considered.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which area is this request most related to?
+      options:
+        - Frontend / UI
+        - Desktop shell / Tauri
+        - Build / CI / Packaging
+        - Local development
+        - Server-backed workflow
+        - Runtime process related
+        - Browser-kernel related
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use case
+      description: Who benefits from this and in what scenario?
+      placeholder: Describe the user flow or operational scenario.
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution intent
+      options:
+        - label: I would be interested in working on this feature.
+        - label: I am willing to help validate or test this feature.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and did not find an obvious duplicate.
+          required: true

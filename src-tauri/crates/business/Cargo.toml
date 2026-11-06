@@ -1,0 +1,37 @@
+[package]
+name = "business"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "business"
+path = "src/lib.rs"
+
+[dependencies]
+tokio = { version = "1", features = [
+    "macros",
+    "rt-multi-thread",
+] }
+serde = { version = "^1.0.217", features = ["derive"] }
+serde_json = "^1"
+thiserror = "2"
+anyhow = "1.0.93"
+chrono = { version = "0.4", features = ["serde"] }
+sha2 = "0.10.8"
+hex = "0.4"
+tracing = "0.1"
+sqlx = { version = "0.8", features = [
+    "sqlite",
+    "runtime-tokio",
+    "chrono",
+    "json",
+    "uuid",
+] }
+uuid = { version = "1.11.0", features = [
+    "v4",
+    "fast-rng",
+    "macro-diagnostics",
+    "serde",
+] }
+url = "2.5.4"

@@ -1,0 +1,10 @@
+{
+  "id": "syncer",
+  "name": "Syncer Window",
+  "version": "1.0.0",
+  "description": "浏览器同步器悬浮窗口",
+  "author": "Simprint Team",
+  "entry": "./src/index.tsx",
+  "slots": [],
+  "enabled": true
+}

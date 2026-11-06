@@ -1,0 +1,10 @@
+{
+  "id": "system-settings",
+  "name": "System Settings",
+  "version": "1.0.0",
+  "description": "系统设置页面插件",
+  "author": "Simprint Team",
+  "entry": "./src/index.tsx",
+  "slots": [],
+  "enabled": true
+}
