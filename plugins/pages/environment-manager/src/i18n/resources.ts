@@ -65,7 +65,8 @@ export const environmentResources = {
         assignGroup: '配置分组',
         editCookies: '编辑 Cookies',
         clearCache: '清除缓存',
-        createShortcut: '创建桌面快捷方式',
+        setDefaultBrowser: '设为默认浏览器',
+        clearDefaultBrowser: '取消默认浏览器',
         toggleFailed: '切换状态失败',
         deleteFailed: '删除失败',
         assignTagFailed: '分配标签失败',
@@ -82,17 +83,24 @@ export const environmentResources = {
       filterAllGroups: '所有分组',
       confirmDelete: '确定要删除环境 "{{name}}" 吗？此操作不可恢复。',
     },
-    shortcut: {
-      created: '已在桌面创建“{{name}}”的快捷方式，双击即可直接打开这个环境',
-      createdMany: '已在桌面创建 {{count}} 个快捷方式',
-      partial: '已创建 {{ok}} 个，{{failed}} 个失败：{{reason}}',
-      failed: '创建桌面快捷方式失败',
+    defaultBrowser: {
+      badge: '默认浏览器',
+      badgeHint: '外部软件里点开的链接固定在这个环境打开',
+      setDone: '已将“{{name}}”设为默认浏览器，外部链接会直接在这个环境里打开',
+      setNeedSystemStep:
+        '已将“{{name}}”设为默认浏览器。还差一步：请在 Windows 设置里把默认浏览器选为 Simprint',
+      cleared: '已取消默认浏览器',
+      clearedRestore:
+        '已取消默认浏览器。如果 Windows 仍把 Simprint 当作默认浏览器，请在系统设置里改回你常用的浏览器',
+      openSettings: '打开系统设置',
+      systemStepBanner:
+        '默认浏览器环境已设置，但 Windows 的默认浏览器还不是 Simprint。请在系统“默认应用 → Web 浏览器”里选择 Simprint，外部链接才会进入这个环境',
+      failed: '设置默认浏览器失败',
     },
     batchActions: {
       selected: '已选择',
       batchStart: '批量启动',
       batchStop: '批量停止',
-      createShortcuts: '创建桌面快捷方式',
       updateProxy: '更新代理',
       moveToGroup: '移动至分组',
       assignTag: '分配标签',
@@ -556,7 +564,8 @@ export const environmentResources = {
         assignGroup: 'Assign Group',
         editCookies: 'Edit Cookies',
         clearCache: 'Clear Cache',
-        createShortcut: 'Create Desktop Shortcut',
+        setDefaultBrowser: 'Set as Default Browser',
+        clearDefaultBrowser: 'Unset Default Browser',
         toggleFailed: 'Failed to toggle status',
         deleteFailed: 'Failed to delete',
         assignTagFailed: 'Failed to assign tag',
@@ -575,17 +584,24 @@ export const environmentResources = {
       confirmDelete:
         'Are you sure you want to delete environment "{{name}}"? This action cannot be undone.',
     },
-    shortcut: {
-      created: 'Desktop shortcut for "{{name}}" created; double-click it to open this environment directly',
-      createdMany: 'Created {{count}} desktop shortcuts',
-      partial: 'Created {{ok}}, {{failed}} failed: {{reason}}',
-      failed: 'Failed to create the desktop shortcut',
+    defaultBrowser: {
+      badge: 'Default browser',
+      badgeHint: 'Links opened from other apps always open in this environment',
+      setDone: '"{{name}}" is now the default browser; external links open in it directly',
+      setNeedSystemStep:
+        '"{{name}}" is now the default browser. One more step: pick Simprint as the default browser in Windows Settings',
+      cleared: 'Default browser unset',
+      clearedRestore:
+        'Default browser unset. If Windows still uses Simprint as the default browser, switch it back in system settings',
+      openSettings: 'Open system settings',
+      systemStepBanner:
+        'A default browser environment is set, but Windows still uses another default browser. Pick Simprint under Default apps → Web browser so external links open in this environment',
+      failed: 'Failed to change the default browser',
     },
     batchActions: {
       selected: 'Selected',
       batchStart: 'Batch Start',
       batchStop: 'Batch Stop',
-      createShortcuts: 'Create Desktop Shortcuts',
       updateProxy: 'Update Proxy',
       moveToGroup: 'Move to Group',
       assignTag: 'Assign Tag',

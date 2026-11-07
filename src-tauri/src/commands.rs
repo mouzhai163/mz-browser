@@ -2,8 +2,8 @@ use tauri::ipc::Invoke;
 
 pub mod app;
 pub mod auth;
+pub mod default_browser;
 pub mod environment;
-pub mod environment_shortcut;
 pub mod file_system;
 pub mod local_api;
 pub mod local_extensions;
@@ -34,8 +34,11 @@ pub fn register_handles() -> impl Fn(Invoke<tauri::Wry>) -> bool + Send + Sync +
         window::calculate_window_layout,
         window::hide_window,
         window::show_window,
-        // Environment shortcut commands
-        environment_shortcut::create_environment_shortcuts,
+        // Default browser commands
+        default_browser::get_default_browser_state,
+        default_browser::set_default_browser_environment,
+        default_browser::clear_default_browser_environment,
+        default_browser::open_default_apps_settings,
         // Environment commands
         environment::get_running_environments,
         environment::start_sync,

@@ -18,11 +18,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         logger::log_app_panic(panic_info);
     }));
 
-    // 被环境快捷方式拉起来，而应用已经在运行：把环境 ID 交给它就退出，不再启动第二个应用。
-    if let Some(env_uuid) =
-        simprint_lib::services::environment_shortcut::env_from_args(std::env::args().skip(1))
+    // 系统启动的新进程没有开发/隔离运行的环境变量：数据目录由登记命令里的 --simprint-root 提供。
+    simprint_lib::services::default_browser::apply_root_arg();
+
+    // 被系统当作默认浏览器拉起来，而应用已经在运行：把链接交给它就退出，不再启动第二个应用。
+    if let Some(link) =
+        simprint_lib::services::default_browser::link_from_args(std::env::args().skip(1))
     {
-        if simprint_lib::services::environment_shortcut::ipc::try_forward(&env_uuid) {
+        if simprint_lib::services::default_browser::ipc::try_forward(&link) {
             return Ok(());
         }
     }

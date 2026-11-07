@@ -11,7 +11,7 @@ const GENERAL_SETTINGS_STORE_KEY: &str = "general";
 static BACKEND_STARTUP_READY: AtomicBool = AtomicBool::new(false);
 static MAIN_FRONTEND_READY: AtomicBool = AtomicBool::new(false);
 static STARTUP_COMPLETED: AtomicBool = AtomicBool::new(false);
-/// 被环境快捷方式拉起来的进程：只负责打开那个环境，不显示工作台主窗口。
+/// 被系统当作默认浏览器拉起来的进程：只负责在默认环境里打开链接，不显示工作台主窗口。
 static HEADLESS_LAUNCH: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Deserialize)]
@@ -27,9 +27,9 @@ fn should_start_minimized(app: &AppHandle) -> bool {
         .unwrap_or(false)
 }
 
-/// 进程启动最早期调用：如果是被环境快捷方式拉起来的，整个生命周期内都不自动显示主窗口。
+/// 进程启动最早期调用：如果是被系统当作默认浏览器拉起来的，整个生命周期内都不自动显示主窗口。
 pub fn mark_headless_launch_if_requested() {
-    if crate::services::environment_shortcut::launched_for_environment() {
+    if crate::services::default_browser::launched_for_link() {
         HEADLESS_LAUNCH.store(true, Ordering::Release);
     }
 }
@@ -38,7 +38,7 @@ fn keep_main_window_hidden(app: &AppHandle) -> bool {
     HEADLESS_LAUNCH.load(Ordering::Acquire) || should_start_minimized(app)
 }
 
-/// 无条件显示主窗口（打开环境失败时用，让用户看到错误提示）。
+/// 无条件显示主窗口（打开链接失败时用，让用户看到错误提示）。
 pub fn show_main_window_now(app: &AppHandle) {
     if let Some(main_window) = app.get_webview_window("main") {
         let _ = main_window.show();

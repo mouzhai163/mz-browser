@@ -1,7 +1,8 @@
 import { useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { EnvironmentHeader } from './environment-header';
-import { listenShortcutOpenResult } from '../api/shortcut';
+import { useDefaultBrowserStore } from '../stores/default-browser-store';
 import { EnvironmentTable } from './environment-table';
 import { EnvironmentBatchActions } from './environment-batch-actions';
 import { EnvironmentPagination } from './environment-pagination';
@@ -36,6 +37,7 @@ import {
 } from '../stores';
 
 export function EnvironmentList() {
+  const { t } = useTranslation('environment');
   // URL 参数处理
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -100,13 +102,22 @@ export function EnvironmentList() {
     };
   }, []);
 
-  // 从桌面快捷方式打开环境失败时给出提示（后端会同时显示主窗口）
+  // 默认浏览器：读取当前设置，并在系统交来的外部链接打不开时提示
   useEffect(() => {
-    const unlistenPromise = listenShortcutOpenResult();
+    const { refresh, initListener } = useDefaultBrowserStore.getState();
+    void refresh().catch((error) => console.warn('[DefaultBrowser] refresh failed:', error));
+    const unlistenPromise = initListener();
+    // 从 Windows 设置回来后立刻刷新"是否已是系统默认"
+    const handleFocus = () => {
+      void refresh().catch(() => undefined);
+    };
+    window.addEventListener('focus', handleFocus);
     return () => {
+      window.removeEventListener('focus', handleFocus);
       void unlistenPromise.then((unlisten) => unlisten());
     };
   }, []);
+  const defaultBrowser = useDefaultBrowserStore((s) => s.state);
 
   const handlePageChange = (page: number) => {
     filtersStore.setCurrentPage(page);
@@ -129,6 +140,19 @@ export function EnvironmentList() {
         onComplete={refresh}
         onManageTags={dialogStore.openManageTagsDialog}
       />
+
+      {defaultBrowser.supported && defaultBrowser.environmentUuid && !defaultBrowser.isSystemDefault && (
+        <div className="mx-6 mb-2 flex items-center gap-3 rounded border border-primary/40 bg-primary/10 px-3 py-2 text-xs">
+          <span className="flex-1">{t('defaultBrowser.systemStepBanner')}</span>
+          <button
+            type="button"
+            className="shrink-0 rounded bg-primary px-2 py-1 text-primary-foreground"
+            onClick={() => void useDefaultBrowserStore.getState().openSystemSettings()}
+          >
+            {t('defaultBrowser.openSettings')}
+          </button>
+        </div>
+      )}
 
       {error && <div className="px-6 py-2 text-xs text-destructive">环境列表加载失败：{error}</div>}
 

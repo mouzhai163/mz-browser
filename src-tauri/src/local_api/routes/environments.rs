@@ -10,6 +10,10 @@ pub fn register_routes(router: Router<LocalApiServerState>) -> Router<LocalApiSe
             post(start_environment_handler),
         )
         .route(
+            "/api/local/environments/open-url",
+            post(open_environment_url_handler),
+        )
+        .route(
             "/api/local/environments/stop",
             post(stop_environment_handler),
         )

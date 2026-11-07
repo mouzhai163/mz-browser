@@ -1,10 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Play, Square, FolderTree, Tag, Trash2, X, RotateCcw, MonitorUp } from 'lucide-react';
+import { Play, Square, FolderTree, Tag, Trash2, X, RotateCcw } from 'lucide-react';
 import { useEnvironmentDialogStore, useEnvironmentSelectionStore, useEnvironmentFiltersStore } from '../stores';
 import { useEnvironmentOperations } from '../hooks/use-environment-operations';
 import type { Environment } from '../types';
-import { createEnvironmentShortcuts } from '../api/shortcut';
 
 interface EnvironmentBatchActionsProps {
   environments: Environment[];
@@ -47,31 +46,6 @@ export function EnvironmentBatchActions({
       await operations.batchStart(selectedStartItems);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '批量启动失败');
-    }
-  };
-
-  // 为选中的环境在桌面批量创建快捷方式
-  const handleBatchCreateShortcuts = async () => {
-    const items = environments
-      .filter((environment) => selectionStore.selectedIds.has(environment.uuid))
-      .map((environment) => ({ envUuid: environment.uuid, envName: environment.name }));
-    if (items.length === 0) return;
-    try {
-      const results = await createEnvironmentShortcuts(items);
-      const failed = results.filter((result) => !result.ok);
-      if (failed.length === 0) {
-        toast.success(t('shortcut.createdMany', { count: results.length }));
-      } else {
-        toast.error(
-          t('shortcut.partial', {
-            ok: results.length - failed.length,
-            failed: failed.length,
-            reason: failed[0]?.message ?? '',
-          })
-        );
-      }
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('shortcut.failed'));
     }
   };
 
@@ -152,12 +126,6 @@ export function EnvironmentBatchActions({
             className="text-xs font-semibold hover:text-primary hover:bg-primary/10 flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer px-3 py-1.5 rounded-md"
           >
             <Square size={14} /> {t('batchActions.batchStop')}
-          </button>
-          <button
-            onClick={handleBatchCreateShortcuts}
-            className="text-xs font-semibold hover:text-primary hover:bg-primary/10 flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer px-3 py-1.5 rounded-md"
-          >
-            <MonitorUp size={14} /> {t('batchActions.createShortcuts')}
           </button>
           <button
             onClick={handleMoveToGroup}
