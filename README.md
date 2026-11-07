@@ -39,6 +39,8 @@ Core data stays on your machine by default; neither daily use nor development de
 - **Per-environment fingerprint seed**: derived from the environment ID, so Canvas / WebGL / audio noise differs between environments and stays stable across restarts.
 - **Persistent configuration**: environment settings, account context and workspace state are kept long term, with groups, tags and batch operations.
 - **Launch guarantee**: an environment only counts as started after the browser confirms the fingerprint config was applied. If the confirmation fails or times out, the launch fails instead of opening pages with a default fingerprint.
+- **Desktop shortcuts**: create a desktop shortcut for one or many environments; double-click opens that environment directly without opening the app first. If Simprint is already running the request is forwarded to it, and an environment that is already open is simply brought to the front.
+- **No sign-in**: Simprint is a local single-user workbench; there is no login, user picker or lock screen. It just opens.
 
 ### Fingerprint
 
@@ -65,7 +67,7 @@ New environments get GPU, core count, memory, resolution and scaling from one ti
 
 - **RPA workflows**: build and run repeatable browser automation flows.
 - **Syncer**: pick a controller window and mirror interactions to other running windows.
-- **Local API**: control environments, proxies, tags, groups and browser kernels through a local API protected by an API key.
+- **Local API**: control environments, proxies, tags, groups and browser kernels through a local API protected by an API key. Enabled by default, local machine only.
 - **MCP**: an optional local Model Context Protocol server (off by default) that lets external AI clients use workspace resources.
 
 ### Browser kernel

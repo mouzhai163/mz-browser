@@ -3,7 +3,7 @@ import { create } from 'zustand';
 /**
  * 设置弹窗的 Tab 类型
  */
-export type SettingsDialogTab = 'account' | 'general' | 'browser' | 'network' | 'storage';
+export type SettingsDialogTab = 'general' | 'browser' | 'network' | 'storage';
 
 /**
  * 设置弹窗状态接口
@@ -40,7 +40,7 @@ export type SettingsDialogStore = SettingsDialogState & SettingsDialogActions;
 export const useSettingsDialogStore = create<SettingsDialogStore>((set) => ({
   // 状态
   isOpen: false,
-  activeTab: 'account',
+  activeTab: 'general',
 
   // 操作
   open: (tab?: SettingsDialogTab) =>

@@ -18,6 +18,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         logger::log_app_panic(panic_info);
     }));
 
+    // 被环境快捷方式拉起来，而应用已经在运行：把环境 ID 交给它就退出，不再启动第二个应用。
+    if let Some(env_uuid) =
+        simprint_lib::services::environment_shortcut::env_from_args(std::env::args().skip(1))
+    {
+        if simprint_lib::services::environment_shortcut::ipc::try_forward(&env_uuid) {
+            return Ok(());
+        }
+    }
+    simprint_lib::app::startup::mark_headless_launch_if_requested();
+
     disable_env_var();
 
     // 初始化日志系统（兜底目录，Tauri 启动后会在 setup 中按 store 设置重新初始化）

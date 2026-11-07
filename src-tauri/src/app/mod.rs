@@ -8,7 +8,6 @@ pub mod init_state;
 pub mod lifecycle;
 pub mod runtime;
 pub mod runtime_info;
-pub mod session_lock;
 pub mod setup;
 pub mod startup;
 
@@ -55,10 +54,8 @@ fn initialize_business_context(
 
 pub fn run() {
     let ctx = tauri::generate_context!();
-    let session_lock_manager = session_lock::SessionLockManager::new();
 
     let app = tauri::Builder::default()
-        .manage(session_lock_manager.clone())
         .setup(move |app| {
             setup::register_plugins(app.handle());
 
@@ -99,12 +96,6 @@ pub fn run() {
             lifecycle::init_tauri_dependent(app.handle())?;
 
             setup::init_simprint_runtime_background(app.handle().clone());
-
-            // 初始化会话自动锁定后台任务
-            session_lock::init_session_lock_background(
-                app.handle().clone(),
-                session_lock_manager.clone(),
-            );
 
             if startup::StartupService::backend_startup_ready(app.handle()).is_err() {
                 return Err(anyhow::anyhow!("Failed to complete the backend startup gate").into());

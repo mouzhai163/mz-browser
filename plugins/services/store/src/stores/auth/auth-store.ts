@@ -6,7 +6,6 @@ interface LocalUserResponse {
   uuid: string;
   nickname: string;
   avatar: string;
-  hasPassword: boolean;
   currentWorkspaceUuid?: string | null;
   currentTeamUuid?: string | null;
 }
@@ -17,7 +16,6 @@ function mapLocalUser(user: LocalUserResponse): User {
     id: user.uuid,
     nickname: user.nickname,
     avatar: user.avatar,
-    has_password: user.hasPassword,
     status: 'active',
     current_workspace_uuid: user.currentWorkspaceUuid ?? null,
     current_team_uuid: user.currentTeamUuid ?? null,

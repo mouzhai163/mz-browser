@@ -9,6 +9,7 @@
 pub mod app;
 pub mod connectivity;
 pub mod environment;
+pub mod environment_shortcut;
 pub mod file_system;
 pub mod local_extensions;
 pub mod mihomo;

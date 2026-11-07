@@ -3,7 +3,6 @@ import { Drawer, DrawerClose, DrawerContent, DrawerTitle } from '@/components/ui
 import { X } from 'lucide-react';
 import { useSettingsDialogStore } from '../../../../services/store/src';
 import { getNavItems } from '../config';
-import { AccountPanel } from './account-panel';
 import { GeneralPanel } from './general-panel';
 import { BrowserPanel } from './browser-panel';
 import { NetworkPanel } from './network-panel';
@@ -24,8 +23,6 @@ export function SettingsDialog() {
 
   const renderPanel = () => {
     switch (activeTab) {
-      case 'account':
-        return <AccountPanel />;
       case 'general':
         return <GeneralPanel />;
       case 'browser':

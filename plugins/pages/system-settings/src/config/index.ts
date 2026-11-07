@@ -1,4 +1,4 @@
-import { User, Settings, Fingerprint, Wifi, HardDrive, Sun, Moon, Monitor } from 'lucide-react';
+import { Settings, Fingerprint, Wifi, HardDrive, Sun, Moon, Monitor } from 'lucide-react';
 import type { NavItem, ThemeOption, LanguageOption } from '../types';
 
 /**
@@ -6,7 +6,6 @@ import type { NavItem, ThemeOption, LanguageOption } from '../types';
  * Note: This should be called within a component that has useTranslation hook
  */
 export const getNavItems = (t: (key: string) => string): NavItem[] => [
-  { id: 'account', label: t('navAccount'), icon: User },
   { id: 'general', label: t('navGeneral'), icon: Settings },
   { id: 'browser', label: t('navBrowser'), icon: Fingerprint },
   { id: 'network', label: t('navNetwork'), icon: Wifi },
@@ -18,7 +17,6 @@ export const getNavItems = (t: (key: string) => string): NavItem[] => [
  * @deprecated Use getNavItems with translation function instead
  */
 export const navItems: NavItem[] = [
-  { id: 'account', label: '账户与安全', icon: User },
   { id: 'general', label: '通用设置', icon: Settings },
   { id: 'browser', label: '浏览器与自动化', icon: Fingerprint },
   { id: 'network', label: '网络与同步', icon: Wifi },

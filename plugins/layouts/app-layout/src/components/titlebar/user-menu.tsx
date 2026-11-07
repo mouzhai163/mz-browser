@@ -1,5 +1,4 @@
-import { LogOut, ChevronDown, Palette, Languages, Users, Check, Building2 } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { ChevronDown, Palette, Languages, Users, Check, Building2 } from 'lucide-react';
 import {
   useAuth,
   useSettingsDialogStore,
@@ -34,11 +33,10 @@ import { toast } from 'sonner';
  * 用户菜单组件
  */
 export function UserMenu() {
-  const { user, isAuthenticated, clearUser } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const { theme, setTheme } = useTheme();
   const { i18n, t: tCommon } = useTranslation('common');
   const { t } = useTranslation('appLayout');
-  const navigate = useNavigate();
   const { open: openSettingsDialog } = useSettingsDialogStore();
   const { themeOptions, languageOptions, settingsOptions } = useUserMenuConfig(t, tCommon);
 
@@ -54,20 +52,6 @@ export function UserMenu() {
   // 监听团队数据刷新标识
   const teamsRefreshKey = useRefreshStore((state) => state.teams);
   const { setCurrentTeam } = useAuthStore();
-
-  const handleLogout = async () => {
-    // 清理当前本地会话，返回用户选择界面。
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('logout');
-    } catch (e) {
-      // 即使失败也继续清理前端状态并跳转，避免卡死在当前页面
-      console.warn('[UserMenu] 退出登录时调用 tauri logout 失败:', e);
-    }
-
-    clearUser();
-    navigate('/auth/login');
-  };
 
   const handleSettingsOpen = (tabId: string) => {
     openSettingsDialog(tabId as SettingsDialogTab);
@@ -280,11 +264,6 @@ export function UserMenu() {
               })}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem data-testid="local-user-logout" variant="destructive" onClick={handleLogout} className="cursor-pointer">
-            <LogOut className="w-4 h-4" />
-            <span>{t('status.logout')}</span>
-          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <WorkspaceSwitchDialog open={workspaceDialogOpen} onOpenChange={setWorkspaceDialogOpen} />

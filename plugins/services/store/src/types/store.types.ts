@@ -6,7 +6,6 @@ export interface User {
   id: string;
   nickname?: string;
   avatar?: string;
-  has_password?: boolean;
   status: string;
   current_workspace_uuid?: string | null; // 当前工作空间 UUID
   current_team_uuid?: string | null; // 当前团队 UUID

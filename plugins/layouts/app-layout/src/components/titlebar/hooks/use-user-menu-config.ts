@@ -56,12 +56,6 @@ export function useUserMenuConfig(
 
   const settingsOptions: SettingsOption[] = [
     {
-      id: 'account',
-      label: t('status.settingsAccount'),
-      icon: User,
-      path: '/settings?menu=account',
-    },
-    {
       id: 'general',
       label: t('status.settingsGeneral'),
       icon: Settings,

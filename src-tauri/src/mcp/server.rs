@@ -55,16 +55,6 @@ impl McpServer {
                 "MCP policy changed; restart MCP",
             ));
         }
-        if app
-            .state::<crate::app::session_lock::SessionLockManager>()
-            .get_state()
-            .await
-            .locked
-        {
-            return Err(super::error::McpToolError::invalid_params(
-                "Local session is locked",
-            ));
-        }
         Ok(())
     }
 

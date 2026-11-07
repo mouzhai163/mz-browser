@@ -1,5 +1,5 @@
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { AccountPanel, GeneralPanel, BrowserPanel, NetworkPanel, StoragePanel } from './index';
+import { GeneralPanel, BrowserPanel, NetworkPanel, StoragePanel } from './index';
 import type { SettingsTab } from '../types';
 
 interface SettingsContentProps {
@@ -12,8 +12,6 @@ interface SettingsContentProps {
 export const SettingsContent: React.FC<SettingsContentProps> = ({ activeTab }) => {
   const renderPanel = () => {
     switch (activeTab) {
-      case 'account':
-        return <AccountPanel />;
       case 'general':
         return <GeneralPanel />;
       case 'browser':

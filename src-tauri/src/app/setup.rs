@@ -11,6 +11,12 @@ pub fn register_plugins(app_handle: &AppHandle) {
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             use tauri::Manager;
 
+            // 环境快捷方式（正式版里由单实例插件转发）：直接打开那个环境，不显示主窗口。
+            if let Some(env_uuid) = crate::services::environment_shortcut::env_from_args(argv.clone()) {
+                crate::services::environment_shortcut::handle_open_env_in_background(app.clone(), env_uuid);
+                return;
+            }
+
             let app_state = crate::app::init_state::read_app_init_state();
             if app_state.is_initialized && !app_state.is_updating {
                 let Some(main_window) = app.get_webview_window("main") else {
@@ -82,6 +88,23 @@ pub fn init_simprint_runtime_background(app_handle: AppHandle) {
 
         let ctx = AppContext::get();
         ctx.simprint_runtime_manager.set_app_handle(app_handle.clone()).await;
+
+        // 没有登录这一步：启动时直接使用默认本地用户，并拉起依赖会话的服务（运行时、本地 API）。
+        if let Err(error) = crate::commands::auth::ensure_default_session().await {
+            log::error!("failed to establish the local session: {error}");
+        }
+
+        // 被环境快捷方式拉起来（--open-env=<环境 ID>）：运行时就绪后直接打开这个环境。
+        if let Some(env_uuid) =
+            crate::services::environment_shortcut::env_from_args(std::env::args().skip(1))
+        {
+            crate::services::environment_shortcut::handle_open_env_in_background(app_handle.clone(), env_uuid);
+        }
+        // 之后再点快捷方式时，新进程通过本机命名管道把环境 ID 交给这个应用。
+        let pipe_app = app_handle.clone();
+        tauri::async_runtime::spawn(crate::services::environment_shortcut::ipc::serve(move |env_uuid| {
+            crate::services::environment_shortcut::handle_open_env_in_background(pipe_app.clone(), env_uuid);
+        }));
 
         if let Err(error) = ctx.simprint_runtime_manager.start_background().await {
             log::warn!("failed to start embedded environment runtime: {}", error);

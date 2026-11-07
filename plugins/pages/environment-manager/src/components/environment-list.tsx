@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { EnvironmentHeader } from './environment-header';
+import { listenShortcutOpenResult } from '../api/shortcut';
 import { EnvironmentTable } from './environment-table';
 import { EnvironmentBatchActions } from './environment-batch-actions';
 import { EnvironmentPagination } from './environment-pagination';
@@ -96,6 +97,14 @@ export function EnvironmentList() {
     const unlistenPromise = runningEnvsStore.initListener();
     return () => {
       unlistenPromise.then((unlisten) => unlisten());
+    };
+  }, []);
+
+  // 从桌面快捷方式打开环境失败时给出提示（后端会同时显示主窗口）
+  useEffect(() => {
+    const unlistenPromise = listenShortcutOpenResult();
+    return () => {
+      void unlistenPromise.then((unlisten) => unlisten());
     };
   }, []);
 

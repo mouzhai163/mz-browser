@@ -3,7 +3,6 @@ export { SettingCard, type SettingCardProps } from './setting-card';
 export { SettingRow, type SettingRowProps } from './setting-row';
 
 // 面板组件
-export { AccountPanel } from './account-panel';
 export { GeneralPanel } from './general-panel';
 export { BrowserPanel } from './browser-panel';
 export { NetworkPanel } from './network-panel';

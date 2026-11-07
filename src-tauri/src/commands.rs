@@ -3,6 +3,7 @@ use tauri::ipc::Invoke;
 pub mod app;
 pub mod auth;
 pub mod environment;
+pub mod environment_shortcut;
 pub mod file_system;
 pub mod local_api;
 pub mod local_extensions;
@@ -11,7 +12,6 @@ pub mod mcp;
 pub mod mihomo;
 pub mod network;
 pub mod rpa;
-pub mod security;
 pub mod store;
 pub mod window;
 
@@ -34,6 +34,8 @@ pub fn register_handles() -> impl Fn(Invoke<tauri::Wry>) -> bool + Send + Sync +
         window::calculate_window_layout,
         window::hide_window,
         window::show_window,
+        // Environment shortcut commands
+        environment_shortcut::create_environment_shortcuts,
         // Environment commands
         environment::get_running_environments,
         environment::start_sync,
@@ -60,9 +62,6 @@ pub fn register_handles() -> impl Fn(Invoke<tauri::Wry>) -> bool + Send + Sync +
         file_system::get_storage_default_paths,
         file_system::get_directory_sizes,
         // Security commands
-        security::report_user_activity,
-        security::get_session_lock_state,
-        security::unlock_session,
         // Network commands
         network::http_post,
         network::test_proxy,
@@ -72,12 +71,7 @@ pub fn register_handles() -> impl Fn(Invoke<tauri::Wry>) -> bool + Send + Sync +
         rpa::execute_local_rpa_script,
         // Auth commands
         auth::list_local_users,
-        auth::create_local_user,
-        auth::login_local_user,
         auth::get_current_local_user,
-        auth::verify_local_user_password,
-        auth::logout,
-        auth::is_logged_in,
         // Core utilities
         crate::core::utils::process::kill_process,
         crate::core::utils::process::find_process,

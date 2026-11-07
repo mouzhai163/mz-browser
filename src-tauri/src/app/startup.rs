@@ -11,6 +11,8 @@ const GENERAL_SETTINGS_STORE_KEY: &str = "general";
 static BACKEND_STARTUP_READY: AtomicBool = AtomicBool::new(false);
 static MAIN_FRONTEND_READY: AtomicBool = AtomicBool::new(false);
 static STARTUP_COMPLETED: AtomicBool = AtomicBool::new(false);
+/// 被环境快捷方式拉起来的进程：只负责打开那个环境，不显示工作台主窗口。
+static HEADLESS_LAUNCH: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,6 +25,26 @@ fn should_start_minimized(app: &AppHandle) -> bool {
         .and_then(|raw| serde_json::from_value::<GeneralSettingsSnapshot>(raw).ok())
         .and_then(|settings| settings.start_minimized)
         .unwrap_or(false)
+}
+
+/// 进程启动最早期调用：如果是被环境快捷方式拉起来的，整个生命周期内都不自动显示主窗口。
+pub fn mark_headless_launch_if_requested() {
+    if crate::services::environment_shortcut::launched_for_environment() {
+        HEADLESS_LAUNCH.store(true, Ordering::Release);
+    }
+}
+
+fn keep_main_window_hidden(app: &AppHandle) -> bool {
+    HEADLESS_LAUNCH.load(Ordering::Acquire) || should_start_minimized(app)
+}
+
+/// 无条件显示主窗口（打开环境失败时用，让用户看到错误提示）。
+pub fn show_main_window_now(app: &AppHandle) {
+    if let Some(main_window) = app.get_webview_window("main") {
+        let _ = main_window.show();
+        let _ = main_window.unminimize();
+        let _ = main_window.set_focus();
+    }
 }
 
 fn try_complete_startup(app: &AppHandle) -> Result<(), ()> {
@@ -56,8 +78,8 @@ fn try_complete_startup(app: &AppHandle) -> Result<(), ()> {
     let _ = crate::app::init_state::update_app_init_state(app_state);
 
     if let Some(main_window) = app.get_webview_window("main") {
-        if should_start_minimized(app) {
-            log::info!("Start minimized is enabled; keeping the ready main window hidden");
+        if keep_main_window_hidden(app) {
+            log::info!("Start minimized or shortcut launch; keeping the ready main window hidden");
         } else {
             let _ = main_window.show();
             let _ = main_window.set_focus();
@@ -108,8 +130,8 @@ impl StartupService {
         }
 
         if let Some(main_window) = app.get_webview_window("main") {
-            if should_start_minimized(&app) {
-                log::info!("Start minimized is enabled; skipping main window display");
+            if keep_main_window_hidden(&app) {
+                log::info!("Start minimized or shortcut launch; skipping main window display");
             } else {
                 let _ = main_window.show();
                 let _ = main_window.set_focus();

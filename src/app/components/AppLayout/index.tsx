@@ -13,8 +13,6 @@ import { Toaster } from '@/components/ui/sonner';
 import { AppRoutes } from '../AppRoutes';
 import { SyncerRenderer } from '../SyncerRenderer';
 import { useDisableDevTools } from '@/hooks/use-disable-dev-tools';
-import { SessionLockOverlay } from '../session-lock-overlay';
-import { useSessionLock } from '../../hooks/use-session-lock';
 
 const SettingsDialog = React.lazy(() =>
   import('../../../../plugins/pages/system-settings/src/components/settings-dialog').then(
@@ -34,12 +32,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ mode = 'main', pluginsRead
   const [windowManagerComponent, setWindowManagerComponent] = useState<React.ComponentType | null>(
     null
   );
-  const { initAuth, isAuthenticated } = useAuthStore();
+  const { initAuth } = useAuthStore();
   const isSettingsDialogOpen = useSettingsDialogStore((state) => state.isOpen);
   const [authReady, setAuthReady] = useState(mode !== 'main');
   const [routesReady, setRoutesReady] = useState(false);
   useDisableDevTools();
-  const sessionLock = useSessionLock(mode === 'main');
 
   // 初始化认证状态（仅在 main 模式下）
   useEffect(() => {
@@ -112,12 +109,6 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ mode = 'main', pluginsRead
                 <SettingsDialog />
               </Suspense>
             ) : null}
-            <SessionLockOverlay
-              open={mode === 'main' && isAuthenticated && sessionLock.isLocked}
-              unlocking={sessionLock.unlocking}
-              error={sessionLock.error}
-              onUnlock={sessionLock.unlock}
-            />
             <Toaster />
           </BrowserRouter>
         </I18nProvider>

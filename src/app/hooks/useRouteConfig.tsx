@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { Navigate } from 'react-router';
 import type { RouteObject } from 'react-router';
 import { pluginRegistry } from '@slotkitjs/core';
 import { useAppState } from '../../../plugins/services/store/src';
@@ -7,15 +6,15 @@ import type { RouteConfig } from '../types';
 
 /**
  * 构建路由配置的 Hook
+ *
+ * 软件没有登录页：本地用户会话在启动时自动建立，打开软件就直接进入应用布局。
  */
 export function useRouteConfig(routes: RouteConfig[]) {
   const { isAuthenticated } = useAppState();
 
   return useMemo(() => {
     const appLayoutPlugin = pluginRegistry.getPlugin('app-layout');
-    const authLayoutPlugin = pluginRegistry.getPlugin('authorization-layout');
     const AppLayoutComponent = appLayoutPlugin?.component;
-    const AuthLayoutComponent = authLayoutPlugin?.component;
 
     if (!AppLayoutComponent) {
       return [
@@ -26,6 +25,20 @@ export function useRouteConfig(routes: RouteConfig[]) {
               <div className="flex-1 flex items-center justify-center">
                 <p>Waiting for layout plugin...</p>
               </div>
+            </div>
+          ),
+        },
+      ];
+    }
+
+    // 本地会话由后端在启动时自动建立；走到这里说明它没能建立（数据库损坏等），给出明确提示。
+    if (!isAuthenticated) {
+      return [
+        {
+          path: '*',
+          element: (
+            <div className="flex min-h-screen w-full items-center justify-center text-muted-foreground">
+              <p>无法初始化本地会话，请重启软件；如果仍然如此，请查看日志。</p>
             </div>
           ),
         },
@@ -53,96 +66,24 @@ export function useRouteConfig(routes: RouteConfig[]) {
       ];
     }
 
-    // 分离认证路由和其他路由
-    const authRoutes = routes.filter((route) => route.path.startsWith('/auth'));
-    const otherRoutes = routes.filter((route) => !route.path.startsWith('/auth'));
-
-    const routeConfig: RouteObject[] = [];
-
-    // 添加认证布局路由
-    if (authRoutes.length > 0 && AuthLayoutComponent) {
-      // 如果已登录，认证路由应该重定向到首页
-      if (isAuthenticated) {
-        routeConfig.push({
-          path: '/auth',
-          element: <Navigate to="/" replace />,
-        });
-        routeConfig.push({
-          path: '/auth/*',
-          element: <Navigate to="/" replace />,
-        });
-      } else {
-        const authChildren = authRoutes.map((route) => {
-          const childPath = route.path.replace(/^\/auth/, '') || '';
-          const normalizedPath = childPath.replace(/^\//, '') || 'login';
+    const routeConfig: RouteObject[] = [
+      {
+        path: '/',
+        element: <AppLayoutComponent />,
+        children: routes.map((route) => {
+          if (route.path === '/') {
+            return {
+              index: true,
+              element: <route.Component />,
+            };
+          }
           return {
-            path: normalizedPath,
+            path: route.path.replace(/^\//, ''),
             element: <route.Component />,
           };
-        });
-
-        // 找到登录页面作为默认路由
-        const loginRoute = authChildren.find((c) => c.path === 'login');
-
-        routeConfig.push({
-          path: '/auth',
-          element: <AuthLayoutComponent />,
-          children: [
-            ...(loginRoute
-              ? [
-                  {
-                    index: true,
-                    element: loginRoute.element,
-                  },
-                ]
-              : []),
-            ...authChildren,
-          ],
-        });
-      }
-    }
-
-    // 添加应用布局路由（需要登录）
-    if (otherRoutes.length > 0) {
-      // 如果未登录，所有应用路由都重定向到登录页
-      if (!isAuthenticated) {
-        routeConfig.push({
-          path: '/',
-          element: <Navigate to="/auth/login" replace />,
-        });
-        // 添加通配符路由，确保所有未匹配的路由都重定向到登录页
-        routeConfig.push({
-          path: '*',
-          element: <Navigate to="/auth/login" replace />,
-        });
-      } else {
-        // 已登录，正常添加应用布局路由
-        routeConfig.push({
-          path: '/',
-          element: <AppLayoutComponent />,
-          children: otherRoutes.map((route) => {
-            if (route.path === '/') {
-              return {
-                index: true,
-                element: <route.Component />,
-              };
-            } else {
-              const childPath = route.path.replace(/^\//, '');
-              return {
-                path: childPath,
-                element: <route.Component />,
-              };
-            }
-          }),
-        });
-      }
-    } else if (!isAuthenticated) {
-      // 如果没有应用路由且未登录，添加默认重定向
-      routeConfig.push({
-        path: '*',
-        element: <Navigate to="/auth/login" replace />,
-      });
-    }
+        }),
+      },
+    ];
 
     return routeConfig;
   }, [routes, isAuthenticated]);

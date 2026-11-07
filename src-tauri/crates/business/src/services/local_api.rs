@@ -179,9 +179,21 @@ pub async fn init_local_api_for_user_service(
     context: &SvcCtx,
     user_uuid: Uuid,
 ) -> Result<(), String> {
-    models::local_api::upsert_local_api_settings(&context.db, user_uuid, None, None, None, None)
+    // 本地 API 默认开启：设置行第一次创建时写入开启；已有的设置（包括用户手动关闭的）不动。
+    let first_time = models::local_api::fetch_local_api_settings(&context.db, user_uuid)
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| error.to_string())?
+        .is_none();
+    models::local_api::upsert_local_api_settings(
+        &context.db,
+        user_uuid,
+        first_time.then_some(true),
+        None,
+        None,
+        None,
+    )
+    .await
+    .map_err(|error| error.to_string())?;
     if let Some(key) = models::local_api::fetch_active_api_key(&context.db, user_uuid)
         .await
         .map_err(|error| error.to_string())?

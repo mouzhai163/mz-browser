@@ -5,7 +5,7 @@ import type { SettingsTab } from '../types';
 /**
  * 有效的设置标签列表
  */
-const VALID_TABS: SettingsTab[] = ['account', 'general', 'browser', 'network', 'storage'];
+const VALID_TABS: SettingsTab[] = ['general', 'browser', 'network', 'storage'];
 
 interface UseSettingsTabsReturn {
   activeTab: SettingsTab;
@@ -21,12 +21,12 @@ export function useSettingsTabs(): UseSettingsTabsReturn {
   const [searchParams, setSearchParams] = useSearchParams();
   const menuParam = searchParams.get('menu');
 
-  // 从 URL 参数获取当前标签，如果无效则默认为 'account'
+  // 从 URL 参数获取当前标签，如果无效则默认为 'general'
   const currentTabFromUrl = useMemo((): SettingsTab => {
     if (menuParam && VALID_TABS.includes(menuParam as SettingsTab)) {
       return menuParam as SettingsTab;
     }
-    return 'account';
+    return 'general';
   }, [menuParam]);
 
   const [activeTab, setActiveTab] = useState<SettingsTab>(currentTabFromUrl);
@@ -36,7 +36,7 @@ export function useSettingsTabs(): UseSettingsTabsReturn {
     const newTab =
       menuParam && VALID_TABS.includes(menuParam as SettingsTab)
         ? (menuParam as SettingsTab)
-        : 'account';
+        : 'general';
 
     // 使用函数式更新避免在 effect 中直接调用 setState
     setActiveTab((prev) => {
@@ -48,7 +48,7 @@ export function useSettingsTabs(): UseSettingsTabsReturn {
 
     if (!menuParam) {
       // 如果没有 menu 参数，添加默认参数
-      setSearchParams({ menu: 'account' }, { replace: true });
+      setSearchParams({ menu: 'general' }, { replace: true });
     }
   }, [menuParam, setSearchParams]);
 

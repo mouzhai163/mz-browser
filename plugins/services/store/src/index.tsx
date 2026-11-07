@@ -26,13 +26,6 @@ export type { User } from './types/store.types';
 export type { AppState } from './components/store-provider';
 export type { SettingsDialogTab, SettingsDialogStore } from './stores/settings-dialog';
 export {
-  getAccountSecuritySettings,
-  setAccountSecuritySettings,
-  DEFAULT_ACCOUNT_SECURITY_SETTINGS,
-  LOCK_TIME_OPTIONS,
-} from './stores/account-security-settings';
-export type { AccountSecuritySettings } from './stores/account-security-settings';
-export {
   getGeneralSettings,
   setGeneralSettings,
   DEFAULT_GENERAL_SETTINGS,

@@ -7,7 +7,6 @@ export * from './loading';
 export * from './refresh';
 export * from './settings-dialog';
 export * from './workspace';
-export * from './account-security-settings';
 export * from './general-settings';
 export * from './browser-settings';
 export * from './network-settings';

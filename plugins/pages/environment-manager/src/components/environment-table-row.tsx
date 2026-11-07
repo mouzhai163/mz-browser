@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { createEnvironmentShortcuts } from '../api/shortcut';
 import { cn } from '@/lib/utils';
 import { FaApple, FaFirefoxBrowser, FaLinux, FaWindows } from 'react-icons/fa';
 import { SiGooglechrome } from 'react-icons/si';
@@ -26,6 +27,7 @@ import {
   Eraser,
   Pencil,
   RotateCcw,
+  MonitorUp,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -424,9 +426,11 @@ function ActionsDropdown({
   onEditCookies,
   onClearCache,
   onDelete,
+  onCreateShortcut,
 }: {
   environment: Environment;
   isRunning: boolean;
+  onCreateShortcut: () => void;
   t: (key: string) => string;
   onEdit?: () => void;
   onToggle: () => void;
@@ -476,6 +480,12 @@ function ActionsDropdown({
         <DropdownMenuItem onClick={onExport} className="cursor-pointer">
           <Download className="w-4 h-4 mr-2" />
           <span>{t('table.actions.exportWindow')}</span>
+        </DropdownMenuItem>
+
+        {/* 在桌面创建快捷方式：双击直接打开这个环境 */}
+        <DropdownMenuItem onClick={onCreateShortcut} className="cursor-pointer">
+          <MonitorUp className="w-4 h-4 mr-2" />
+          <span>{t('table.actions.createShortcut')}</span>
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
@@ -676,6 +686,24 @@ export function EnvironmentTableRow({
       }, 300);
     }
   }, [currentStatus, isRunning, stoppingProgress]);
+
+  // 在桌面创建快捷方式
+  const handleCreateShortcut = async () => {
+    try {
+      const [result] = await createEnvironmentShortcuts([
+        { envUuid: environment.uuid, envName: environment.name },
+      ]);
+      if (result?.ok) {
+        toast.success(t('shortcut.created', { name: environment.name }), {
+          description: result.path ?? undefined,
+        });
+      } else {
+        toast.error(result?.message || t('shortcut.failed'));
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('shortcut.failed'));
+    }
+  };
 
   // 获取当前视图类型
   const isTrashMode = filtersStore.viewType === 'trash';
@@ -986,6 +1014,7 @@ export function EnvironmentTableRow({
               onEditCookies={handleEditCookies}
               onClearCache={handleClearCache}
               onDelete={handleDelete}
+              onCreateShortcut={handleCreateShortcut}
             />
           </>
         )}

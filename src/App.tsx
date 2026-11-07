@@ -8,10 +8,7 @@ import * as pluginImports from './core/plugin/loader/plugin-imports.generated';
 
 const MAIN_STARTUP_PLUGIN_IDS = [
   'app-layout',
-  'authorization-layout',
   'environment-manager',
-  'login',
-  'register',
   'i18n',
   'store',
   'window-manager',
