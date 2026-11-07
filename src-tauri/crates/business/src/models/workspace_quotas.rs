@@ -93,7 +93,7 @@ pub async fn decrement_used_environments(
     sqlx::query(
         r#"
         UPDATE workspace_quotas
-        SET used_environments = GREATEST(0, used_environments - $1),
+        SET used_environments = MAX(0, used_environments - $1),
             updated_at = CURRENT_TIMESTAMP
         WHERE workspace_uuid = $2
         "#,
@@ -137,7 +137,7 @@ pub async fn decrement_used_proxies(
     sqlx::query(
         r#"
         UPDATE workspace_quotas
-        SET used_proxies = GREATEST(0, used_proxies - $1),
+        SET used_proxies = MAX(0, used_proxies - $1),
             updated_at = CURRENT_TIMESTAMP
         WHERE workspace_uuid = $2
         "#,

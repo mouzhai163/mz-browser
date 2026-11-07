@@ -55,10 +55,22 @@ pub struct WorkspaceQuotaValues {
 impl Default for WorkspaceQuotaValues {
     fn default() -> Self {
         Self {
-            max_environments: 8,
+            max_environments: 99_999,
             max_team_members: 1,
             max_proxies: 99_999,
             max_rpa_tasks: 99_999,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_environment_quota_is_not_the_legacy_commercial_limit() {
+        let quota = WorkspaceQuotaValues::default();
+        assert_eq!(quota.max_environments, 99_999);
+        assert_eq!(quota.max_proxies, 99_999);
     }
 }

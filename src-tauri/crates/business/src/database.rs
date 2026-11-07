@@ -106,6 +106,78 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn migration_raises_legacy_environment_quota_of_existing_workspaces() {
+        use crate::entitys::CreateWorkspaceRequest;
+        use crate::models::{workspace_quotas, workspaces};
+
+        let mut config = DatabaseConfig::embedded("sqlite::memory:");
+        config.max_connections = 1;
+        config.min_connections = 1;
+        let context = crate::svc_ctx::SvcCtx::new(&config)
+            .await
+            .expect("business context should initialize");
+        let pool = &context.db;
+        let user_uuid = uuid::Uuid::new_v4();
+
+        sqlx::query("INSERT INTO users (uuid, id) VALUES ($1, $2)")
+            .bind(user_uuid)
+            .bind("LOCAL_USER")
+            .execute(pool)
+            .await
+            .expect("local user should be inserted");
+        sqlx::query(
+            "INSERT INTO user_infos (user_uuid, nickname, email, password) VALUES ($1, $2, $3, $4)",
+        )
+        .bind(user_uuid)
+        .bind("Local User")
+        .bind("local@simprint.invalid")
+        .bind("")
+        .execute(pool)
+        .await
+        .expect("local user profile should be inserted");
+        let workspace_uuid = workspaces::insert_workspace(
+            pool,
+            user_uuid,
+            &CreateWorkspaceRequest {
+                name: "Legacy Workspace".to_string(),
+                workspace_type: Some("personal".to_string()),
+            },
+        )
+        .await
+        .expect("workspace should be created");
+
+        // Reproduce a database created before the limit was lifted.
+        workspace_quotas::insert_or_update_workspace_quota(pool, workspace_uuid, 8, 1, 99_999, 99_999)
+            .await
+            .expect("legacy quota should be written");
+        let before: i32 = sqlx::query_scalar(
+            "SELECT max_environments FROM workspace_quotas WHERE workspace_uuid = $1",
+        )
+        .bind(workspace_uuid)
+        .fetch_one(pool)
+        .await
+        .expect("quota row should exist");
+        assert_eq!(before, 8);
+
+        sqlx::query(include_str!(
+            "../migrations/20261106000001_raise_workspace_environment_quota.sql"
+        ))
+        .execute(pool)
+        .await
+        .expect("quota migration should run");
+
+        let max_environments: i32 = sqlx::query_scalar(
+            "SELECT max_environments FROM workspace_quotas WHERE workspace_uuid = $1",
+        )
+        .bind(workspace_uuid)
+        .fetch_one(pool)
+        .await
+        .expect("quota row should exist");
+        assert_eq!(max_environments, 99_999);
+        assert!(workspace_quotas::check_quota(pool, workspace_uuid, "environments").await.unwrap());
+    }
+
+    #[tokio::test]
     async fn core_models_round_trip_on_sqlite() {
         use crate::entitys::{CreateTeamRequest, CreateWorkspaceRequest};
         use crate::models::{environments, proxies, teams, workspaces};
