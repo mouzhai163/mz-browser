@@ -139,7 +139,7 @@ export function transformTemplateToWindowConfig(
         (fingerprintSettings.fontFingerprint as 'random' | 'real' | 'custom' | 'system') ||
         'system',
       fontList,
-      webrtc: (fingerprintSettings.webrtc as 'replace' | 'real' | 'disable') || 'disable',
+      webrtc: fingerprintSettings.webrtc === 'real' ? 'real' : 'disable',
       webglImage:
         (fingerprintSettings.webglImage as 'random' | 'real' | 'custom' | 'system') || 'random',
       webglInfo:

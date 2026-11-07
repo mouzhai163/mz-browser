@@ -86,7 +86,7 @@ export function transformEnvironmentConfigToWindowConfig(
         (fingerprintSettings.fontFingerprint as 'random' | 'real' | 'custom' | 'system') ||
         'system',
       fontList,
-      webrtc: (fingerprintSettings.webrtc as 'replace' | 'real' | 'disable') || 'disable',
+      webrtc: fingerprintSettings.webrtc === 'real' ? 'real' : 'disable',
       webglImage:
         (fingerprintSettings.webglImage as 'random' | 'real' | 'custom' | 'system') || 'random',
       webglInfo:
@@ -99,7 +99,7 @@ export function transformEnvironmentConfigToWindowConfig(
         (fingerprintSettings.audioContext as 'random' | 'real' | 'custom' | 'system') || 'random',
       speechVoices:
         (fingerprintSettings.speechVoices as 'random' | 'real' | 'custom' | 'system') || 'random',
-      doNotTrack: (fingerprintSettings.doNotTrack as boolean) ?? true,
+      doNotTrack: (fingerprintSettings.doNotTrack as boolean) ?? false,
       clientRects:
         (fingerprintSettings.clientRects as 'random' | 'real' | 'custom' | 'system') || 'random',
       mediaDevices:

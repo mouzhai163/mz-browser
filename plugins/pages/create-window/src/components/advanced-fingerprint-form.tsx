@@ -57,18 +57,7 @@ export function AdvancedFingerprintForm({ value, onChange }: AdvancedFingerprint
     { value: 'real' as const, label: t('advancedFingerprint.fingerprintMode.real') },
   ];
 
-  const resolutionOptions = [
-    { value: 'random' as const, label: t('advancedFingerprint.fingerprintMode.random') },
-    { value: 'system' as const, label: t('advancedFingerprint.fingerprintMode.system') },
-  ];
-
-  const systemRandomOptions = [
-    { value: 'system' as const, label: t('advancedFingerprint.fingerprintMode.system') },
-    { value: 'random' as const, label: t('advancedFingerprint.fingerprintMode.random') },
-  ];
-
   const webrtcOptions = [
-    { value: 'replace' as const, label: t('advancedFingerprint.webrtcMode.replace') },
     { value: 'real' as const, label: t('advancedFingerprint.webrtcMode.real') },
     { value: 'disable' as const, label: t('advancedFingerprint.webrtcMode.disable') },
   ];

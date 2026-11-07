@@ -8,7 +8,8 @@ export type MatchMode = 'ip' | 'custom';
 
 export type GeolocationPrompt = 'ask' | 'allow' | 'forbid';
 
-export type WebRTCMode = 'replace' | 'real' | 'disable';
+// 'replace'（替换为代理出口 IP）内核未实现，已移除；旧配置里的 'replace' 一律按 'disable' 处理。
+export type WebRTCMode = 'real' | 'disable';
 
 export type FingerprintMode = 'random' | 'real' | 'custom' | 'system';
 

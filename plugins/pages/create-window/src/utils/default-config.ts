@@ -71,7 +71,8 @@ export function getDefaultWindowConfig(): WindowConfig {
       canvas: 'random',
       audioContext: 'random',
       speechVoices: 'random',
-      doNotTrack: true,
+      // Chrome 默认不发送 DNT；开启它只有极少数用户，本身就是指纹特征
+      doNotTrack: false,
       clientRects: 'random',
       mediaDevices: 'random',
     },

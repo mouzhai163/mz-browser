@@ -10,6 +10,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc, oneshot};
 
+/// How long to wait for the browser to confirm that the fingerprint config was applied.
+const FINGERPRINT_APPLY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FingerprintConfig {
     pub language: Option<String>,
@@ -270,6 +273,7 @@ impl EventBusManager {
             connections.insert(env_id_owned.clone(), browser_connection.clone());
         }
 
+        let mut pending_fingerprint: Option<FingerprintConfig> = None;
         if let Some(config) = launch_config {
             let config_data = serde_json::to_vec(&config)
                 .map_err(|error| EventBusError::Serialization(error.to_string()))?;
@@ -281,20 +285,9 @@ impl EventBusManager {
             }
             log_info("eventbus", format!("[{}] Launch config sent", env_id_owned));
 
-            if let Some(fingerprint_config) = config.fingerprint_config {
-                let fingerprint_data = serde_json::to_vec(&fingerprint_config)
-                    .map_err(|error| EventBusError::Serialization(error.to_string()))?;
-                if let Err(error) =
-                    browser_connection.send_event(Topic::FingerprintApply, fingerprint_data).await
-                {
-                    self.connections.write().await.remove(&env_id_owned);
-                    return Err(error);
-                }
-                log_info(
-                    "eventbus",
-                    format!("[{}] Fingerprint config sent", env_id_owned),
-                );
-            }
+            // 指纹配置不在这里发送：必须等接收循环启动后以"请求-应答"方式发送，
+            // 并等待浏览器确认已应用，见下方。
+            pending_fingerprint = config.fingerprint_config;
         }
 
         self.emit_connection_status(&env_id_owned, "connected").await;
@@ -387,6 +380,42 @@ impl EventBusManager {
                     }
                 }
             });
+        }
+
+        // 严格隔离要求：指纹配置必须被浏览器确认已应用才算启动成功。
+        // 握手成功只说明管道通了，不说明配置已生效；否则内核可能带着默认指纹打开页面。
+        if let Some(fingerprint_config) = pending_fingerprint {
+            let fingerprint_data = serde_json::to_vec(&fingerprint_config)
+                .map_err(|error| EventBusError::Serialization(error.to_string()))?;
+            let outcome = tokio::time::timeout(
+                FINGERPRINT_APPLY_TIMEOUT,
+                self.send_request(&env_id_owned, Topic::FingerprintApply, fingerprint_data),
+            )
+            .await;
+            let failure = match outcome {
+                Err(_) => Some(format!(
+                    "browser did not confirm the fingerprint config within {} seconds",
+                    FINGERPRINT_APPLY_TIMEOUT.as_secs()
+                )),
+                Ok(Err(error)) => Some(format!("fingerprint config request failed: {}", error)),
+                Ok(Ok(response)) if response.error_code != 0 => Some(format!(
+                    "browser rejected the fingerprint config (error code {})",
+                    response.error_code
+                )),
+                Ok(Ok(_)) => None,
+            };
+            if let Some(reason) = failure {
+                self.connections.write().await.remove(&env_id_owned);
+                log_error(
+                    "eventbus",
+                    format!("[{}] Fingerprint config not applied: {}", env_id_owned, reason),
+                );
+                return Err(EventBusError::InvalidMessage(reason));
+            }
+            log_info(
+                "eventbus",
+                format!("[{}] Fingerprint config applied (confirmed by browser)", env_id_owned),
+            );
         }
 
         Ok(())

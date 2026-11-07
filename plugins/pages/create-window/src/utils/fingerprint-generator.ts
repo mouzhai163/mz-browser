@@ -307,8 +307,6 @@ const DEVICE_PIXEL_RATIO_OPTIONS = [1, 1.5, 2];
 /** 颜色深度选项 */
 const COLOR_DEPTH_OPTIONS: (24 | 32)[] = [24, 32];
 
-/** 最大触摸点选项 */
-const MAX_TOUCH_POINTS_OPTIONS = [0, 5, 10];
 
 // ==================== 生成函数 ====================
 
@@ -369,9 +367,13 @@ export function generateRandomDevicePixelRatio(): number {
   return randomChoice(DEVICE_PIXEL_RATIO_OPTIONS);
 }
 
-/** 生成随机最大触摸点 */
+/**
+ * 最大触摸点。
+ * 桌面 Windows 环境固定为 0：UA/UA-CH 声明为桌面、媒体查询是 pointer: fine，
+ * 随机出 5/10 会得到"带触摸屏的桌面"这种少见组合，反而更容易被识别。
+ */
 export function generateRandomMaxTouchPoints(): number {
-  return randomChoice(MAX_TOUCH_POINTS_OPTIONS);
+  return 0;
 }
 
 /** 生成随机硬件并发数 */
@@ -397,7 +399,8 @@ export function generateRandomFingerprintSettings(): AdvancedFingerprintSettings
     maxTouchPoints: generateRandomMaxTouchPoints(),
     fontFingerprint: generateFingerprintMode(),
     fontList: generateFontListConfig('random', 'Windows'),
-    webrtc: randomChoice<'replace' | 'real' | 'disable'>(['replace', 'disable']),
+    // 内核尚未实现 'replace'（选了等于没有防护），所以只生成 'disable'
+    webrtc: 'disable',
     webglImage: generateFingerprintMode(),
     webglInfo: generateFingerprintMode(),
     webglVendor: hardware.vendor,
@@ -453,11 +456,52 @@ function shuffleArray<T>(arr: T[]): T[] {
 }
 
 /**
- * 生成随机字体列表（从 CreepJS 检测列表中随机选择）
+ * 每台标准 Windows 10/11 都自带的字体。
+ * 随机字体列表必须始终包含它们：内核只会把列表内的系统字体暴露给网页，
+ * 缺了 Arial、Microsoft YaHei 等，常见的 font-family 回退链会全部落空，页面排版和中文显示都会异常。
+ */
+const CORE_WINDOWS_FONTS = [
+  'Arial',
+  'Arial Black',
+  'Calibri',
+  'Cambria',
+  'Cambria Math',
+  'Comic Sans MS',
+  'Consolas',
+  'Courier New',
+  'Georgia',
+  'Impact',
+  'Lucida Console',
+  'Lucida Sans Unicode',
+  'Malgun Gothic',
+  'Microsoft JhengHei',
+  'Microsoft Sans Serif',
+  'Microsoft YaHei',
+  'MS Gothic',
+  'Palatino Linotype',
+  'Segoe UI',
+  'Segoe UI Emoji',
+  'Segoe UI Symbol',
+  'SimSun',
+  'Symbol',
+  'Tahoma',
+  'Times New Roman',
+  'Trebuchet MS',
+  'Verdana',
+  'Webdings',
+  'Wingdings',
+  'Yu Gothic',
+];
+
+/**
+ * 生成随机字体列表：核心字体 + 从 CreepJS 检测列表中随机挑选的若干额外字体
  */
 export function generateRandomFontList(): string[] {
-  const count = randomInt(10, 25); // 随机选择 10-25 个字体
-  return shuffleArray(CREEPJS_FONT_LIST).slice(0, count);
+  const core = new Set(CORE_WINDOWS_FONTS.map((font) => font.toLowerCase()));
+  const extras = shuffleArray(
+    CREEPJS_FONT_LIST.filter((font) => !core.has(font.toLowerCase())),
+  ).slice(0, randomInt(5, 15));
+  return [...CORE_WINDOWS_FONTS, ...extras];
 }
 
 /**

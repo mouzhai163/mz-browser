@@ -150,7 +150,6 @@ export function NetworkLocationForm({
   ];
 
   const webrtcOptions = [
-    { value: 'replace' as const, label: t('advancedFingerprint.webrtcMode.replace') },
     { value: 'real' as const, label: t('advancedFingerprint.webrtcMode.real') },
     { value: 'disable' as const, label: t('advancedFingerprint.webrtcMode.disable') },
   ];
