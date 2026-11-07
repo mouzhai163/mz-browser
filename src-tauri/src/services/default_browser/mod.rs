@@ -210,39 +210,36 @@ async fn open_link_inner(app: &AppHandle, raw: &str) -> std::result::Result<Stri
     Ok(env_uuid)
 }
 
-/// 在指定环境里打开网址：环境已在运行就新开标签页，否则启动环境并带上这个网址。
+/// 在指定环境里打开网址：环境已在运行就新开标签页，否则先启动环境再开标签页。
+///
+/// 链接总是由我们通过 DevTools 新开标签页（拿到标签页 ID 再切到前台），而不是作为启动参数交给内核：
+/// 内核把启动网址开在后台标签页，网址一跳转（`qq.com` → `www.qq.com`）就再也认不出是哪一个。
 pub async fn open_url_in_environment(app: &AppHandle, env_uuid: &str, raw_url: &str) -> Result<()> {
     let url = validate_link(raw_url).map_err(|reason| format!("链接无效：{reason}"))?;
 
     if let Some(endpoint) = KernelService::get_cdp_endpoint(env_uuid.to_string()).await? {
-        return open_in_running_browser(&endpoint.host, endpoint.port, &url).await;
+        // 端点记录还在，不代表浏览器还在（窗口刚被关掉时）。连不上就当作没在运行。
+        if browser_reachable(&endpoint.host, endpoint.port).await {
+            return open_in_running_browser(&endpoint.host, endpoint.port, &url).await.map(|_| ());
+        }
+        log::info!("{env_uuid} has a CDP endpoint but the browser is gone; launching it again");
     }
 
     let launch_paths = EnvironmentLaunchRuntimeService::resolve_launch_paths(app)?;
     let status_emitter = Some(crate::services::environment::kernel::utils::build_tauri_status_emitter(
         app.clone(),
     ));
-    match EnvironmentLaunchRuntimeService::start_environment_with_url(
+    match EnvironmentLaunchRuntimeService::start_environment_for_link(
         env_uuid.to_string(),
         launch_paths,
         status_emitter,
-        url.clone(),
     )
     .await
     {
-        Ok(()) => {
-            // 内核把启动链接开在后台标签页，旁边还有一个空白新标签页：把链接切到前台，并关掉空白页。
-            focus_launched_link(env_uuid, &url).await;
-            Ok(())
-        }
-        Err(error) => {
-            // 环境正在被启动（比如连续点了两个链接）：等它就绪后再开标签页。
-            if error.to_string().contains("already active") {
-                wait_and_open(env_uuid, &url).await
-            } else {
-                Err(error)
-            }
-        }
+        Ok(()) => open_after_launch(env_uuid, &url).await,
+        // 环境正在被启动（比如连续点了两个链接）：等它就绪后再开标签页。
+        Err(error) if error.to_string().contains("already active") => open_after_launch(env_uuid, &url).await,
+        Err(error) => Err(error),
     }
 }
 
@@ -254,67 +251,73 @@ fn is_blank_tab(url: &str) -> bool {
     )
 }
 
-/// 两个网址是不是同一个页面：浏览器会补全结尾的 `/`，其余必须一致。
-fn same_page(left: &str, right: &str) -> bool {
-    left.trim_end_matches('/') == right.trim_end_matches('/')
+fn devtools_client(timeout: Duration) -> Result<reqwest::Client> {
+    // 本机 DevTools 端口不能走系统代理。
+    Ok(reqwest::Client::builder().no_proxy().timeout(timeout).build()?)
 }
 
-/// 启动环境后等启动链接的标签页出现，把它切到前台，并关掉空白的新标签页。找不到不算失败
-/// （比如链接跳转到了别的地址）——链接本身已经打开了，只是没切到前台。
-async fn focus_launched_link(env_uuid: &str, url: &str) {
-    for _ in 0..40 {
-        if let Ok(Some(endpoint)) = KernelService::get_cdp_endpoint(env_uuid.to_string()).await {
-            if let Ok(true) = focus_link_tab(&endpoint.host, endpoint.port, url).await {
-                return;
-            }
-        }
-        tokio::time::sleep(Duration::from_millis(500)).await;
-    }
-    log::warn!("started {env_uuid} but could not bring the link tab to the front");
+/// 浏览器的 DevTools 接口能不能连上。
+async fn browser_reachable(host: &str, port: u16) -> bool {
+    let Ok(client) = devtools_client(Duration::from_secs(2)) else { return false };
+    matches!(
+        client.get(format!("http://{host}:{port}/json/version")).send().await,
+        Ok(response) if response.status().is_success()
+    )
 }
 
-async fn focus_link_tab(host: &str, port: u16, url: &str) -> Result<bool> {
-    let client = reqwest::Client::builder().no_proxy().timeout(Duration::from_secs(5)).build()?;
-    let base = format!("http://{host}:{port}");
-    let targets = client.get(format!("{base}/json/list")).send().await?.error_for_status()?.json::<Value>().await?;
-    let pages: Vec<(&str, &str)> = targets
+/// 当前所有页面标签页：(id, url)。
+async fn list_pages(host: &str, port: u16) -> Result<Vec<(String, String)>> {
+    let client = devtools_client(Duration::from_secs(5))?;
+    let targets = client
+        .get(format!("http://{host}:{port}/json/list"))
+        .send()
+        .await?
+        .error_for_status()?
+        .json::<Value>()
+        .await?;
+    Ok(targets
         .as_array()
         .map(|items| {
             items
                 .iter()
                 .filter(|item| item.get("type").and_then(Value::as_str) == Some("page"))
                 .filter_map(|item| {
-                    Some((item.get("id")?.as_str()?, item.get("url")?.as_str()?))
+                    Some((item.get("id")?.as_str()?.to_string(), item.get("url")?.as_str()?.to_string()))
                 })
                 .collect()
         })
-        .unwrap_or_default();
-    let Some((link_id, _)) = pages.iter().find(|(_, page_url)| same_page(page_url, url)) else {
-        return Ok(false);
-    };
-    client.get(format!("{base}/json/activate/{link_id}")).send().await?.error_for_status()?;
-    for (id, page_url) in &pages {
-        if id != link_id && is_blank_tab(page_url) {
-            let _ = client.get(format!("{base}/json/close/{id}")).send().await;
-        }
-    }
-    Ok(true)
+        .unwrap_or_default())
 }
 
-async fn wait_and_open(env_uuid: &str, url: &str) -> Result<()> {
+/// 环境刚启动：等浏览器窗口出现，再新开链接标签页并切到前台，然后关掉内核自带的空白标签页
+/// （先开新的再关空白的，否则关掉最后一个标签页会让整个浏览器退出）。
+async fn open_after_launch(env_uuid: &str, url: &str) -> Result<()> {
     for _ in 0..60 {
-        if let Some(endpoint) = KernelService::get_cdp_endpoint(env_uuid.to_string()).await? {
-            return open_in_running_browser(&endpoint.host, endpoint.port, url).await;
+        if let Ok(Some(endpoint)) = KernelService::get_cdp_endpoint(env_uuid.to_string()).await {
+            if let Ok(pages) = list_pages(&endpoint.host, endpoint.port).await {
+                if !pages.is_empty() {
+                    let created = open_in_running_browser(&endpoint.host, endpoint.port, url).await?;
+                    let client = devtools_client(Duration::from_secs(5))?;
+                    for (id, page_url) in &pages {
+                        if Some(id) != created.as_ref() && is_blank_tab(page_url) {
+                            let _ = client
+                                .get(format!("http://{}:{}/json/close/{id}", endpoint.host, endpoint.port))
+                                .send()
+                                .await;
+                        }
+                    }
+                    return Ok(());
+                }
+            }
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
-    Err("环境启动超时，链接未能打开".into())
+    Err("环境已启动，但浏览器窗口迟迟没有就绪，链接未能打开".into())
 }
 
-/// 通过该环境的 DevTools HTTP 接口新开标签页（`PUT /json/new?<url>`），并尽量切到前台。
-async fn open_in_running_browser(host: &str, port: u16, url: &str) -> Result<()> {
-    // 本机 DevTools 端口不能走系统代理。
-    let client = reqwest::Client::builder().no_proxy().timeout(Duration::from_secs(10)).build()?;
+/// 通过该环境的 DevTools HTTP 接口新开标签页（`PUT /json/new?<url>`）并切到前台，返回新标签页 ID。
+async fn open_in_running_browser(host: &str, port: u16, url: &str) -> Result<Option<String>> {
+    let client = devtools_client(Duration::from_secs(10))?;
     let base = format!("http://{host}:{port}");
     let created = client
         .put(format!("{base}/json/new?{}", link::percent_encode_all(url)))
@@ -323,11 +326,12 @@ async fn open_in_running_browser(host: &str, port: u16, url: &str) -> Result<()>
         .error_for_status()?
         .json::<Value>()
         .await?;
-    if let Some(target_id) = created.get("id").and_then(Value::as_str) {
+    let target_id = created.get("id").and_then(Value::as_str).map(str::to_string);
+    if let Some(target_id) = &target_id {
         // 切换标签页并把窗口带到前台；失败不影响链接已经打开。
         let _ = client.get(format!("{base}/json/activate/{target_id}")).send().await;
     }
-    Ok(())
+    Ok(target_id)
 }
 
 /// 处理系统交来的链接（命令行 / 单实例转发 / 命名管道），在后台执行。
@@ -374,13 +378,5 @@ mod tests {
         for page in ["https://example.com/", "chrome://settings/", "https://example.com/about:blank", ""] {
             assert!(!is_blank_tab(page), "{page}");
         }
-    }
-
-    #[test]
-    fn the_browser_adding_a_trailing_slash_is_still_the_same_page() {
-        assert!(same_page("https://example.com/", "https://example.com"));
-        assert!(same_page("https://example.com/a?b=1#c", "https://example.com/a?b=1#c"));
-        assert!(!same_page("https://example.com/a", "https://example.com/b"));
-        assert!(!same_page("https://example.com/?a=1", "https://example.com/?a=2"));
     }
 }

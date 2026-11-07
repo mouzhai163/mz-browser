@@ -69,12 +69,12 @@ impl EnvironmentLaunchRuntimeService {
         .await
     }
 
-    /// 启动环境，并只打开指定的网址（用于默认浏览器：外部链接直接进这个环境）。
-    pub async fn start_environment_with_url(
+    /// 为打开外部链接启动环境（默认浏览器）：不打开环境自己配置的起始页，
+    /// 链接随后由调用方通过 DevTools 开在前台标签页里。
+    pub async fn start_environment_for_link(
         env_uuid: String,
         launch_paths: LaunchPaths,
         status_emitter: Option<KernelStatusEmitter>,
-        url: String,
     ) -> Result<()> {
         let app = get_app_handle()?;
         let mut request = Self::build_launch_request(
@@ -85,7 +85,7 @@ impl EnvironmentLaunchRuntimeService {
             None,
         )
         .await?;
-        request.urls = Some(vec![url]);
+        request.urls = Some(Vec::new());
 
         KernelService::launch_environment(
             app,
