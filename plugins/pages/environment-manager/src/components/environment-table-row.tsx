@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { useDefaultBrowserStore } from '../stores/default-browser-store';
 import { cn } from '@/lib/utils';
 import { FaApple, FaFirefoxBrowser, FaLinux, FaWindows } from 'react-icons/fa';
 import { SiGooglechrome } from 'react-icons/si';
@@ -27,8 +26,6 @@ import {
   Eraser,
   Pencil,
   RotateCcw,
-  BadgeCheck,
-  Unlink,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -427,13 +424,9 @@ function ActionsDropdown({
   onEditCookies,
   onClearCache,
   onDelete,
-  isDefaultBrowser,
-  onToggleDefaultBrowser,
 }: {
   environment: Environment;
   isRunning: boolean;
-  isDefaultBrowser: boolean;
-  onToggleDefaultBrowser: () => void;
   t: (key: string) => string;
   onEdit?: () => void;
   onToggle: () => void;
@@ -483,20 +476,6 @@ function ActionsDropdown({
         <DropdownMenuItem onClick={onExport} className="cursor-pointer">
           <Download className="w-4 h-4 mr-2" />
           <span>{t('table.actions.exportWindow')}</span>
-        </DropdownMenuItem>
-
-        {/* 设为 / 取消默认浏览器：外部软件里的链接固定在这个环境打开 */}
-        <DropdownMenuItem onClick={onToggleDefaultBrowser} className="cursor-pointer">
-          {isDefaultBrowser ? (
-            <Unlink className="w-4 h-4 mr-2" />
-          ) : (
-            <BadgeCheck className="w-4 h-4 mr-2" />
-          )}
-          <span>
-            {isDefaultBrowser
-              ? t('table.actions.clearDefaultBrowser')
-              : t('table.actions.setDefaultBrowser')}
-          </span>
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
@@ -698,51 +677,6 @@ export function EnvironmentTableRow({
     }
   }, [currentStatus, isRunning, stoppingProgress]);
 
-  // 默认浏览器：同一时刻只有一个环境，外部软件里的链接固定在它里面打开
-  const defaultBrowserEnvUuid = useDefaultBrowserStore((s) => s.state.environmentUuid);
-  const isDefaultBrowser = defaultBrowserEnvUuid === environment.uuid;
-
-  const handleToggleDefaultBrowser = async () => {
-    const store = useDefaultBrowserStore.getState();
-    try {
-      if (isDefaultBrowser) {
-        const wasSystemDefault = store.state.isSystemDefault;
-        await store.clear();
-        toast.success(
-          wasSystemDefault
-            ? t('defaultBrowser.clearedRestore')
-            : t('defaultBrowser.cleared'),
-          wasSystemDefault
-            ? {
-                duration: 12000,
-                action: {
-                  label: t('defaultBrowser.openSettings'),
-                  onClick: () => void store.openSystemSettings(),
-                },
-              }
-            : undefined
-        );
-        return;
-      }
-
-      const next = await store.setDefault(environment.uuid);
-      if (next.isSystemDefault) {
-        toast.success(t('defaultBrowser.setDone', { name: environment.name }));
-      } else {
-        // Windows 不允许程序替用户选择默认浏览器，还差用户在系统设置里选一次 Simprint。
-        toast.success(t('defaultBrowser.setNeedSystemStep', { name: environment.name }), {
-          duration: 15000,
-          action: {
-            label: t('defaultBrowser.openSettings'),
-            onClick: () => void store.openSystemSettings(),
-          },
-        });
-      }
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('defaultBrowser.failed'));
-    }
-  };
-
   // 获取当前视图类型
   const isTrashMode = filtersStore.viewType === 'trash';
 
@@ -911,15 +845,6 @@ export function EnvironmentTableRow({
         ) : (
           <span className="font-medium">{environment.name}</span>
         )}
-        {isDefaultBrowser && (
-          <span
-            className="ml-2 inline-flex items-center gap-1 rounded border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary align-middle"
-            title={t('defaultBrowser.badgeHint')}
-          >
-            <BadgeCheck className="h-3 w-3" />
-            {t('defaultBrowser.badge')}
-          </span>
-        )}
       </DataTableCell>
 
       {/* 代理列 */}
@@ -1061,8 +986,6 @@ export function EnvironmentTableRow({
               onEditCookies={handleEditCookies}
               onClearCache={handleClearCache}
               onDelete={handleDelete}
-              isDefaultBrowser={isDefaultBrowser}
-              onToggleDefaultBrowser={handleToggleDefaultBrowser}
             />
           </>
         )}

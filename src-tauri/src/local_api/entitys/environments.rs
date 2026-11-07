@@ -77,14 +77,6 @@ pub struct LocalApiStartEnvironmentRequest {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LocalApiOpenUrlRequest {
-    pub env_uuid: String,
-    /// 只接受 http / https
-    pub url: String,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct LocalApiBatchStartEnvironmentsRequest {
     pub env_uuids: Vec<String>,
 }

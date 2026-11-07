@@ -65,7 +65,6 @@ New environments get GPU, core count, memory, resolution and scaling from one ti
 
 - **RPA workflows**: build and run repeatable browser automation flows.
 - **Syncer**: pick a controller window and mirror interactions to other running windows.
-- **Default browser**: mark one environment as the "default browser" in the environment manager (one at a time, can be unset any time); links opened from other apps then open directly in that environment without asking. Only http / https links are accepted. Windows does not let a program choose the default browser for you, so you still pick Simprint once in Windows' Default apps settings.
 - **Local API**: control environments, proxies, tags, groups and browser kernels through a local API protected by an API key.
 - **MCP**: an optional local Model Context Protocol server (off by default) that lets external AI clients use workspace resources.
 

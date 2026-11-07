@@ -11,12 +11,6 @@ pub fn register_plugins(app_handle: &AppHandle) {
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             use tauri::Manager;
 
-            // 系统把 http(s) 链接交给我们（默认浏览器）：在默认环境里打开，不打扰主窗口。
-            if let Some(link) = crate::services::default_browser::link_from_args(argv.clone()) {
-                crate::services::default_browser::handle_link_in_background(app.clone(), link);
-                return;
-            }
-
             let app_state = crate::app::init_state::read_app_init_state();
             if app_state.is_initialized && !app_state.is_updating {
                 let Some(main_window) = app.get_webview_window("main") else {
@@ -88,12 +82,6 @@ pub fn init_simprint_runtime_background(app_handle: AppHandle) {
 
         let ctx = AppContext::get();
         ctx.simprint_runtime_manager.set_app_handle(app_handle.clone()).await;
-
-        // 被系统当作默认浏览器启动（命令行带 http(s) 链接）：运行时就绪后在默认环境里打开。
-        if let Some(link) = crate::services::default_browser::link_from_args(std::env::args().skip(1)) {
-            crate::services::default_browser::handle_link_in_background(app_handle.clone(), link);
-        }
-        crate::services::default_browser::refresh_registration_if_needed(&app_handle);
 
         if let Err(error) = ctx.simprint_runtime_manager.start_background().await {
             log::warn!("failed to start embedded environment runtime: {}", error);

@@ -117,10 +117,4 @@ FunctionEnd
   ${EndIf}
 
   DeleteRegKey HKCU "Software\${PRODUCTNAME}\RuntimePaths"
-
-  ; 取消"默认浏览器"登记：卸载后 Simprint 不再出现在 Windows 的可选浏览器里。
-  ; 登记名与 services/default_browser/registry.rs 的 RELEASE_NAMES 保持一致（开发运行用另一套名字，不受影响）。
-  DeleteRegKey HKCU "Software\Classes\SimprintHTML"
-  DeleteRegKey HKCU "Software\Clients\StartMenuInternet\Simprint"
-  DeleteRegValue HKCU "Software\RegisteredApplications" "Simprint"
 !macroend

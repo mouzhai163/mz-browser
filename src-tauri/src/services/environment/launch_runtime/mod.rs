@@ -69,40 +69,6 @@ impl EnvironmentLaunchRuntimeService {
         .await
     }
 
-    /// 启动环境，并只打开指定的网址（用于默认浏览器：外部链接直接进这个环境）。
-    pub async fn start_environment_with_url(
-        env_uuid: String,
-        launch_paths: LaunchPaths,
-        status_emitter: Option<KernelStatusEmitter>,
-        url: String,
-    ) -> Result<()> {
-        let app = get_app_handle()?;
-        let mut request = Self::build_launch_request(
-            app.clone(),
-            env_uuid,
-            &launch_paths,
-            status_emitter.clone(),
-            None,
-        )
-        .await?;
-        request.urls = Some(vec![url]);
-
-        KernelService::launch_environment(
-            app,
-            request.exe_path,
-            request.env_uuid,
-            request.cache_path,
-            request.cookies,
-            request.urls,
-            request.proxy,
-            request.fingerprint_config,
-            request.accounts,
-            request.extensions,
-            status_emitter,
-        )
-        .await
-    }
-
     pub async fn batch_start_environments_by_uuid(
         env_uuids: Vec<String>,
         launch_paths: LaunchPaths,

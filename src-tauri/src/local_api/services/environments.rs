@@ -8,7 +8,7 @@ use crate::{
         context::LocalApiRequestContext,
         entitys::{
             LocalApiBatchStartEnvironmentsRequest, LocalApiEnvironmentActionResponse,
-            LocalApiOpenUrlRequest, LocalApiStartEnvironmentRequest,
+            LocalApiStartEnvironmentRequest,
         },
         services::forward_service,
         types::LocalApiRoute,
@@ -205,28 +205,6 @@ pub async fn start_environment_service(
     )
     .await
     .map_err(|error| (StatusCode::BAD_GATEWAY, error.to_string()))?;
-
-    serde_json::to_value(LocalApiEnvironmentActionResponse {
-        env_uuid,
-        success: true,
-    })
-    .map_err(|error| (StatusCode::BAD_GATEWAY, error.to_string()))
-}
-
-/// 在指定环境里打开网址：环境在运行就新开标签页，否则启动环境并打开该网址。
-pub async fn open_environment_url_service(
-    _ctx: &LocalApiRequestContext,
-    payload: LocalApiOpenUrlRequest,
-) -> Result<Value, (StatusCode, String)> {
-    let app =
-        get_app_handle().map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?;
-    let env_uuid = payload.env_uuid;
-
-    crate::services::default_browser::validate_link(&payload.url)
-        .map_err(|reason| (StatusCode::BAD_REQUEST, format!("链接无效：{reason}")))?;
-    crate::services::default_browser::open_url_in_environment(&app, &env_uuid, &payload.url)
-        .await
-        .map_err(|error| (StatusCode::BAD_GATEWAY, error.to_string()))?;
 
     serde_json::to_value(LocalApiEnvironmentActionResponse {
         env_uuid,
