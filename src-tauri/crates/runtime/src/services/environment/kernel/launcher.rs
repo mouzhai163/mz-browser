@@ -9,7 +9,6 @@ use crate::infrastructure::diagnostics::{log_info, log_warn};
 use crate::infrastructure::eventbus::{LaunchConfig, Message, eventbus_manager};
 use crate::infrastructure::eventbus::{Topic, get_eventbus_manager};
 use crate::services::environment::{EnvironmentStatus, EnvironmentStatusManager};
-use std::fs::OpenOptions;
 use std::path::Path;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -394,37 +393,11 @@ async fn spawn_browser_process(
     let mut command = tokio::process::Command::new(exe_path);
     command.current_dir(work_dir).args(&args).stdin(Stdio::null());
 
-    let browser_log_path = Path::new(user_data_dir).join("simprint-browser.log");
-    match OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(&browser_log_path)
-    {
-        Ok(stdout) => match stdout.try_clone() {
-            Ok(stderr) => {
-                command.stdout(Stdio::from(stdout)).stderr(Stdio::from(stderr));
-            }
-            Err(error) => {
-                log_warn(
-                    "kernel",
-                    format!("Failed to clone browser log file: {}", error),
-                );
-                command.stdout(Stdio::null()).stderr(Stdio::null());
-            }
-        },
-        Err(error) => {
-            log_warn(
-                "kernel",
-                format!(
-                    "Failed to open browser log {}: {}",
-                    browser_log_path.display(),
-                    error
-                ),
-            );
-            command.stdout(Stdio::null()).stderr(Stdio::null());
-        }
-    }
+    // 浏览器日志由内核自己写入 user-data-dir 下的 simprint-browser.log（见 base_browser_args 的
+    // --log-file）。不要再用 --enable-logging=stderr 并重定向 stderr：Windows 上 Chromium 的
+    // 不开沙箱的子进程（如网络服务）拿不到有效的 stderr 时会自己分配一个控制台窗口，
+    // 启动后就会弹出黑框。
+    command.stdout(Stdio::null()).stderr(Stdio::null());
 
     #[cfg(target_os = "windows")]
     {
@@ -478,7 +451,11 @@ fn base_browser_args(env_id: &str, user_data_dir: &str, cdp_port: u16) -> Vec<St
         "--remote-debugging-address=127.0.0.1".into(),
         "--remote-allow-origins=tauri://localhost,http://tauri.localhost,http://localhost:5173,http://127.0.0.1:5173".into(),
         "--disable-skia-graphite".into(),
-        "--enable-logging=stderr".into(),
+        "--enable-logging".into(),
+        format!(
+            "--log-file={}",
+            Path::new(user_data_dir).join("simprint-browser.log").display()
+        ),
     ];
     #[cfg(all(feature = "desktop-e2e", debug_assertions, not(feature = "production")))]
     let args = append_test_certificate(args);
@@ -562,6 +539,15 @@ mod policy_tests {
         );
         assert!(!args.iter().any(|arg| arg == "--remote-allow-origins=*"));
         assert!(args.iter().any(|arg| arg == "--remote-debugging-address=127.0.0.1"));
+    }
+
+    #[test]
+    fn browser_logs_to_a_file_and_never_to_stderr() {
+        // --enable-logging=stderr makes unsandboxed child processes pop up console windows.
+        let args = super::base_browser_args("env-1", "test-profile", 29200);
+        assert!(!args.iter().any(|arg| arg.starts_with("--enable-logging=")));
+        assert!(args.iter().any(|arg| arg == "--enable-logging"));
+        assert!(args.iter().any(|arg| arg.starts_with("--log-file=") && arg.ends_with("simprint-browser.log")));
     }
 
     #[test]
