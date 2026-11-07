@@ -2,7 +2,9 @@ use axum::{Extension, Json, response::Response};
 
 use crate::local_api::{
     context::LocalApiRequestContext,
-    entitys::{LocalApiBatchStartEnvironmentsRequest, LocalApiStartEnvironmentRequest},
+    entitys::{
+        LocalApiBatchStartEnvironmentsRequest, LocalApiOpenUrlRequest, LocalApiStartEnvironmentRequest,
+    },
     handlers::{fail_response, success_response},
     services::environments::*,
     types::LocalApiJsonRequest,
@@ -99,6 +101,16 @@ pub async fn start_environment_handler(
     Json(payload): Json<LocalApiStartEnvironmentRequest>,
 ) -> Response {
     match start_environment_service(&ctx, payload).await {
+        Ok(value) => success_response(None, Some(value)),
+        Err((status, message)) => fail_response(status, &message),
+    }
+}
+
+pub async fn open_environment_url_handler(
+    Extension(ctx): Extension<LocalApiRequestContext>,
+    Json(payload): Json<LocalApiOpenUrlRequest>,
+) -> Response {
+    match open_environment_url_service(&ctx, payload).await {
         Ok(value) => success_response(None, Some(value)),
         Err((status, message)) => fail_response(status, &message),
     }

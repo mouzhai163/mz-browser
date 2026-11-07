@@ -8,6 +8,7 @@
 
 pub mod app;
 pub mod connectivity;
+pub mod default_browser;
 pub mod environment;
 pub mod file_system;
 pub mod local_extensions;

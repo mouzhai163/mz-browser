@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { EnvironmentHeader } from './environment-header';
+import { useDefaultBrowserStore } from '../stores/default-browser-store';
 import { EnvironmentTable } from './environment-table';
 import { EnvironmentBatchActions } from './environment-batch-actions';
 import { EnvironmentPagination } from './environment-pagination';
@@ -96,6 +97,16 @@ export function EnvironmentList() {
     const unlistenPromise = runningEnvsStore.initListener();
     return () => {
       unlistenPromise.then((unlisten) => unlisten());
+    };
+  }, []);
+
+  // 默认浏览器：读取当前设置，并在系统交来的外部链接打不开时提示
+  useEffect(() => {
+    const { refresh, initListener } = useDefaultBrowserStore.getState();
+    void refresh().catch((error) => console.warn('[DefaultBrowser] refresh failed:', error));
+    const unlistenPromise = initListener();
+    return () => {
+      void unlistenPromise.then((unlisten) => unlisten());
     };
   }, []);
 

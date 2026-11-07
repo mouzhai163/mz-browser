@@ -65,6 +65,8 @@ export const environmentResources = {
         assignGroup: '配置分组',
         editCookies: '编辑 Cookies',
         clearCache: '清除缓存',
+        setDefaultBrowser: '设为默认浏览器',
+        clearDefaultBrowser: '取消默认浏览器',
         toggleFailed: '切换状态失败',
         deleteFailed: '删除失败',
         assignTagFailed: '分配标签失败',
@@ -80,6 +82,18 @@ export const environmentResources = {
       filterAllTags: '所有标签',
       filterAllGroups: '所有分组',
       confirmDelete: '确定要删除环境 "{{name}}" 吗？此操作不可恢复。',
+    },
+    defaultBrowser: {
+      badge: '默认浏览器',
+      badgeHint: '外部软件里点开的链接固定在这个环境打开',
+      setDone: '已将“{{name}}”设为默认浏览器，外部链接会直接在这个环境里打开',
+      setNeedSystemStep:
+        '已将“{{name}}”设为默认浏览器。还差一步：请在 Windows 设置里把默认浏览器选为 Simprint',
+      cleared: '已取消默认浏览器',
+      clearedRestore:
+        '已取消默认浏览器。如果 Windows 仍把 Simprint 当作默认浏览器，请在系统设置里改回你常用的浏览器',
+      openSettings: '打开系统设置',
+      failed: '设置默认浏览器失败',
     },
     batchActions: {
       selected: '已选择',
@@ -548,6 +562,8 @@ export const environmentResources = {
         assignGroup: 'Assign Group',
         editCookies: 'Edit Cookies',
         clearCache: 'Clear Cache',
+        setDefaultBrowser: 'Set as Default Browser',
+        clearDefaultBrowser: 'Unset Default Browser',
         toggleFailed: 'Failed to toggle status',
         deleteFailed: 'Failed to delete',
         assignTagFailed: 'Failed to assign tag',
@@ -565,6 +581,18 @@ export const environmentResources = {
       filterAllGroups: 'All Groups',
       confirmDelete:
         'Are you sure you want to delete environment "{{name}}"? This action cannot be undone.',
+    },
+    defaultBrowser: {
+      badge: 'Default browser',
+      badgeHint: 'Links opened from other apps always open in this environment',
+      setDone: '"{{name}}" is now the default browser; external links open in it directly',
+      setNeedSystemStep:
+        '"{{name}}" is now the default browser. One more step: pick Simprint as the default browser in Windows Settings',
+      cleared: 'Default browser unset',
+      clearedRestore:
+        'Default browser unset. If Windows still uses Simprint as the default browser, switch it back in system settings',
+      openSettings: 'Open system settings',
+      failed: 'Failed to change the default browser',
     },
     batchActions: {
       selected: 'Selected',
