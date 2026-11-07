@@ -126,6 +126,10 @@ pub async fn launch_browser(
         request.window_position.as_deref(),
         request.window_size.as_deref(),
         request.extension_dirs.as_ref(),
+        request
+            .fingerprint_config
+            .as_ref()
+            .and_then(|config| config.interface_language.as_deref().or(config.language.as_deref())),
         job_manager.clone(),
     )
     .await;
@@ -361,11 +365,18 @@ async fn spawn_browser_process(
     window_position: Option<&str>,
     window_size: Option<&str>,
     extension_dirs: Option<&Vec<String>>,
+    ui_language: Option<&str>,
     job_manager: Arc<JobManager>,
 ) -> Result<Child> {
     validate_browser_runtime_layout(exe_path)?;
 
     let mut args = base_browser_args(env_id, user_data_dir, cdp_port);
+
+    // 浏览器界面语言必须跟随环境配置，而不是宿主机系统语言：表单控件（文件选择按钮、日期框等）
+    // 的文字和宽度页面可以读到，系统是德语时会暴露 "Datei auswählen" 之类的文字。
+    if let Some(language) = ui_language.and_then(browser_ui_language_arg) {
+        args.push(language);
+    }
 
     if cfg!(debug_assertions) {
         args.push("--v=1".to_string());
@@ -441,6 +452,19 @@ async fn spawn_browser_process(
         ),
     );
     Ok(child)
+}
+
+/// 把环境配置里的语言（如 "ja-JP"）转成 `--lang=` 参数；只接受 BCP-47 风格的字符，
+/// 配置尚未解析（"ip"/空）时返回 None，由浏览器使用默认语言。
+fn browser_ui_language_arg(language: &str) -> Option<String> {
+    let language = language.trim();
+    let valid = !language.is_empty()
+        && !language.eq_ignore_ascii_case("ip")
+        && language.len() <= 16
+        && language
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    valid.then(|| format!("--lang={language}"))
 }
 
 fn base_browser_args(env_id: &str, user_data_dir: &str, cdp_port: u16) -> Vec<String> {
@@ -539,6 +563,15 @@ mod policy_tests {
         );
         assert!(!args.iter().any(|arg| arg == "--remote-allow-origins=*"));
         assert!(args.iter().any(|arg| arg == "--remote-debugging-address=127.0.0.1"));
+    }
+
+    #[test]
+    fn ui_language_follows_the_environment_config() {
+        assert_eq!(super::browser_ui_language_arg("ja-JP").as_deref(), Some("--lang=ja-JP"));
+        assert_eq!(super::browser_ui_language_arg(" en-US ").as_deref(), Some("--lang=en-US"));
+        assert_eq!(super::browser_ui_language_arg("ip"), None);
+        assert_eq!(super::browser_ui_language_arg(""), None);
+        assert_eq!(super::browser_ui_language_arg("en-US --no-sandbox"), None);
     }
 
     #[test]

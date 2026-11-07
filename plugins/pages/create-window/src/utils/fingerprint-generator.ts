@@ -139,151 +139,87 @@ const DEVICE_NAME_PREFIXES = ['DESKTOP', 'LAPTOP', 'PC', 'WORKSTATION', 'WIN'];
 const HARDWARE_CONCURRENCY_OPTIONS = [2, 4, 8, 16];
 
 /** 常见内存大小 (GB)（与 UI 保持一致）*/
-const DEVICE_MEMORY_OPTIONS = [4, 8, 16];
+const DEVICE_MEMORY_OPTIONS = [4, 8];
 
 // ==================== 硬件配置组合 ====================
 
-/** 硬件配置模板（确保 GPU、CPU、内存的合理组合） */
+/**
+ * 显示器配置。screen.width/height 是 CSS 像素（物理分辨率 ÷ 系统缩放），devicePixelRatio 就是缩放比例，
+ * 所以 3840x2160 的 4K 显示器在 200% 缩放下报告 1920x1080 @ 2。只列真实存在的组合；
+ * 像素比只用界面支持的 1 / 1.5 / 2。
+ */
+interface DisplayProfile {
+  width: number;
+  height: number;
+  dpr: 1 | 1.5 | 2;
+}
+
+type HardwareTier = 'low' | 'mid' | 'high';
+
+/** 各档位可用的显示器：低端配低分辨率，高端才会有 2K/4K 和高缩放 */
+const TIER_DISPLAYS: Record<HardwareTier, DisplayProfile[]> = {
+  low: [
+    { width: 1366, height: 768, dpr: 1 },
+    { width: 1600, height: 900, dpr: 1 },
+    { width: 1920, height: 1080, dpr: 1 },
+  ],
+  mid: [
+    { width: 1920, height: 1080, dpr: 1 },
+    { width: 1920, height: 1200, dpr: 1 },
+    { width: 2560, height: 1440, dpr: 1 },
+  ],
+  high: [
+    { width: 1920, height: 1080, dpr: 1 },
+    { width: 2560, height: 1440, dpr: 1 },
+    { width: 3440, height: 1440, dpr: 1 },
+    { width: 3840, height: 2160, dpr: 1 },
+    { width: 2560, height: 1440, dpr: 1.5 }, // 4K 屏 150% 缩放
+    { width: 1920, height: 1080, dpr: 2 }, // 4K 屏 200% 缩放
+  ],
+};
+
+/**
+ * 各档位的 CPU 逻辑核心数与内存（GB）。
+ * navigator.deviceMemory 真实 Chrome 最大只报 8，所以内存最多填 8；
+ * 核心数只用界面支持的 2 / 4 / 8 / 16。
+ */
+const TIER_CORES: Record<HardwareTier, number[]> = {
+  low: [4, 8],
+  mid: [8],
+  high: [8, 16],
+};
+const TIER_MEMORY: Record<HardwareTier, number[]> = {
+  low: [4, 8],
+  mid: [8],
+  high: [8],
+};
+
+/** 硬件配置模板：GPU 决定档位，档位决定核心数 / 内存 / 显示器 */
 interface HardwareProfile {
   gpuVendor: string;
   gpuRenderer: string;
-  cpuCores: number;
-  memory: number;
-  era: string; // 硬件年代
+  tier: HardwareTier;
 }
 
 const HARDWARE_PROFILES: HardwareProfile[] = [
-  // 入门级集成显卡配置（2020-2024）
-  {
-    gpuVendor: 'Google Inc. (Intel)',
-    gpuRenderer: 'ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-    cpuCores: 4,
-    memory: 8,
-    era: 'modern-low',
-  },
-  {
-    gpuVendor: 'Google Inc. (Intel)',
-    gpuRenderer: 'ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-    cpuCores: 6,
-    memory: 8,
-    era: 'modern-low',
-  },
-  {
-    gpuVendor: 'Google Inc. (Intel)',
-    gpuRenderer: 'ANGLE (Intel, Intel(R) Iris Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)',
-    cpuCores: 8,
-    memory: 16,
-    era: 'modern-mid',
-  },
-  {
-    gpuVendor: 'Google Inc. (Intel)',
-    gpuRenderer: 'ANGLE (Intel(R) UHD Graphics 770 Direct3D11 vs_5_0 ps_5_0, D3D11-31.0.101.5592)',
-    cpuCores: 12,
-    memory: 16,
-    era: 'modern-mid',
-  },
-
-  // 中端独立显卡配置（2018-2022）
-  {
-    gpuVendor: 'Google Inc. (NVIDIA)',
-    gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Ti Direct3D11 vs_5_0 ps_5_0, D3D11)',
-    cpuCores: 6,
-    memory: 16,
-    era: 'modern-mid',
-  },
-  {
-    gpuVendor: 'Google Inc. (NVIDIA)',
-    gpuRenderer: 'ANGLE (NVIDIA GeForce GTX 1070 Direct3D11 vs_5_0 ps_5_0, D3D11-30.0.15.1277)',
-    cpuCores: 8,
-    memory: 16,
-    era: 'modern-mid',
-  },
-  {
-    gpuVendor: 'Google Inc. (NVIDIA)',
-    gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1080 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-    cpuCores: 8,
-    memory: 16,
-    era: 'modern-mid',
-  },
-  {
-    gpuVendor: 'Google Inc. (AMD)',
-    gpuRenderer: 'ANGLE (AMD, AMD Radeon RX 580 Series Direct3D11 vs_5_0 ps_5_0, D3D11)',
-    cpuCores: 6,
-    memory: 8,
-    era: 'modern-mid',
-  },
-  {
-    gpuVendor: 'Google Inc. (AMD)',
-    gpuRenderer: 'ANGLE (AMD Radeon RX 570 Series Direct3D11 vs_5_0 ps_5_0, D3D11-31.0.14057.5006)',
-    cpuCores: 6,
-    memory: 8,
-    era: 'modern-mid',
-  },
-
-  // 高端独立显卡配置（2020-2024）
-  {
-    gpuVendor: 'Google Inc. (NVIDIA)',
-    gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-    cpuCores: 8,
-    memory: 16,
-    era: 'modern-high',
-  },
-  {
-    gpuVendor: 'Google Inc. (NVIDIA)',
-    gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-    cpuCores: 12,
-    memory: 16,
-    era: 'modern-high',
-  },
-  {
-    gpuVendor: 'Google Inc. (NVIDIA)',
-    gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-    cpuCores: 16,
-    memory: 32,
-    era: 'modern-high',
-  },
-  {
-    gpuVendor: 'Google Inc. (NVIDIA)',
-    gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-    cpuCores: 12,
-    memory: 16,
-    era: 'modern-high',
-  },
-  {
-    gpuVendor: 'Google Inc. (NVIDIA)',
-    gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-    cpuCores: 16,
-    memory: 32,
-    era: 'modern-high',
-  },
-  {
-    gpuVendor: 'Google Inc. (AMD)',
-    gpuRenderer: 'ANGLE (AMD, AMD Radeon RX 5700 XT Direct3D11 vs_5_0 ps_5_0, D3D11)',
-    cpuCores: 8,
-    memory: 16,
-    era: 'modern-high',
-  },
-  {
-    gpuVendor: 'Google Inc. (AMD)',
-    gpuRenderer: 'ANGLE (AMD, AMD Radeon RX 6800 XT Direct3D11 vs_5_0 ps_5_0, D3D11)',
-    cpuCores: 12,
-    memory: 16,
-    era: 'modern-high',
-  },
-  {
-    gpuVendor: 'Google Inc. (AMD)',
-    gpuRenderer: 'ANGLE (AMD, AMD Radeon RX 7900 XTX Direct3D11 vs_5_0 ps_5_0, D3D11)',
-    cpuCores: 16,
-    memory: 32,
-    era: 'modern-high',
-  },
-  {
-    gpuVendor: 'Google Inc. (AMD)',
-    gpuRenderer: 'ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)',
-    cpuCores: 8,
-    memory: 16,
-    era: 'modern-mid',
-  },
+  // 低端：集成显卡
+  { gpuVendor: 'Google Inc. (Intel)', gpuRenderer: 'ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'low' },
+  { gpuVendor: 'Google Inc. (Intel)', gpuRenderer: 'ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'low' },
+  { gpuVendor: 'Google Inc. (Intel)', gpuRenderer: 'ANGLE (Intel, Intel(R) HD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'low' },
+  // 中端：新集成显卡 / 入门到中端独立显卡
+  { gpuVendor: 'Google Inc. (Intel)', gpuRenderer: 'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'mid' },
+  { gpuVendor: 'Google Inc. (AMD)', gpuRenderer: 'ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'mid' },
+  { gpuVendor: 'Google Inc. (AMD)', gpuRenderer: 'ANGLE (AMD, AMD Radeon RX 580 Series Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'mid' },
+  { gpuVendor: 'Google Inc. (NVIDIA)', gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Ti Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'mid' },
+  { gpuVendor: 'Google Inc. (NVIDIA)', gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1070 Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'mid' },
+  { gpuVendor: 'Google Inc. (NVIDIA)', gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'mid' },
+  // 高端独立显卡
+  { gpuVendor: 'Google Inc. (NVIDIA)', gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'high' },
+  { gpuVendor: 'Google Inc. (NVIDIA)', gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'high' },
+  { gpuVendor: 'Google Inc. (NVIDIA)', gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'high' },
+  { gpuVendor: 'Google Inc. (NVIDIA)', gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'high' },
+  { gpuVendor: 'Google Inc. (AMD)', gpuRenderer: 'ANGLE (AMD, AMD Radeon RX 6800 XT Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'high' },
+  { gpuVendor: 'Google Inc. (AMD)', gpuRenderer: 'ANGLE (AMD, AMD Radeon RX 7900 XTX Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'high' },
 ];
 
 /** 常见屏幕分辨率 */
@@ -336,19 +272,42 @@ export function generateWebGL(): { vendor: string; renderer: string } {
   };
 }
 
-/** 生成与 GPU 匹配的 CPU 和内存配置 */
-export function generateHardwareConfig(): {
+/** 一套自洽的设备画像：GPU、核心数、内存、屏幕分辨率和缩放比例互相匹配 */
+export interface DeviceProfile {
   vendor: string;
   renderer: string;
-  cpuCores: number;
-  memory: number;
-} {
-  const profile = randomChoice(HARDWARE_PROFILES);
+  hardwareConcurrency: number;
+  deviceMemory: number;
+  resolution: { width: number; height: number };
+  devicePixelRatio: number;
+}
+
+/** 宿主机的逻辑核心数。声明的核心数不超过它，否则多线程跑分一测就露馅 */
+function hostLogicalCores(): number {
+  if (typeof navigator !== 'undefined' && navigator.hardwareConcurrency > 0) {
+    return navigator.hardwareConcurrency;
+  }
+  return 8;
+}
+
+/**
+ * 生成一套自洽的设备画像。GPU 决定档位，档位再决定核心数、内存和显示器，
+ * 避免出现"4 核 + 旗舰显卡"、"低端核显 + 4K"、"内存 16G"（Chrome 最大只报 8）这类矛盾组合。
+ */
+export function generateDeviceProfile(): DeviceProfile {
+  const gpu = randomChoice(HARDWARE_PROFILES);
+  const cap = hostLogicalCores();
+  const coreChoices = TIER_CORES[gpu.tier].filter((cores) => cores <= cap);
+  const display = randomChoice(TIER_DISPLAYS[gpu.tier]);
   return {
-    vendor: profile.gpuVendor,
-    renderer: profile.gpuRenderer,
-    cpuCores: profile.cpuCores,
-    memory: profile.memory,
+    vendor: gpu.gpuVendor,
+    renderer: gpu.gpuRenderer,
+    hardwareConcurrency: randomChoice(
+      coreChoices.length > 0 ? coreChoices : [Math.min(...TIER_CORES[gpu.tier])],
+    ),
+    deviceMemory: randomChoice(TIER_MEMORY[gpu.tier]),
+    resolution: { width: display.width, height: display.height },
+    devicePixelRatio: display.dpr,
   };
 }
 
@@ -389,13 +348,13 @@ export function generateRandomDeviceMemory(): number {
 /**
  * 生成随机指纹设置
  */
-export function generateRandomFingerprintSettings(): AdvancedFingerprintSettings {
-  const hardware = generateHardwareConfig();
-
+export function generateRandomFingerprintSettings(
+  hardware: DeviceProfile = generateDeviceProfile(),
+): AdvancedFingerprintSettings {
   return {
-    resolution: generateScreenResolution(),
+    resolution: hardware.resolution,
     colorDepth: generateRandomColorDepth(),
-    devicePixelRatio: generateRandomDevicePixelRatio(),
+    devicePixelRatio: hardware.devicePixelRatio,
     maxTouchPoints: generateRandomMaxTouchPoints(),
     fontFingerprint: generateFingerprintMode(),
     fontList: generateFontListConfig('random', 'Windows'),
@@ -418,16 +377,16 @@ export function generateRandomFingerprintSettings(): AdvancedFingerprintSettings
 /**
  * 生成随机设备设置
  */
-export function generateRandomDeviceSettings(): Partial<DeviceSettings> {
-  const hardware = generateHardwareConfig();
-
+export function generateRandomDeviceSettings(
+  hardware: DeviceProfile = generateDeviceProfile(),
+): Partial<DeviceSettings> {
   return {
     deviceName: generateDeviceName(),
     deviceNameRandom: true,
     macAddress: generateMacAddress(),
     macAddressMode: 'custom',
-    hardwareConcurrency: generateRandomHardwareConcurrency(),
-    deviceMemory: generateRandomDeviceMemory(),
+    hardwareConcurrency: hardware.hardwareConcurrency,
+    deviceMemory: hardware.deviceMemory,
   };
 }
 
@@ -456,33 +415,63 @@ function shuffleArray<T>(arr: T[]): T[] {
 }
 
 /**
- * 每台标准 Windows 10/11 都自带的字体。
- * 随机字体列表必须始终包含它们：内核只会把列表内的系统字体暴露给网页，
- * 缺了 Arial、Microsoft YaHei 等，常见的 font-family 回退链会全部落空，页面排版和中文显示都会异常。
+ * 每台标准 Windows 10/11 都自带的字体（微软官方"Windows 10 字体列表"）。
+ * 内核只会把列表内的系统字体暴露给网页，所以必须是完整的默认集：缺了 Arial、Microsoft YaHei，
+ * 常见的 font-family 回退链会全部落空；缺了 Candara、Corbel、Nirmala UI 等每台 Win10 都有的字体，
+ * "只能检测到一半系统字体"本身就是特征。宿主机没有的字体仍然不会出现，列表只负责"允许暴露"。
  */
-const CORE_WINDOWS_FONTS = [
+const DEFAULT_WINDOWS_FONTS = [
   'Arial',
   'Arial Black',
+  'Bahnschrift',
   'Calibri',
   'Cambria',
   'Cambria Math',
+  'Candara',
   'Comic Sans MS',
   'Consolas',
+  'Constantia',
+  'Corbel',
   'Courier New',
+  'Ebrima',
+  'Franklin Gothic Medium',
+  'Gabriola',
+  'Gadugi',
   'Georgia',
+  'HoloLens MDL2 Assets',
   'Impact',
+  'Ink Free',
+  'Javanese Text',
+  'Leelawadee UI',
   'Lucida Console',
   'Lucida Sans Unicode',
   'Malgun Gothic',
+  'Marlett',
+  'Microsoft Himalaya',
   'Microsoft JhengHei',
+  'Microsoft New Tai Lue',
+  'Microsoft PhagsPa',
   'Microsoft Sans Serif',
+  'Microsoft Tai Le',
   'Microsoft YaHei',
+  'Microsoft Yi Baiti',
+  'MingLiU-ExtB',
+  'Mongolian Baiti',
   'MS Gothic',
+  'MV Boli',
+  'Myanmar Text',
+  'Nirmala UI',
   'Palatino Linotype',
+  'Segoe MDL2 Assets',
+  'Segoe Print',
+  'Segoe Script',
   'Segoe UI',
   'Segoe UI Emoji',
+  'Segoe UI Historic',
   'Segoe UI Symbol',
   'SimSun',
+  'Sitka Text',
+  'Sylfaen',
   'Symbol',
   'Tahoma',
   'Times New Roman',
@@ -493,15 +482,26 @@ const CORE_WINDOWS_FONTS = [
   'Yu Gothic',
 ];
 
+/** 装了 Office 之后常见的额外字体：随机带上其中几个，让不同环境的字体集合略有差异 */
+const OFFICE_EXTRA_FONTS = [
+  'Century Gothic',
+  'Rockwell',
+  'Gill Sans MT',
+  'Bookman Old Style',
+  'Garamond',
+  'Tw Cen MT',
+  'Book Antiqua',
+  'Franklin Gothic Book',
+  'Lucida Bright',
+  'Perpetua',
+];
+
 /**
- * 生成随机字体列表：核心字体 + 从 CreepJS 检测列表中随机挑选的若干额外字体
+ * 生成随机字体列表：完整的 Windows 默认字体 + 随机几个 Office 常见字体
  */
 export function generateRandomFontList(): string[] {
-  const core = new Set(CORE_WINDOWS_FONTS.map((font) => font.toLowerCase()));
-  const extras = shuffleArray(
-    CREEPJS_FONT_LIST.filter((font) => !core.has(font.toLowerCase())),
-  ).slice(0, randomInt(5, 15));
-  return [...CORE_WINDOWS_FONTS, ...extras];
+  const extras = shuffleArray(OFFICE_EXTRA_FONTS).slice(0, randomInt(0, 5));
+  return [...DEFAULT_WINDOWS_FONTS, ...extras];
 }
 
 /**
@@ -545,8 +545,10 @@ export function generateAllFingerprintSettings(): {
   fingerprintSettings: AdvancedFingerprintSettings;
   deviceSettings: Partial<DeviceSettings>;
 } {
+  // 两部分共用同一套设备画像，GPU / 核心数 / 内存 / 屏幕才会互相匹配
+  const profile = generateDeviceProfile();
   return {
-    fingerprintSettings: generateRandomFingerprintSettings(),
-    deviceSettings: generateRandomDeviceSettings(),
+    fingerprintSettings: generateRandomFingerprintSettings(profile),
+    deviceSettings: generateRandomDeviceSettings(profile),
   };
 }

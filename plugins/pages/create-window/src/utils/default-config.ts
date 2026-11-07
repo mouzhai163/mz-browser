@@ -2,14 +2,10 @@ import type { WindowConfig } from '../types';
 import { generateUserAgentByKernel } from './user-agent-generator';
 import {
   generateRandomColorDepth,
-  generateRandomDevicePixelRatio,
   generateRandomMaxTouchPoints,
-  generateRandomHardwareConcurrency,
-  generateRandomDeviceMemory,
   generateDeviceName,
   generateMacAddress,
-  generateWebGL,
-  generateScreenResolution,
+  generateDeviceProfile,
   generateFontListConfig,
 } from './fingerprint-generator';
 
@@ -23,7 +19,8 @@ export function getDefaultWindowConfig(): WindowConfig {
   // 这样每次创建新窗口时都会生成不同的 UA
 
   // 生成关联的 WebGL vendor 和 renderer
-  const webglPair = generateWebGL();
+  // GPU / 核心数 / 内存 / 分辨率 / 缩放比例来自同一套自洽的设备画像
+  const profile = generateDeviceProfile();
 
   return {
     windowInfo: {
@@ -56,17 +53,17 @@ export function getDefaultWindowConfig(): WindowConfig {
       windowPosition: 'top-left',
     },
     advancedFingerprintSettings: {
-      resolution: generateScreenResolution(),
+      resolution: profile.resolution,
       colorDepth: generateRandomColorDepth(),
-      devicePixelRatio: generateRandomDevicePixelRatio(),
+      devicePixelRatio: profile.devicePixelRatio,
       maxTouchPoints: generateRandomMaxTouchPoints(),
       fontFingerprint: 'random',
       fontList: generateFontListConfig('random', defaultSystem),
       webrtc: 'disable',
       webglImage: 'random',
       webglInfo: 'random',
-      webglVendor: webglPair.vendor,
-      webglRenderer: webglPair.renderer,
+      webglVendor: profile.vendor,
+      webglRenderer: profile.renderer,
       webgpu: 'webgl-match',
       canvas: 'random',
       audioContext: 'random',
@@ -81,8 +78,8 @@ export function getDefaultWindowConfig(): WindowConfig {
       deviceNameRandom: true,
       macAddress: generateMacAddress(),
       macAddressMode: 'custom',
-      hardwareConcurrency: generateRandomHardwareConcurrency(),
-      deviceMemory: generateRandomDeviceMemory(),
+      hardwareConcurrency: profile.hardwareConcurrency,
+      deviceMemory: profile.deviceMemory,
       sslFingerprint: true,
       portScanProtection: true,
       scanWhitelist: '',
