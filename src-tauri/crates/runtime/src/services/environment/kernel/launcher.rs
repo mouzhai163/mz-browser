@@ -112,6 +112,8 @@ pub async fn launch_browser(
         urls: request.urls.clone(),
         fingerprint_config: request.fingerprint_config.clone(),
         accounts: request.accounts.clone(),
+        // 没有代理 = 环境明确配置为直连；有代理但没带过来则由浏览器视为"代理丢失"并断网
+        direct_connection: request.proxy.is_none(),
     };
 
     let mut server_ready = eventbus_manager().start_server(env_id.clone(), Some(launch_config));

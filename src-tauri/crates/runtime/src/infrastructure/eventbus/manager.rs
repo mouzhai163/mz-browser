@@ -66,6 +66,39 @@ pub struct FingerprintConfig {
     pub env_name: Option<String>,
 }
 
+/// 把浏览器回传的"实际采用的值"与我们发送的配置逐项比对，防止配置被部分忽略。
+fn verify_effective_config(
+    sent: &FingerprintConfig,
+    confirmation: &[u8],
+) -> std::result::Result<(), String> {
+    let summary: serde_json::Value = serde_json::from_slice(confirmation)
+        .map_err(|error| format!("browser confirmation is not valid JSON: {error}"))?;
+    let check = |name: &str, expected: Option<&str>| -> std::result::Result<(), String> {
+        let Some(expected) = expected.map(str::trim).filter(|value| !value.is_empty()) else {
+            return Ok(());
+        };
+        let actual = summary.get(name).and_then(|value| value.as_str()).unwrap_or("");
+        if actual == expected {
+            Ok(())
+        } else {
+            Err(format!("browser applied a different {name}: sent '{expected}', applied '{actual}'"))
+        }
+    };
+    check("language", sent.language.as_deref())?;
+    check("timezone", sent.timezone.as_deref())?;
+    check("geolocation", sent.geolocation.as_deref())?;
+    // user_agent 不比对：内核会按真实 Chrome 的规则把 UA 归一化（例如完整版本号固定为 .0.0.0），
+    // 它是否有效由内核侧的校验保证。
+    if let Some(serde_json::Value::Object(resolution)) = &sent.resolution {
+        let width = resolution.get("width").and_then(|value| value.as_i64());
+        let height = resolution.get("height").and_then(|value| value.as_i64());
+        if let (Some(width), Some(height)) = (width, height) {
+            check("resolution", Some(&format!("{width}x{height}")))?;
+        }
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LaunchConfig {
     pub env_uuid: String,
@@ -78,6 +111,10 @@ pub struct LaunchConfig {
     pub urls: Option<Vec<String>>,
     pub fingerprint_config: Option<FingerprintConfig>,
     pub accounts: Option<Vec<AccountConfig>>,
+    /// 环境明确配置为不使用代理（直连）。浏览器收到的启动配置里既没有代理、也没有这个声明时，
+    /// 视为代理丢失：断开所有网络，而不是回退直连。
+    #[serde(default)]
+    pub direct_connection: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -399,10 +436,14 @@ impl EventBusManager {
                 )),
                 Ok(Err(error)) => Some(format!("fingerprint config request failed: {}", error)),
                 Ok(Ok(response)) if response.error_code != 0 => Some(format!(
-                    "browser rejected the fingerprint config (error code {})",
-                    response.error_code
+                    "browser rejected the fingerprint config (error code {}): {}",
+                    response.error_code,
+                    String::from_utf8_lossy(&response.data)
                 )),
-                Ok(Ok(_)) => None,
+                // 回应成功还不够：浏览器回传它实际采用的值，必须和我们发送的一致。
+                Ok(Ok(response)) => {
+                    verify_effective_config(&fingerprint_config, &response.data).err()
+                }
             };
             if let Some(reason) = failure {
                 self.connections.write().await.remove(&env_id_owned);
@@ -610,5 +651,67 @@ impl EventBusManager {
 impl Default for EventBusManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod confirmation_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn sent() -> FingerprintConfig {
+        serde_json::from_value(json!({
+            "language": "ja-JP",
+            "timezone": "Asia/Tokyo",
+            "geolocation": "35.6762,139.6503",
+            "user_agent": "Mozilla/5.0 test",
+            "resolution": {"width": 1920, "height": 1080}
+        }))
+        .unwrap()
+    }
+
+    fn confirmation(overrides: serde_json::Value) -> Vec<u8> {
+        let mut base = json!({
+            "language": "ja-JP",
+            "timezone": "Asia/Tokyo",
+            "geolocation": "35.6762,139.6503",
+            "user_agent": "Mozilla/5.0 test",
+            "resolution": "1920x1080"
+        });
+        for (key, value) in overrides.as_object().unwrap() {
+            base[key] = value.clone();
+        }
+        serde_json::to_vec(&base).unwrap()
+    }
+
+    #[test]
+    fn matching_confirmation_is_accepted() {
+        assert!(verify_effective_config(&sent(), &confirmation(json!({}))).is_ok());
+    }
+
+    #[test]
+    fn a_partially_applied_config_is_rejected() {
+        for (field, wrong) in [
+            ("language", "en-US"),
+            ("timezone", "America/Los_Angeles"),
+            ("geolocation", ""),
+            ("resolution", "0x0"),
+        ] {
+            let result = verify_effective_config(&sent(), &confirmation(json!({ field: wrong })));
+            assert!(result.is_err(), "{field} mismatch must be rejected");
+        }
+    }
+
+    #[test]
+    fn garbage_confirmation_is_rejected() {
+        assert!(verify_effective_config(&sent(), b"").is_err());
+        assert!(verify_effective_config(&sent(), b"not json").is_err());
+    }
+
+    #[test]
+    fn fields_the_app_did_not_send_are_not_compared() {
+        let sent: FingerprintConfig = serde_json::from_value(json!({"language": "en-US"})).unwrap();
+        let confirmation = serde_json::to_vec(&json!({"language": "en-US", "timezone": "x"})).unwrap();
+        assert!(verify_effective_config(&sent, &confirmation).is_ok());
     }
 }
