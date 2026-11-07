@@ -1,24 +1,14 @@
 <div align="center">
   <img src="./public/assets/logo.png" alt="Simprint Logo" width="120" />
   <h1>Simprint</h1>
-  <p>面向浏览器环境、代理资源与自动化工作流的桌面工作台。</p>
+  <p>本地优先的指纹浏览器工作台：每个环境都是全新、严格隔离的浏览器环境。</p>
   <p>
     <img alt="License AGPLv3" src="https://img.shields.io/badge/license-AGPLv3-67e8f9?style=flat-square&labelColor=0f172a" />
     <img alt="Desktop Tauri 2" src="https://img.shields.io/badge/desktop-Tauri%202-f59e0b?style=flat-square&labelColor=0f172a" />
     <img alt="UI React 19" src="https://img.shields.io/badge/ui-React%2019-60a5fa?style=flat-square&labelColor=0f172a" />
     <img alt="Runtime Rust 2024" src="https://img.shields.io/badge/runtime-Rust%202024-f97316?style=flat-square&labelColor=0f172a" />
+    <img alt="Chromium 156" src="https://img.shields.io/badge/chromium-156-34d399?style=flat-square&labelColor=0f172a" />
   </p>
-  <table border="1" cellspacing="0" cellpadding="12">
-    <tr>
-      <td align="center">
-        <strong>👉 立即加入 Simprint 社区</strong><br />
-        <sub>获取更新、交流问题，并找到其他贡献者。</sub><br />
-        <sub>👇 选择下方群组加入</sub><br /><br />
-        <a href="https://t.me/simprintapp"><img alt="Telegram 社区" src="https://img.shields.io/badge/Telegram-@simprintapp-27a7e7?style=for-the-badge" /></a>
-        <img alt="QQ Group 1105174006" src="https://img.shields.io/badge/QQ%20群-1105174006-12b7f5?style=for-the-badge" />
-      </td>
-    </tr>
-  </table>
   <p>
     <a href="./README.md">English</a> | <strong>简体中文</strong>
   </p>
@@ -30,50 +20,71 @@
 
 ---
 
-## Introduction
+## 简介
 
-Simprint 是一个 local-first 的浏览器桌面工作台，用于在同一入口中集中组织浏览器配置、代理资源、自动化流程以及本地运行能力。
+Simprint 是一个运行在本机的桌面工作台，用来创建、运行和管理多个相互隔离的浏览器环境，并为每个环境配置代理、指纹和自动化流程。
 
-它适合需要长期维护多套浏览器工作环境的个人与团队，例如跨境业务、账号运营、自动化任务执行以及资源协同管理等场景。通过统一的桌面入口，Simprint 可以更稳定地管理环境生命周期、连接外部资源，并围绕日常操作建立可复用的工作流。
+它的目标很明确：**指纹质量**。每个新建环境都有独立的用户数据目录、独立的指纹种子和一套自洽的设备画像，
+环境之间的 Canvas、WebGL、音频指纹互不相同，也无法通过时区、语言、屏幕、硬件等信息互相关联；
+同一个环境重启后指纹保持不变。
 
-核心业务数据默认保存在本机，日常使用和桌面端开发均可在本地完成。
+核心数据默认只保存在本机，日常使用与开发都不依赖任何云端服务。
 
-## Why Simprint?
+## 功能
 
-今天大多数浏览器自动化工具和浏览器工作台产品，仍然存在一些反复出现的问题：
+### 环境与隔离
 
-- 闭源，关键实现不可见，长期信任成本很高。
-- 强依赖云端，把工作流和敏感数据交给第三方基础设施。
-- 产品设计偏平台方而非用户方，限制环境所有权、可迁移性与控制权。
-- 可扩展性很弱，难以接入自定义自动化、脚本体系和外部工具链。
+- **严格隔离的环境**：每个环境独立的用户数据目录，localStorage、cookie、IndexedDB 互不可见。
+- **环境级指纹种子**：由环境 ID 派生，Canvas / WebGL / 音频噪声各环境不同、重启不变。
+- **持久化配置**：长期保存环境配置、账号上下文与工作区状态，支持分组、标签、批量操作。
+- **启动保证**：指纹配置由浏览器确认已应用后环境才算启动成功；确认失败或超时则启动失败，不会带着默认指纹打开页面。
 
-Simprint 想走另一条路线：构建一个开放、可编排、可编程的浏览器工作台，服务开发者、研究者、运营团队以及重度自动化场景。目标是让浏览器环境更容易在本地掌控，更容易与周边工具集成，也更容易随着工作流逐步走向技术化和 AI 化而持续演进。
+### 指纹
 
-## Features
+| 方面 | 做法 |
+| --- | --- |
+| UA 与客户端提示 | `User-Agent`、`Sec-CH-UA` 请求头、`navigator.userAgentData` 同源生成，品牌、平台、版本一致 |
+| 语言与地区 | 语言、`Accept-Language`、`Intl`、时区、地理位置按环境生效，页面与 Worker 一致；可设为"跟随代理出口 IP"自动匹配 |
+| 屏幕 | `screen`、`devicePixelRatio`、CSS 媒体查询（`device-width`、`resolution`、指针类型）使用同一套配置 |
+| 硬件 | `hardwareConcurrency`、`deviceMemory`（最大 8，与真实 Chrome 一致）、WebGL 供应商/渲染器、WebGPU 适配器信息成套匹配 |
+| Canvas / WebGL / 音频 | 按环境种子加入稳定噪声，不破坏页面渲染 |
+| 字体 | 只向网页暴露白名单内的系统字体，网页字体不受影响 |
+| WebRTC | 默认禁用，不收集 host/srflx 候选，SDP、事件和 `getStats()` 都拿不到真实 IP |
+| 其他 | 语音列表、媒体设备、触摸点、Do Not Track、浏览器界面语言均跟随环境配置 |
 
-- **Isolated browser environments**：运行多套彼此隔离的浏览器工作环境，分离状态与操作边界。
-- **Persistent browser profiles**：长期保存并组织浏览器配置、账号上下文与工作区状态。
-- **Proxy orchestration**：在不同环境和工作流场景中接入、分配并管理代理资源。
-- **Fingerprint configuration**：控制环境级浏览器特征，并持续完善指纹相关行为配置。
-- **Local automation runtime**：构建和运行可重复执行的浏览器自动化工作流。
-- **Chromium-based desktop runtime**：通过面向 Chromium 的本地 Tauri + Rust 桌面运行时集成前端与系统级服务。
-- **Syncer**：协调多个运行中的环境，选择主控会话，并在选定窗口之间同步交互流程。
-- **RPC bridge**：通过内置的 Tauri 命令桥连接 React 前端与 Rust 服务，承接桌面侧调用与编排。
-- **Local API**：通过本地运行时 API 暴露环境、代理、标签、分组和浏览器内核等工作区资源。
-- **MCP**：运行本地 Model Context Protocol 服务，让外部 AI 客户端接入 Simprint 管理的工具与工作区资源。
+新建环境时，GPU、核心数、内存、分辨率和缩放比例来自同一套按档位生成的设备画像，不会出现"4 核配旗舰显卡"这类矛盾组合。
 
-## Quick Start
+### 代理与网络
+
+- **代理管理**：在不同环境中接入、分配和管理代理资源。
+- **出口信息自动匹配**：语言、时区、地理位置可设为"跟随代理出口 IP"。
+
+### 自动化与扩展
+
+- **RPA 工作流**：构建并运行可重复执行的浏览器自动化流程。
+- **同步器（Syncer）**：选择主控窗口，把交互同步到其他运行中的窗口。
+- **本地 API**：通过本机 API 控制环境、代理、标签、分组和浏览器内核，使用 API Key 鉴权。
+- **MCP**：可选的本地 Model Context Protocol 服务（默认关闭），让外部 AI 客户端使用工作区资源。
+
+### 浏览器内核
+
+- 使用定制的 Chromium 内核（当前为 **156**，计划同时支持 158、159），内核只能由 Simprint 启动。
+- 内核通过内核目录（`config/browser-kernels.json`）注册，目录里记录名称、版本、校验信息和下载地址，下载地址可配置。
+- 内核补丁与构建产物不在本仓库。
+
+## 快速开始
 
 完整的 Windows 从零开发配置步骤见 [开发配置文档](./docs/development-setup.zh-CN.md)。
 
-### Prerequisites
+### 环境要求
 
-- Node.js 20
+- Node.js 20 及以上
 - `pnpm` 9
-- Rust toolchain
+- Rust 工具链
 - 目标平台所需的 Tauri 系统依赖
+- 一个可用的浏览器内核（Windows x86_64）
 
-### Run locally
+### 本地运行
 
 ```powershell
 pnpm install --frozen-lockfile
@@ -82,45 +93,28 @@ cargo tauri dev
 
 启动桌面端无需预先配置或运行额外服务。
 
-## Status
+## 文档
 
-Simprint 最初按照在线商业产品路线开发，目前已经迁移为 local-first 的开源桌面应用。当前开放版本将以不做功能阉割的方式提供完整的核心能力。
+- [开发配置](./docs/development-setup.zh-CN.md)
+- [实施记录 04：内核 156 与指纹隔离加固](./docs/implementation-04.zh-CN.md)：本轮修复的 bug、新增功能、验证结果和已知不足
+- [静态检查基线](./docs/baseline/README.zh-CN.md)
+- [贡献指南](./CONTRIBUTING.md)
 
-产品中仍可能出现部分计费界面、升级提示或商业化入口，这些早期遗留内容将在后续版本中继续整理和移除。
+## 当前状态
 
-## Roadmap
+个人自用、本地优先。早期遗留的计费、升级提示等商业化界面仍会逐步清理；环境数量上限已放开。
 
-- **AI workflows**：扩展 AI 辅助工作流与面向代理任务的执行能力。
-- **Local-first hardening**：继续完善本地数据迁移、备份恢复和离线可用性。
-- **Fingerprint research**：持续推进浏览器环境控制、兼容性与指纹方向研究。
-- **Automation SDK**：提供更可复用的自动化构建与集成接口。
+已知不足：
 
-## Data Use
+- 内核目前仅在 Windows x86_64 上验证，且只有 156 完成；158、159 待移植。
+- 代理丢失或检测失败时回退直连的行为尚未处理。
+- 机房 IP 会被 IP 信誉类检测识别，建议使用住宅代理。
+- 旧版本创建的环境保存的是旧的硬件配置，新建环境才会使用新的设备画像。
 
-Simprint 的核心业务数据默认保存在用户设备上。浏览器内核下载、应用更新、代理和外部网站等需要联网的功能，仍会访问相应的第三方服务。
+## 数据说明
 
-## Contributing
+核心业务数据默认保存在本机。内核下载、应用更新、代理以及外部网站等需要联网的功能，仍会访问相应的第三方服务。
 
-Simprint 目前正处于持续推进的开源迁移阶段，我们希望逐步吸引早期贡献者和未来的长期维护者参与进来。
+## 许可
 
-具体的开发环境准备、贡献流程和 Pull Request 约定可见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
-
-当前最欢迎的贡献方向包括：
-
-- 带有复现步骤和环境信息的 Bug 反馈
-- 构建、打包与 CI 流程改进
-- 文档完善、上手体验与本地开发体验优化
-- 前端交互细节与工作流一致性改进
-- 测试补充、回归覆盖与发布验证
-
-欢迎提交 Issue 和 Pull Request。如果你希望长期参与维护，也欢迎通过 Issue 或 Discussion 简单介绍自己，并说明你希望参与的方向。
-
-## Friend Links
-
-- [LINUX DO - 新的理想型社区](https://linux.do/)
-
-## License
-
-本项目采用 GNU Affero General Public License v3.0 (AGPLv3) 进行许可。
-
-如果你希望在不履行 AGPLv3 义务的前提下使用 Simprint，包括分发修改版本或以闭源服务形式提供修改版本，请联系获取商业许可。
+本项目采用 GNU Affero General Public License v3.0 (AGPLv3) 进行许可，详见 [LICENSE](./LICENSE)。
