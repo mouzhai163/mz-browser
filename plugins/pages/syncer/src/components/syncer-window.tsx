@@ -12,13 +12,6 @@ interface RunningEnvironment {
   status: 'running' | 'stopped';
 }
 
-// 与后端 WindowLayoutCell 对应，用于一键排列布局测试
-interface WindowLayoutCell {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
 
 /**
  * 同步器窗口 - 悬浮窗口用于同步多个浏览器操作
@@ -47,7 +40,7 @@ export function SyncerWindow() {
       }
 
       // 2. 从 API 获取环境列表（携带名称），用于匹配 UUID → 名称
-      let nameMap: Record<string, string> = {};
+      const nameMap: Record<string, string> = {};
       try {
         const apiResult = await post<{
           items: Array<{ environment: { uuid: string; name: string } }>;

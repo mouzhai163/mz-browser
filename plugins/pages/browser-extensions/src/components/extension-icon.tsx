@@ -24,7 +24,6 @@ function isLikelyIconText(icon: string): boolean {
 
 export function ExtensionIcon({
   icon,
-  source = 'local',
   containerClassName,
   imageClassName,
   textClassName,

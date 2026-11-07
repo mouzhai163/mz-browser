@@ -60,7 +60,7 @@ export function useGroupOperations(onComplete?: () => void): UseGroupOperationsR
     onComplete?.();
   };
 
-  const assignToTeam = async (_uuid: string, _teamUuid: string): Promise<void> => {
+  const assignToTeam = async (): Promise<void> => {
     // TODO: 实现划分到团队的 API
     onComplete?.();
   };

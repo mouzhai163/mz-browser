@@ -293,7 +293,7 @@ export function EnvironmentManageTagsDialog({
                       key={rowKey}
                       tag={row}
                       isSelected={isSelected}
-                      onSelect={(id, selected) => handleSelect(selected)}
+                      onSelect={(_id, selected) => handleSelect(selected)}
                       onEdit={handleEdit}
                       onDelete={handleDeleteClick}
                     />

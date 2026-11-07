@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Tag, MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { MoreVertical, Edit, Trash2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,

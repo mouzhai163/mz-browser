@@ -27,7 +27,7 @@ interface FiltersActions {
 /**
  * 环境过滤和搜索状态 Store
  */
-export const useEnvironmentFiltersStore = create<FiltersState & FiltersActions>((set, get) => ({
+export const useEnvironmentFiltersStore = create<FiltersState & FiltersActions>((set) => ({
   // 初始状态
   searchQuery: '',
   filterTagId: '',

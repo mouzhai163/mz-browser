@@ -92,12 +92,6 @@ const systemOptions = [
   { value: 'Linux', label: 'Linux', icon: FaLinux },
 ];
 
-/** 系统到平台映射 */
-const systemToPlatform: Record<string, string> = {
-  Windows: 'windows',
-  macOS: 'darwin',
-  Linux: 'linux',
-};
 
 const KERNEL_TYPE_CHROME = 'chrome';
 const KERNEL_TYPE_FIREFOX = 'firefox';

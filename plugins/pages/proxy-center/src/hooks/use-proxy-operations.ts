@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { invoke } from '@/lib/tauri';
-import { toast } from 'sonner';
 import type { Proxy, ProxyFormData } from '../types';
 import { createProxy, updateProxy, deleteProxy, batchDeleteProxies } from '../api';
 
@@ -108,7 +107,7 @@ export function useProxyOperations(onComplete?: () => void): UseProxyOperationsR
           countryCode: proxy.countryCode,
         };
       }
-    } catch (e) {
+    } catch {
       return {
         ...proxy,
         status: 'unreachable',

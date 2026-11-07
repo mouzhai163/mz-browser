@@ -27,7 +27,7 @@ async function openSyncerWindow() {
   }
 }
 
-export function EnvironmentHeader({ environments, onComplete, onManageTags }: EnvironmentHeaderProps) {
+export function EnvironmentHeader({ environments, onManageTags }: EnvironmentHeaderProps) {
   const { t } = useTranslation('environment');
   const filtersStore = useEnvironmentFiltersStore();
   const selectionStore = useEnvironmentSelectionStore();

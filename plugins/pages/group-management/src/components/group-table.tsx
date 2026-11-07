@@ -130,7 +130,7 @@ export function GroupTable({
           key={rowKey}
           group={row}
           isSelected={isSelected}
-          onSelect={(id, selected) => handleSelect(selected)}
+          onSelect={(_id, selected) => handleSelect(selected)}
           onAssignToTeam={onAssignToTeam}
           onEdit={onEdit}
           onDelete={onDelete}

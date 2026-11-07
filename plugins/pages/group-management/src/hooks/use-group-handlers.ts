@@ -60,7 +60,6 @@ interface UseGroupHandlersReturn {
  * 整合所有分组相关的操作和事件处理逻辑
  */
 export function useGroupHandlers({
-  groups: _groups,
   paginatedGroups,
   onRefresh,
 }: UseGroupHandlersProps): UseGroupHandlersReturn {

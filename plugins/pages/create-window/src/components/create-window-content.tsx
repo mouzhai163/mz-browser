@@ -18,7 +18,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import {
@@ -94,10 +93,10 @@ export function CreateWindowContent({
   // 分组、标签、代理、账号列表
   const [allGroups, setAllGroups] = useState<GroupItem[]>([]);
   const [allTags, setAllTags] = useState<TagItem[]>([]);
-  const [allProxies, setAllProxies] = useState<ProxyItem[]>([]);
-  const [allAccounts, setAllAccounts] = useState<AccountItem[]>([]);
-  const [loadingGroups, setLoadingGroups] = useState(false);
-  const [loadingTags, setLoadingTags] = useState(false);
+  const [, setAllProxies] = useState<ProxyItem[]>([]);
+  const [, setAllAccounts] = useState<AccountItem[]>([]);
+  const [, setLoadingGroups] = useState(false);
+  const [, setLoadingTags] = useState(false);
 
   // 模板相关状态
   const [templates, setTemplates] = useState<TemplateDto[]>([]);
@@ -152,7 +151,7 @@ export function CreateWindowContent({
         setAllTags(tags);
         setAllProxies(proxies);
         setAllAccounts(accounts);
-      } catch (e) {
+      } catch {
         // 忽略错误
       } finally {
         setLoadingGroups(false);

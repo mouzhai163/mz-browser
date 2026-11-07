@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2, Shield, X } from 'lucide-react';
 import { FormattedDialog, FormattedDialogFooter } from '@/components/formatted-dialog';

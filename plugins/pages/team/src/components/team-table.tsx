@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Users } from 'lucide-react';
 import { DataTable, type ColumnDef } from '@/components/data-table';
 import { TeamTableRow, type TeamMember } from './team-table-row';
-import { useTeamSelectionStore, useTeamFiltersStore } from '../stores';
+import { useTeamSelectionStore } from '../stores';
 
 export type { TeamMember };
 
@@ -40,7 +40,6 @@ export function TeamTable({
 }: TeamTableProps) {
   const { t } = useTranslation('team');
   const selectionStore = useTeamSelectionStore();
-  const filtersStore = useTeamFiltersStore();
 
   // 排除 owner 的选择
   const selectableMembers = members.filter((m) => m.role !== 'owner');
@@ -141,7 +140,7 @@ export function TeamTable({
           key={rowKey}
           member={row}
           isSelected={isSelected}
-          onSelect={(id, selected) => handleSelect(selected)}
+          onSelect={(_id, selected) => handleSelect(selected)}
           onChangeRole={onChangeRole}
           onDelete={onDelete}
         />

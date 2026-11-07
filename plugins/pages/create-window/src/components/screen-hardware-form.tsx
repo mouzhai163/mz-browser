@@ -112,10 +112,6 @@ export function ScreenHardwareForm({
 }: ScreenHardwareFormProps) {
   const { t } = useTranslation('create-window');
 
-  const resolutionOptions = [
-    { value: 'random' as const, label: t('advancedFingerprint.fingerprintMode.random') },
-    { value: 'system' as const, label: t('advancedFingerprint.fingerprintMode.system') },
-  ];
 
   const deviceNameModeOptions = [
     { value: 'random' as const, label: t('advancedFingerprint.fingerprintMode.random') },

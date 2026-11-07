@@ -288,7 +288,7 @@ export function EnvironmentTable({
           environment={row}
           index={startIndex + rowIndex + 1}
           isSelected={isSelected}
-          onSelect={(id, selected) => onSelect(selected)}
+          onSelect={(_id, selected) => onSelect(selected)}
           onEdit={(env) => {
             // 跳转到创建环境页面，传递编辑参数
             navigate(`/create-window?edit=${env.uuid}`);

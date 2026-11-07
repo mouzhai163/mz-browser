@@ -247,7 +247,7 @@ export function NotificationMenu() {
             </div>
           ) : (
             <div className="py-2 space-y-1">
-              {messages.map((message, index) => {
+              {messages.map((message) => {
                 const MessageIcon = getMessageTypeIcon(message.message_type);
                 const iconColor = getMessageTypeIconColor(message.message_type);
                 const isUnread = !message.is_read;

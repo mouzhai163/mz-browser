@@ -6,7 +6,6 @@ import { Loader2, Repeat, X } from 'lucide-react';
 import {
   LOOP_REGION_CONTENT_BOTTOM,
   LOOP_REGION_CONTENT_TOP,
-  LOOP_REGION_HEADER_HEIGHT,
   LOOP_REGION_PADDING_RIGHT,
   LOOP_REGION_PADDING_X,
 } from '../loop-layout';

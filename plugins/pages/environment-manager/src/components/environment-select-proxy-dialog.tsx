@@ -124,13 +124,6 @@ const getProxyCategoryText = (proxy: EnvironmentProxyCandidate) => {
   return (proxy.proxy_type || '-').toUpperCase();
 };
 
-const getProxyRemarkText = (proxy: EnvironmentProxyCandidate) => {
-  if (proxy.remark) return proxy.remark;
-  if (proxy.country && proxy.city) return `${proxy.country} · ${proxy.city}`;
-  if (proxy.country) return proxy.country;
-  if (proxy.city) return proxy.city;
-  return '-';
-};
 
 const getAssociatedText = (proxy: EnvironmentProxyCandidate) => {
   if (typeof proxy.environments_count === 'number') return String(proxy.environments_count);

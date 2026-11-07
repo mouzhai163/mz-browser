@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { TextareaInput } from '@/components/textarea-input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 // @ts-ignore - Cross-plugin import
-import { listGroups, createGroup, type GroupItem } from '../../../environment-manager/src/api';
+import { listGroups, type GroupItem } from '../../../environment-manager/src/api';
 import { CreateWindowCreateGroupDialog } from './create-window-create-group-dialog';
 
 interface CreateWindowSelectGroupDialogProps {
@@ -102,7 +102,7 @@ export function CreateWindowSelectGroupDialog({
     try {
       const list = await listGroups();
       setGroups(list);
-    } catch (e) {
+    } catch {
       // 忽略错误
     } finally {
       setLoadingGroups(false);

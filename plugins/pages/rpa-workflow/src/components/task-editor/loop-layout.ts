@@ -75,7 +75,7 @@ export function getLoopExpandedHeightForChild(step: FlowStep, childY: number): n
   return Math.max(current.height, requiredHeight);
 }
 
-export function getLoopWidthFromChildren(step: FlowStep, children: FlowStep[]): number {
+export function getLoopWidthFromChildren(children: FlowStep[]): number {
   if (children.length === 0) {
     return LOOP_REGION_WIDTH;
   }
@@ -88,7 +88,7 @@ export function getLoopWidthFromChildren(step: FlowStep, children: FlowStep[]): 
   return Math.max(LOOP_REGION_WIDTH, maxRight);
 }
 
-export function getLoopHeightFromChildren(step: FlowStep, children: FlowStep[]): number {
+export function getLoopHeightFromChildren(children: FlowStep[]): number {
   if (children.length === 0) {
     return LOOP_REGION_HEIGHT;
   }

@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Loader2, Globe, Plus, X, GripVertical } from 'lucide-react';
+import { Loader2, Globe, Plus, X } from 'lucide-react';
 import { FormattedDialog, FormattedDialogFooter } from '@/components/formatted-dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { TextareaInput } from '@/components/textarea-input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useEnvironmentDialogStore } from '../stores';
-import { listEnvironmentUrls, addEnvironmentUrl, clearEnvironmentUrls, type UrlItem } from '../api';
+import { listEnvironmentUrls, addEnvironmentUrl, clearEnvironmentUrls } from '../api';
 
 interface EnvironmentEditUrlDialogProps {
   onComplete?: () => void;

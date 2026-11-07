@@ -29,7 +29,7 @@ export function ApiKeyDisplay({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       onCopy();
-    } catch (e) {
+    } catch {
       toast.error(t('errors.copyFailed'));
     }
   };

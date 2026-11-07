@@ -247,7 +247,7 @@ export function ProxyTable({
           selectable={selectable}
           isSelected={isSelected}
           isTesting={testingIds.has(row.uuid)}
-          onSelect={(uuid, selected) => handleSelect(selected)}
+          onSelect={(_uuid, selected) => handleSelect(selected)}
           onTest={onTest}
           onEdit={onEdit}
           onDelete={onDelete}

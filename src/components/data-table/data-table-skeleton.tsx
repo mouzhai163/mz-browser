@@ -5,7 +5,6 @@ export function DataTableSkeleton({
   columns,
   hasSelectColumn = false,
 }: DataTableSkeletonProps) {
-  const totalColumns = hasSelectColumn ? columns + 1 : columns;
 
   return (
     <>

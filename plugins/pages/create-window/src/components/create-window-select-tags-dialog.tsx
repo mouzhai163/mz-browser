@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { TextareaInput } from '@/components/textarea-input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 // @ts-ignore - Cross-plugin import
-import { listTags, createTag, type TagItem } from '../../../environment-manager/src/api';
+import { listTags, type TagItem } from '../../../environment-manager/src/api';
 // @ts-ignore - Cross-plugin import
 import { getTagDotColorClasses } from '../../../environment-manager/src/utils';
 import { CreateWindowCreateTagDialog } from './create-window-create-tag-dialog';
@@ -103,7 +103,7 @@ export function CreateWindowSelectTagsDialog({
     try {
       const list = await listTags();
       setTags(list);
-    } catch (e) {
+    } catch {
       // 忽略错误
     } finally {
       setLoadingTags(false);

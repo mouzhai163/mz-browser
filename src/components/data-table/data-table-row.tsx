@@ -5,7 +5,6 @@ export function DataTableRow<T>({
   row,
   rowIndex,
   columns,
-  rowKey,
   isSelected = false,
   onSelect,
   selectable = false,

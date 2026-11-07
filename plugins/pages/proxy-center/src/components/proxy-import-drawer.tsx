@@ -36,10 +36,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { DataTable, type ColumnDef } from '@/components/data-table';
-import {
-  DataTableCheckboxCell,
-  DataTableActionsCell,
-} from '@/components/data-table/data-table-row-container';
 import { Checkbox } from '@/components/animate-ui/components/radix/checkbox';
 import type { ImportProxyItem } from '../utils/import-export';
 import { importProxyItems } from '../utils/import-export';
@@ -158,7 +154,7 @@ export function ProxyImportDrawer({
           status: isHealthy ? 'healthy' : 'unreachable',
           latency: isHealthy ? Math.floor(Math.random() * 500) + 50 : undefined,
         }));
-      } catch (e) {
+      } catch {
         setTestResults(prev => new Map(prev).set(itemIndex, { status: 'unreachable' }));
       } finally {
         // 移除测试中状态
@@ -193,7 +189,7 @@ export function ProxyImportDrawer({
           </div>
         ),
         width: 48,
-        cell: ({ row, rowIndex }) => {
+        cell: ({ rowIndex }) => {
           const globalIndex = (currentPage - 1) * pageSize + rowIndex;
           return (
             <div className="flex items-center justify-center">

@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from 'react';
-import type { AuditStatsResponse } from '../api';
 import { getAuditStats } from '../api';
 
 interface AuditStatsDisplay {

@@ -26,7 +26,6 @@ import {
   useSettingsDialogStore,
   useRefreshStore,
 } from '../../../../services/store/src';
-import { useAuthStore } from '../../../../services/store/src/stores/auth';
 
 export interface CreateWindowOptions {
   groupUuid?: string;

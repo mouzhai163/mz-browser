@@ -158,7 +158,7 @@ export function ProxyEditDialog({
         return;
       }
 
-      let parsed: Partial<ProxyFormData> = {};
+      const parsed: Partial<ProxyFormData> = {};
 
       // 检测是否有协议前缀
       const protocolMatch = text.match(/^(http|https|socks5):\/\//i);
@@ -255,7 +255,7 @@ export function ProxyEditDialog({
         }
         return null;
       }
-    } catch (e) {
+    } catch {
       if (!silent) {
         setTestResult('failed');
       }

@@ -85,7 +85,6 @@ export interface DataTableCellProps {
  */
 export function DataTableCell({
   children,
-  isSelected = false,
   stickyLeft = false,
   stickyLeftOffset = 0,
   stickyRight = false,

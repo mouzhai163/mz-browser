@@ -776,6 +776,7 @@ const styledEdges = useMemo(
       }
 
       if (sourceId === 'start') {
+        // 起始节点作为源时无需额外处理
       } else if (!sourceStep) {
         return;
       } else if (sourceStep.type === 'break_loop') {
@@ -935,8 +936,8 @@ const styledEdges = useMemo(
         }
 
         const loopChildren = updatedSteps.filter((candidate) => candidate.parentLoopId === step.id);
-        const width = getLoopWidthFromChildren(step, loopChildren);
-        const height = getLoopHeightFromChildren(step, loopChildren);
+        const width = getLoopWidthFromChildren(loopChildren);
+        const height = getLoopHeightFromChildren(loopChildren);
 
         return {
           ...step,
@@ -1050,8 +1051,8 @@ const styledEdges = useMemo(
         }
 
         const loopChildren = updatedSteps.filter((candidate) => candidate.parentLoopId === step.id);
-        const width = getLoopWidthFromChildren(step, loopChildren);
-        const height = getLoopHeightFromChildren(step, loopChildren);
+        const width = getLoopWidthFromChildren(loopChildren);
+        const height = getLoopHeightFromChildren(loopChildren);
 
         return {
           ...step,

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -25,7 +25,6 @@ import {
   Cookie,
   Eraser,
   Pencil,
-  Loader2,
   RotateCcw,
 } from 'lucide-react';
 import {
@@ -44,11 +43,9 @@ import { Checkbox } from '@/components/animate-ui/components/radix/checkbox';
 import {
   DataTableRowContainer,
   DataTableCell,
-  DataTableCheckboxCell,
-  DataTableIndexCell,
   DataTableActionsCell,
 } from '@/components/data-table';
-import { useEnvironmentDialogStore, useEnvironmentSelectionStore, useRunningEnvsStore, useEnvironmentFiltersStore } from '../stores';
+import { useEnvironmentDialogStore, useRunningEnvsStore, useEnvironmentFiltersStore } from '../stores';
 import { useEnvironmentOperations } from '../hooks/use-environment-operations';
 import type { Environment, TagItem } from '../types';
 import { parseFingerprint, getTagColorClasses, getTagDotColorClasses, getPlatformIcon } from '../utils';
@@ -412,7 +409,6 @@ function TagsCellContent({
  * 操作下拉菜单组件
  */
 function ActionsDropdown({
-  environment,
   isRunning,
   t,
   onEdit,
@@ -578,7 +574,6 @@ export function EnvironmentTableRow({
   const { t } = useTranslation('environment');
   const unsetText = t('table.unset');
   const dialogStore = useEnvironmentDialogStore();
-  const selectionStore = useEnvironmentSelectionStore();
   const runningEnvsStore = useRunningEnvsStore();
   const filtersStore = useEnvironmentFiltersStore();
   const operations = useEnvironmentOperations(onComplete);
@@ -598,9 +593,9 @@ export function EnvironmentTableRow({
 
   // 根据状态计算进度百分比
   const [startingProgress, setStartingProgress] = useState(0);
-  const [startingPausePoint, setStartingPausePoint] = useState(0);
+  const [, setStartingPausePoint] = useState(0);
   const [stoppingProgress, setStoppingProgress] = useState(0);
-  const [stoppingPausePoint, setStoppingPausePoint] = useState(0);
+  const [, setStoppingPausePoint] = useState(0);
 
   useEffect(() => {
     if (isLoadingKernel && startingProgress === 0) {

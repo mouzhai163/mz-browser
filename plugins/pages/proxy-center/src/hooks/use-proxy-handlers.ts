@@ -84,7 +84,6 @@ const defaultFormData: ProxyFormData = {
 export function useProxyHandlers({
   proxies,
   paginatedProxies,
-  filteredProxies: _filteredProxies,
   onRefresh,
 }: UseProxyHandlersProps): UseProxyHandlersReturn {
   const { t } = useTranslation('proxy');

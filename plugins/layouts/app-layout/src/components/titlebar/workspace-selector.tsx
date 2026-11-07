@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Building2, ChevronDown } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../../../../services/store/src/stores/auth';
 import { useWorkspaceStore } from '../../../../../services/store/src/stores/workspace';
 import { useRefreshStore } from '../../../../../services/store/src/stores/refresh';
@@ -12,8 +11,7 @@ import { WorkspaceSwitchDialog } from './workspace-switch-dialog';
  * 显示在顶部导航栏，点击打开切换工作空间弹窗
  */
 export function WorkspaceSelector() {
-  const { t } = useTranslation('appLayout');
-  const { currentWorkspaceUuid, setCurrentWorkspace } = useAuthStore();
+  const { setCurrentWorkspace } = useAuthStore();
   const { workspaces, updateFromResponse, setLoading } = useWorkspaceStore();
   const workspacesRefreshKey = useRefreshStore((state) => state.workspaces);
   const [dialogOpen, setDialogOpen] = useState(false);

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Loader2, Trash2, X, AlertTriangle } from 'lucide-react';
 import { FormattedDialog, FormattedDialogFooter } from '@/components/formatted-dialog';
@@ -17,7 +16,6 @@ interface EnvironmentBatchPermanentDeleteConfirmDialogProps {
 export function EnvironmentBatchPermanentDeleteConfirmDialog({
   onComplete,
 }: EnvironmentBatchPermanentDeleteConfirmDialogProps) {
-  const { t } = useTranslation('environment');
   const dialogStore = useEnvironmentDialogStore();
   const selectionStore = useEnvironmentSelectionStore();
   const operations = useEnvironmentOperations(onComplete);

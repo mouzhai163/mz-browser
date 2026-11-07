@@ -16,7 +16,7 @@ interface SelectionActions {
  * 用于在组件间共享选中的环境 ID
  */
 export const useEnvironmentSelectionStore = create<SelectionState & SelectionActions>(
-  (set, get) => ({
+  (set) => ({
     // 初始状态
     selectedIds: new Set<string>(),
 

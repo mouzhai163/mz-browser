@@ -1,10 +1,8 @@
-import { useTranslation } from 'react-i18next';
 
 /**
  * 默认品牌区域组件
  */
 export function DefaultBrandSlot() {
-  const { t } = useTranslation('appLayout');
 
   return (
     <div className="flex items-center gap-3 px-5 border-r border-border/80 h-full">

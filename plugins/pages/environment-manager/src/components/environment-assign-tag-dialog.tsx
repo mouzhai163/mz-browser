@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Tag, Check, Loader2, Plus } from 'lucide-react';
 import { FormattedDialog, FormattedDialogFooter } from '@/components/formatted-dialog';
@@ -65,7 +64,6 @@ export function EnvironmentAssignTagDialog({
   onComplete,
   onClearSelection,
 }: EnvironmentAssignTagDialogProps) {
-  const { t } = useTranslation('environment');
   const dialogStore = useEnvironmentDialogStore();
   const operations = useEnvironmentOperations(onComplete);
   const [submitting, setSubmitting] = useState(false);

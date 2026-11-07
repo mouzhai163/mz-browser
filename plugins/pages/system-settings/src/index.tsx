@@ -7,7 +7,6 @@ import { useSettingsTabs } from './hooks/use-settings-tabs';
 import { SettingsSidebar } from './components/settings-sidebar';
 import { SettingsHeader } from './components/settings-header';
 import { SettingsContent } from './components/settings-content';
-import { SettingsDialog } from './components/settings-dialog';
 
 // 导出弹窗组件供外部使用
 export { SettingsDialog } from './components/settings-dialog';

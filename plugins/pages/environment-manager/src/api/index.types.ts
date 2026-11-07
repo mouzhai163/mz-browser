@@ -4,10 +4,6 @@
 
 import type {
   Environment,
-  GroupSummary,
-  ProxySummary,
-  TagSummary,
-  AccountSummary,
   GroupItem,
   TagItem,
 } from '../types';

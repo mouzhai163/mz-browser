@@ -1,6 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 interface QuantitySelectorProps {
   value: number;
@@ -38,7 +36,6 @@ const getSegmentHeight = (segment: Segment): string => {
  * 保持分段显示，但支持拖拽精确选择 1-25 之间的任意数字
  */
 export function QuantitySelector({ value, onChange }: QuantitySelectorProps) {
-  const { t } = useTranslation('create-window');
   const [isDragging, setIsDragging] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
   const sliderRef = useRef<HTMLDivElement>(null);
@@ -193,7 +190,6 @@ export function QuantitySelector({ value, onChange }: QuantitySelectorProps) {
         // 判断段的激活状态
         const isBeforeCurrent = index < currentSegmentIndex; // 前面的段，完全高亮
         const isCurrentSegment = index === currentSegmentIndex; // 当前段，部分高亮
-        const isAfterCurrent = index > currentSegmentIndex; // 后面的段，不高亮
 
         // 计算当前段的高亮比例（0-1）
         const highlightProgress = isCurrentSegment
