@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "M Z指纹浏览器",
+  "productName": "MZ指纹浏览器",
   "version": "0.1.0",
   "identifier": "com.mzbrowser.app",
   "build": {
@@ -48,7 +48,7 @@
         "installerHooks": "./windows/nsis/installer-hooks.nsi",
         "template": "./windows/nsis/installer.nsi",
         "sidebarImage": "./windows/assets/sidebarImage.bmp",
-        "startMenuFolder": "M Z指纹浏览器",
+        "startMenuFolder": "MZ指纹浏览器",
         "languages": [
           "English",
           "SimpChinese"

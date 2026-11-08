@@ -79,7 +79,7 @@ impl ToolBase for ListGroupsTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("List M Z指纹浏览器 groups.".into())
+        Some("List MZ指纹浏览器 groups.".into())
     }
 }
 
@@ -105,7 +105,7 @@ impl ToolBase for CreateGroupTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Create a M Z指纹浏览器 group.".into())
+        Some("Create a MZ指纹浏览器 group.".into())
     }
 }
 
@@ -144,7 +144,7 @@ impl ToolBase for UpdateGroupTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Update a M Z指纹浏览器 group.".into())
+        Some("Update a MZ指纹浏览器 group.".into())
     }
 }
 
@@ -181,7 +181,7 @@ impl ToolBase for DeleteGroupTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Delete a M Z指纹浏览器 group by UUID.".into())
+        Some("Delete a MZ指纹浏览器 group by UUID.".into())
     }
 }
 

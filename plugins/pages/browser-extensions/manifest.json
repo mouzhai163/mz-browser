@@ -3,7 +3,7 @@
   "name": "Browser Extensions",
   "version": "1.0.0",
   "description": "浏览器插件管理页面",
-  "author": "M Z指纹浏览器 Team",
+  "author": "MZ指纹浏览器 Team",
   "entry": "./src/index.tsx",
   "slots": [],
   "enabled": true

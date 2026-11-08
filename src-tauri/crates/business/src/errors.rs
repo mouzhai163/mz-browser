@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// M Z指纹浏览器 Server 错误类型
+/// MZ指纹浏览器 Server 错误类型
 #[derive(Error, Debug)]
 pub enum MzError {
     /// 用户不存在

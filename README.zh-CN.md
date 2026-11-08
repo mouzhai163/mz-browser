@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="./public/assets/logo.png" alt="M Z指纹浏览器 Logo" width="120" />
-  <h1>M Z指纹浏览器</h1>
+  <img src="./public/assets/logo.png" alt="MZ指纹浏览器 Logo" width="120" />
+  <h1>MZ指纹浏览器</h1>
   <p>本地优先的指纹浏览器工作台：每个环境都是全新、严格隔离的浏览器环境。</p>
   <p>
     <img alt="License AGPLv3" src="https://img.shields.io/badge/license-AGPLv3-67e8f9?style=flat-square&labelColor=0f172a" />
@@ -18,7 +18,7 @@
 
 ## 简介
 
-M Z指纹浏览器 是一个运行在本机的桌面工作台，用来创建、运行和管理多个相互隔离的浏览器环境，并为每个环境配置代理、指纹和自动化流程。
+MZ指纹浏览器 是一个运行在本机的桌面工作台，用来创建、运行和管理多个相互隔离的浏览器环境，并为每个环境配置代理、指纹和自动化流程。
 
 它的目标很明确：**指纹质量**。每个新建环境都有独立的用户数据目录、独立的指纹种子和一套自洽的设备画像，
 环境之间的 Canvas、WebGL、音频指纹互不相同，也无法通过时区、语言、屏幕、硬件等信息互相关联；
@@ -34,7 +34,7 @@ M Z指纹浏览器 是一个运行在本机的桌面工作台，用来创建、�
 - **环境级指纹种子**：由环境 ID 派生，Canvas / WebGL / 音频噪声各环境不同、重启不变。
 - **持久化配置**：长期保存环境配置与账号上下文，支持分组、标签、批量操作。
 - **启动保证**：指纹配置由浏览器确认已应用后环境才算启动成功；确认失败或超时则启动失败，不会带着默认指纹打开页面。
-- **默认浏览器**：在环境的菜单里把某个环境设为默认浏览器，其他软件里点开的链接就固定在这个环境里打开，不询问，可随时取消。Windows 只允许用户自己选择默认浏览器，设置后需要在系统“默认应用”里选一次 M Z指纹浏览器。软件已在运行时链接直接交给它，没运行就静默启动，不弹出主窗口。
+- **默认浏览器**：在环境的菜单里把某个环境设为默认浏览器，其他软件里点开的链接就固定在这个环境里打开，不询问，可随时取消。Windows 只允许用户自己选择默认浏览器，设置后需要在系统“默认应用”里选一次 MZ指纹浏览器。软件已在运行时链接直接交给它，没运行就静默启动，不弹出主窗口。
 - **纯本地单人使用**：没有用户、团队、工作空间、登录、锁屏和数量配额，打开就能用。
 
 ### 指纹
@@ -66,13 +66,11 @@ M Z指纹浏览器 是一个运行在本机的桌面工作台，用来创建、�
 
 ### 浏览器内核
 
-- 使用定制的 Chromium 内核（当前为 **156**，计划同时支持 158、159），内核只能由 M Z指纹浏览器 启动。
+- 使用定制的 Chromium 内核（当前为 **156**，计划同时支持 158、159），内核只能由 MZ指纹浏览器 启动。
 - 软件内置内核目录，记录名称、版本、校验信息和下载地址：内核从 [browser-kernel](https://github.com/mouzhai163/browser-kernel) 的 Releases 在线下载，下载后校验整个压缩包和核心 DLL。也可以用 `config/browser-kernels.json` 额外注册本地构建的内核。
 - 内核补丁在 [browser-kernel](https://github.com/mouzhai163/browser-kernel) 仓库，不在本仓库。
 
 ## 快速开始
-
-完整的 Windows 从零开发配置步骤见 [开发配置文档](./docs/development-setup.zh-CN.md)。
 
 ### 环境要求
 
@@ -93,9 +91,6 @@ cargo tauri dev
 
 ## 文档
 
-- [开发配置](./docs/development-setup.zh-CN.md)
-- [实施记录 04：内核 156 与指纹隔离加固](./docs/implementation-04.zh-CN.md)：本轮修复的 bug、新增功能、验证结果和已知不足
-- [静态检查基线](./docs/baseline/README.zh-CN.md)
 - [贡献指南](./CONTRIBUTING.md)
 
 ## 当前状态
@@ -115,7 +110,7 @@ cargo tauri dev
 
 ## 来源与致谢
 
-M Z指纹浏览器是 [Simprint](https://github.com/Simprint/simprint)（原作者 Simprint 团队）的二次开发版本，在其源码基础上独立维护；内核补丁同样来自原项目的 [simprint-browser-kernel](https://github.com/Simprint/simprint-browser-kernel)。感谢原项目开源。
+MZ指纹浏览器是 [Simprint](https://github.com/Simprint/simprint)（原作者 Simprint 团队）的二次开发版本，在其源码基础上独立维护；内核补丁同样来自原项目的 [simprint-browser-kernel](https://github.com/Simprint/simprint-browser-kernel)。感谢原项目开源。
 
 在原项目之上的主要改动：升级到 Chromium 156 内核并加固指纹与环境隔离、新增“默认浏览器”、删除用户/团队/工作空间/登录/数量配额（改为纯本地单人使用）、内核改为从 GitHub Releases 在线下载、更改软件名称与图标。
 

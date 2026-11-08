@@ -63,7 +63,7 @@ impl ToolBase for ListBrowserKernelsTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("List M Z指纹浏览器 browser kernel versions by platform or kernel type.".into())
+        Some("List MZ指纹浏览器 browser kernel versions by platform or kernel type.".into())
     }
 }
 

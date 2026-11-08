@@ -88,13 +88,13 @@ export const environmentResources = {
       badgeHint: '外部软件里点开的链接固定在这个环境打开',
       setDone: '已将“{{name}}”设为默认浏览器，外部链接会直接在这个环境里打开',
       setNeedSystemStep:
-        '已将“{{name}}”设为默认浏览器。还差一步：请在 Windows 设置里把默认浏览器选为 M Z指纹浏览器',
+        '已将“{{name}}”设为默认浏览器。还差一步：请在 Windows 设置里把默认浏览器选为 MZ指纹浏览器',
       cleared: '已取消默认浏览器',
       clearedRestore:
-        '已取消默认浏览器。如果 Windows 仍把 M Z指纹浏览器 当作默认浏览器，请在系统设置里改回你常用的浏览器',
+        '已取消默认浏览器。如果 Windows 仍把 MZ指纹浏览器 当作默认浏览器，请在系统设置里改回你常用的浏览器',
       openSettings: '打开系统设置',
       systemStepBanner:
-        '默认浏览器环境已设置，但 Windows 的默认浏览器还不是 M Z指纹浏览器。请在系统“默认应用 → Web 浏览器”里选择 M Z指纹浏览器，外部链接才会进入这个环境',
+        '默认浏览器环境已设置，但 Windows 的默认浏览器还不是 MZ指纹浏览器。请在系统“默认应用 → Web 浏览器”里选择 MZ指纹浏览器，外部链接才会进入这个环境',
       failed: '设置默认浏览器失败',
     },
     batchActions: {
@@ -589,13 +589,13 @@ export const environmentResources = {
       badgeHint: 'Links opened from other apps always open in this environment',
       setDone: '"{{name}}" is now the default browser; external links open in it directly',
       setNeedSystemStep:
-        '"{{name}}" is now the default browser. One more step: pick M Z指纹浏览器 as the default browser in Windows Settings',
+        '"{{name}}" is now the default browser. One more step: pick MZ指纹浏览器 as the default browser in Windows Settings',
       cleared: 'Default browser unset',
       clearedRestore:
-        'Default browser unset. If Windows still uses M Z指纹浏览器 as the default browser, switch it back in system settings',
+        'Default browser unset. If Windows still uses MZ指纹浏览器 as the default browser, switch it back in system settings',
       openSettings: 'Open system settings',
       systemStepBanner:
-        'A default browser environment is set, but Windows still uses another default browser. Pick M Z指纹浏览器 under Default apps → Web browser so external links open in this environment',
+        'A default browser environment is set, but Windows still uses another default browser. Pick MZ指纹浏览器 under Default apps → Web browser so external links open in this environment',
       failed: 'Failed to change the default browser',
     },
     batchActions: {

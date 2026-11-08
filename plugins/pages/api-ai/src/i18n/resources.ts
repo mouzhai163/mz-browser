@@ -168,7 +168,7 @@ export const apiConsoleResources = {
         'The old token will be invalidated and the server stopped. Update your client token before enabling it again.',
       control: 'MCP Service Control',
       controlDesc:
-        'After enabling, M Z指纹浏览器 starts a local MCP server for Cursor, VS Code, Codex, and other MCP clients.',
+        'After enabling, MZ指纹浏览器 starts a local MCP server for Cursor, VS Code, Codex, and other MCP clients.',
       clientGrid: 'Client Integrations',
       clientGridDesc:
         'Choose a common MCP client on the left and the matching configuration example will be shown on the right.',

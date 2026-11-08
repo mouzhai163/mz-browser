@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="./public/assets/logo.png" alt="M Z指纹浏览器 Logo" width="120" />
-  <h1>M Z指纹浏览器</h1>
+  <img src="./public/assets/logo.png" alt="MZ指纹浏览器 Logo" width="120" />
+  <h1>MZ指纹浏览器</h1>
   <p>A local-first fingerprint browser workbench: every environment is a fresh, strictly isolated browser environment.</p>
   <p>
     <img alt="License AGPLv3" src="https://img.shields.io/badge/license-AGPLv3-67e8f9?style=flat-square&labelColor=0f172a" />
@@ -18,7 +18,7 @@
 
 ## Introduction
 
-M Z指纹浏览器 is a desktop workbench that runs on your own machine. It creates, runs and manages many isolated browser
+MZ指纹浏览器 is a desktop workbench that runs on your own machine. It creates, runs and manages many isolated browser
 environments and gives each one its own proxy, fingerprint and automation workflows.
 
 The goal is **fingerprint quality**. Every new environment gets its own user-data directory, its own fingerprint seed
@@ -35,8 +35,8 @@ Core data stays on your machine by default; neither daily use nor development de
 - **Per-environment fingerprint seed**: derived from the environment ID, so Canvas / WebGL / audio noise differs between environments and stays stable across restarts.
 - **Persistent configuration**: environment settings and account context are kept long term, with groups, tags and batch operations.
 - **Launch guarantee**: an environment only counts as started after the browser confirms the fingerprint config was applied. If the confirmation fails or times out, the launch fails instead of opening pages with a default fingerprint.
-- **Default browser**: mark one environment as the default browser in its menu and links clicked in other apps open in it directly, without asking; unset it any time. Windows only lets the user pick the default browser, so after setting it you choose M Z指纹浏览器 once under Default apps. If M Z指纹浏览器 is already running the link is handed to it, otherwise it starts quietly without showing the main window.
-- **Single-user and local**: M Z指纹浏览器 is a personal workbench. There are no users, teams, workspaces, login, lock screen or quotas; it just opens.
+- **Default browser**: mark one environment as the default browser in its menu and links clicked in other apps open in it directly, without asking; unset it any time. Windows only lets the user pick the default browser, so after setting it you choose MZ指纹浏览器 once under Default apps. If MZ指纹浏览器 is already running the link is handed to it, otherwise it starts quietly without showing the main window.
+- **Single-user and local**: MZ指纹浏览器 is a personal workbench. There are no users, teams, workspaces, login, lock screen or quotas; it just opens.
 
 ### Fingerprint
 
@@ -68,13 +68,11 @@ New environments get GPU, core count, memory, resolution and scaling from one ti
 
 ### Browser kernel
 
-- A customized Chromium kernel (currently **156**; 158 and 159 are planned). It can only be launched by M Z指纹浏览器.
+- A customized Chromium kernel (currently **156**; 158 and 159 are planned). It can only be launched by MZ指纹浏览器.
 - The app ships a kernel catalog with name, version, verification data and download URL. Kernels are downloaded from the Releases of [browser-kernel](https://github.com/mouzhai163/browser-kernel), and both the archive and the core DLL are verified. Locally built kernels can still be registered through `config/browser-kernels.json`.
 - Kernel patches live in the [browser-kernel](https://github.com/mouzhai163/browser-kernel) repository, not in this one.
 
 ## Quick Start
-
-For a full from-scratch Windows setup see the [development setup guide](./docs/development-setup.zh-CN.md) (Chinese).
 
 ### Prerequisites
 
@@ -95,9 +93,6 @@ No extra service has to be configured or started for the desktop app.
 
 ## Documentation
 
-- [Development setup](./docs/development-setup.zh-CN.md)
-- [Implementation notes 04](./docs/implementation-04.zh-CN.md): bugs fixed, features added, verification and known gaps (Chinese)
-- [Static-check baseline](./docs/baseline/README.zh-CN.md)
 - [Contributing](./CONTRIBUTING.md)
 
 ## Status
@@ -117,7 +112,7 @@ Core data stays on your device by default. Features that need the network, such 
 
 ## Origin and credits
 
-M Z指纹浏览器 is a derivative of [Simprint](https://github.com/Simprint/simprint) by the Simprint team and is maintained independently on top of its source; the kernel patches likewise come from the original [simprint-browser-kernel](https://github.com/Simprint/simprint-browser-kernel). Thanks to the original project for open-sourcing it.
+MZ指纹浏览器 is a derivative of [Simprint](https://github.com/Simprint/simprint) by the Simprint team and is maintained independently on top of its source; the kernel patches likewise come from the original [simprint-browser-kernel](https://github.com/Simprint/simprint-browser-kernel). Thanks to the original project for open-sourcing it.
 
 Main changes on top of the original: Chromium 156 kernel with hardened fingerprints and environment isolation, a "default browser" feature, removal of users/teams/workspaces/login/environment quotas (now a single-user local workbench), kernel download from GitHub Releases, and a new name and icon.
 

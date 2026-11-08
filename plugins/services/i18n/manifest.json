@@ -3,7 +3,7 @@
   "name": "I18n Service",
   "version": "1.0.0",
   "description": "Provide i18n resource contributions (zh-CN/en-US) for plugins",
-  "author": "M Z指纹浏览器 Team",
+  "author": "MZ指纹浏览器 Team",
   "entry": "./src/index.ts",
   "slots": [],
   "enabled": true

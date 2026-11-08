@@ -729,7 +729,7 @@ export function EnvironmentTableRow({
       if (next.isSystemDefault) {
         toast.success(t('defaultBrowser.setDone', { name: environment.name }));
       } else {
-        // Windows 不允许程序替用户选择默认浏览器，还差用户在系统设置里选一次 M Z指纹浏览器。
+        // Windows 不允许程序替用户选择默认浏览器，还差用户在系统设置里选一次 MZ指纹浏览器。
         toast.success(t('defaultBrowser.setNeedSystemStep', { name: environment.name }), {
           duration: 15000,
           action: {

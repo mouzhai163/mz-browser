@@ -126,7 +126,7 @@ impl ToolBase for ListProxiesTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("List M Z指纹浏览器 proxies with optional filters.".into())
+        Some("List MZ指纹浏览器 proxies with optional filters.".into())
     }
 }
 
@@ -178,7 +178,7 @@ impl ToolBase for GetProxyTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Get a M Z指纹浏览器 proxy by UUID.".into())
+        Some("Get a MZ指纹浏览器 proxy by UUID.".into())
     }
 }
 
@@ -203,7 +203,7 @@ impl ToolBase for CreateProxyTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Create a M Z指纹浏览器 proxy.".into())
+        Some("Create a MZ指纹浏览器 proxy.".into())
     }
 }
 
@@ -248,7 +248,7 @@ impl ToolBase for UpdateProxyTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Update a M Z指纹浏览器 proxy.".into())
+        Some("Update a MZ指纹浏览器 proxy.".into())
     }
 }
 
@@ -294,7 +294,7 @@ impl ToolBase for DeleteProxyTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Delete a M Z指纹浏览器 proxy by UUID.".into())
+        Some("Delete a MZ指纹浏览器 proxy by UUID.".into())
     }
 }
 
@@ -325,7 +325,7 @@ impl ToolBase for BatchDeleteProxiesTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Delete multiple M Z指纹浏览器 proxies by UUID.".into())
+        Some("Delete multiple MZ指纹浏览器 proxies by UUID.".into())
     }
 }
 

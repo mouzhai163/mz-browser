@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 const CLASH_VERGE_REV_APP_ID: &str = "io.github.clash-verge-rev.clash-verge-rev";
 // Clash Verge Rev 的 config.yaml 只承载基础端口与 controller 配置。
-// 如果把 M Z指纹浏览器 的 listeners 编排写回这个文件，再触发 Mihomo reload，
+// 如果把 MZ指纹浏览器 的 listeners 编排写回这个文件，再触发 Mihomo reload，
 // 内核可能退回到只包含 DIRECT/REJECT/GLOBAL 的最小配置，导致订阅节点与策略组丢失。
 // 因此这里必须固定使用 clash-verge.yaml，不能再把 config.yaml 当成候选路径。
 const MIHOMO_CONFIG_FILE_PRIMARY: &str = "clash-verge.yaml";

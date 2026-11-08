@@ -1,6 +1,6 @@
-# Contributing to M Z指纹浏览器
+# Contributing to MZ指纹浏览器
 
-Thanks for considering a contribution to M Z指纹浏览器.
+Thanks for considering a contribution to MZ指纹浏览器.
 
 This repository is in an active open-source transition. We welcome bug reports, documentation improvements, CI and packaging fixes, frontend refinements, test coverage, and well-scoped product improvements.
 
@@ -11,8 +11,6 @@ This repository is in an active open-source transition. We welcome bug reports, 
 - Keep pull requests focused. Small, reviewable changes move faster than broad refactors.
 
 ## Development Setup
-
-Windows 从零配置、桌面端启动和本地数据目录说明请先阅读 [开发配置文档](./docs/development-setup.zh-CN.md)。
 
 ### Prerequisites
 

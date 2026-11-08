@@ -79,7 +79,7 @@ impl ToolBase for ListTagsTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("List M Z指纹浏览器 tags.".into())
+        Some("List MZ指纹浏览器 tags.".into())
     }
 }
 
@@ -105,7 +105,7 @@ impl ToolBase for CreateTagTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Create a M Z指纹浏览器 tag.".into())
+        Some("Create a MZ指纹浏览器 tag.".into())
     }
 }
 
@@ -147,7 +147,7 @@ impl ToolBase for UpdateTagTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Update a M Z指纹浏览器 tag.".into())
+        Some("Update a MZ指纹浏览器 tag.".into())
     }
 }
 
@@ -184,7 +184,7 @@ impl ToolBase for DeleteTagTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Delete a M Z指纹浏览器 tag by UUID.".into())
+        Some("Delete a MZ指纹浏览器 tag by UUID.".into())
     }
 }
 

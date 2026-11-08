@@ -321,7 +321,7 @@ environment_uuid_tool!(
     BatchEnvironmentIdentityInput,
     BatchGetEnvironmentsOutput,
     "mz_batch_get_environments",
-    "Get multiple M Z指纹浏览器 environments by UUID.",
+    "Get multiple MZ指纹浏览器 environments by UUID.",
     |service, param| {
         let env_uuids = require_env_uuids(param.env_uuids)?;
         let items = service.bridge().batch_get_environments(env_uuids).await?;
@@ -337,7 +337,7 @@ environment_uuid_tool!(
     CreateEnvironmentInput,
     EnvironmentMutationOutput,
     "mz_create_environment",
-    "Create a M Z指纹浏览器 environment.",
+    "Create a MZ指纹浏览器 environment.",
     |service, param| {
         if param.name.trim().is_empty() {
             return Err(McpToolError::invalid_params("name is required"));
@@ -374,7 +374,7 @@ environment_uuid_tool!(
     UpdateEnvironmentInput,
     EnvironmentMutationOutput,
     "mz_update_environment",
-    "Update a M Z指纹浏览器 environment.",
+    "Update a MZ指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         service
@@ -405,7 +405,7 @@ environment_uuid_tool!(
     EnvironmentIdentityInput,
     EnvironmentMutationOutput,
     "mz_delete_environment",
-    "Delete a M Z指纹浏览器 environment by UUID.",
+    "Delete a MZ指纹浏览器 environment by UUID.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         service.bridge().delete_environment(&env_uuid).await?;
@@ -419,7 +419,7 @@ environment_uuid_tool!(
     BatchEnvironmentIdentityInput,
     EnvironmentMutationOutput,
     "mz_batch_delete_environments",
-    "Delete multiple M Z指纹浏览器 environments by UUID.",
+    "Delete multiple MZ指纹浏览器 environments by UUID.",
     |service, param| {
         let env_uuids = require_env_uuids(param.env_uuids)?;
         service.bridge().batch_delete_environments(env_uuids.clone()).await?;
@@ -433,7 +433,7 @@ environment_uuid_tool!(
     ListRecycleBinEnvironmentsInput,
     ListRecycleBinEnvironmentsOutput,
     "mz_list_recycle_bin_environments",
-    "List deleted M Z指纹浏览器 environments in the recycle bin.",
+    "List deleted MZ指纹浏览器 environments in the recycle bin.",
     |service, param| {
         let filters = list_environment_filters(param.keyword, param.group_uuid, param.tag_uuids);
         let response = service
@@ -459,7 +459,7 @@ environment_uuid_tool!(
     EnvironmentIdentityInput,
     EnvironmentMutationOutput,
     "mz_restore_environment",
-    "Restore a deleted M Z指纹浏览器 environment from the recycle bin.",
+    "Restore a deleted MZ指纹浏览器 environment from the recycle bin.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         service.bridge().restore_environment(&env_uuid).await?;
@@ -473,7 +473,7 @@ environment_uuid_tool!(
     BatchEnvironmentIdentityInput,
     EnvironmentMutationOutput,
     "mz_batch_restore_environments",
-    "Restore multiple deleted M Z指纹浏览器 environments from the recycle bin.",
+    "Restore multiple deleted MZ指纹浏览器 environments from the recycle bin.",
     |service, param| {
         let env_uuids = require_env_uuids(param.env_uuids)?;
         service.bridge().batch_restore_environments(env_uuids.clone()).await?;
@@ -515,7 +515,7 @@ environment_uuid_tool!(
     SetEnvironmentProxyInput,
     EnvironmentMutationOutput,
     "mz_set_environment_proxy",
-    "Assign or clear a proxy for a M Z指纹浏览器 environment.",
+    "Assign or clear a proxy for a MZ指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         service
@@ -535,7 +535,7 @@ environment_uuid_tool!(
     SetEnvironmentAccountsInput,
     EnvironmentMutationOutput,
     "mz_set_environment_accounts",
-    "Set account bindings for a M Z指纹浏览器 environment.",
+    "Set account bindings for a MZ指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         let account_uuids = require_named_uuids("account_uuids", param.account_uuids)?;
@@ -556,7 +556,7 @@ environment_uuid_tool!(
     AssignEnvironmentTagsInput,
     EnvironmentMutationOutput,
     "mz_assign_environment_tags",
-    "Assign multiple tags to a M Z指纹浏览器 environment.",
+    "Assign multiple tags to a MZ指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         let tag_uuids = require_named_uuids("tag_uuids", param.tag_uuids)?;
@@ -577,7 +577,7 @@ environment_uuid_tool!(
     BatchAssignEnvironmentTagsInput,
     EnvironmentMutationOutput,
     "mz_batch_assign_environment_tags",
-    "Assign a tag to multiple M Z指纹浏览器 environments.",
+    "Assign a tag to multiple MZ指纹浏览器 environments.",
     |service, param| {
         let env_uuids = require_env_uuids(param.env_uuids)?;
         let tag_uuid = require_non_empty("tag_uuid", param.tag_uuid)?;
@@ -598,7 +598,7 @@ environment_uuid_tool!(
     RemoveEnvironmentTagInput,
     EnvironmentMutationOutput,
     "mz_remove_environment_tag",
-    "Remove a tag from a M Z指纹浏览器 environment.",
+    "Remove a tag from a MZ指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         let tag_uuid = require_non_empty("tag_uuid", param.tag_uuid)?;
@@ -619,7 +619,7 @@ environment_uuid_tool!(
     BatchRemoveEnvironmentTagsInput,
     EnvironmentMutationOutput,
     "mz_batch_remove_environment_tags",
-    "Remove one or all tags from multiple M Z指纹浏览器 environments.",
+    "Remove one or all tags from multiple MZ指纹浏览器 environments.",
     |service, param| {
         let env_uuids = require_env_uuids(param.env_uuids)?;
         service
@@ -639,7 +639,7 @@ environment_uuid_tool!(
     MoveEnvironmentToGroupInput,
     EnvironmentMutationOutput,
     "mz_move_environment_to_group",
-    "Move a M Z指纹浏览器 environment to a group or clear its group.",
+    "Move a MZ指纹浏览器 environment to a group or clear its group.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         service
@@ -659,7 +659,7 @@ environment_uuid_tool!(
     BatchMoveEnvironmentsToGroupInput,
     EnvironmentMutationOutput,
     "mz_batch_move_environments_to_group",
-    "Move multiple M Z指纹浏览器 environments to a group.",
+    "Move multiple MZ指纹浏览器 environments to a group.",
     |service, param| {
         let env_uuids = require_env_uuids(param.env_uuids)?;
         let group_uuid = require_non_empty("group_uuid", param.group_uuid)?;
@@ -680,7 +680,7 @@ environment_uuid_tool!(
     EnvironmentIdentityInput,
     ListEnvironmentUrlsOutput,
     "mz_list_environment_urls",
-    "List configured start URLs for a M Z指纹浏览器 environment.",
+    "List configured start URLs for a MZ指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         let items = service.bridge().list_environment_urls(&env_uuid).await?;
@@ -697,7 +697,7 @@ environment_uuid_tool!(
     EnvironmentUrlCreateInput,
     EnvironmentMutationOutput,
     "mz_add_environment_url",
-    "Add a start URL to a M Z指纹浏览器 environment.",
+    "Add a start URL to a MZ指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         if param.url.trim().is_empty() {
@@ -751,7 +751,7 @@ environment_uuid_tool!(
     EnvironmentIdentityInput,
     EnvironmentMutationOutput,
     "mz_clear_environment_urls",
-    "Clear all stored URLs for a M Z指纹浏览器 environment.",
+    "Clear all stored URLs for a MZ指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         service.bridge().clear_environment_urls(&env_uuid).await?;
@@ -765,7 +765,7 @@ environment_uuid_tool!(
     EnvironmentIdentityInput,
     ListEnvironmentCookiesOutput,
     "mz_list_environment_cookies",
-    "List stored cookies for a M Z指纹浏览器 environment.",
+    "List stored cookies for a MZ指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         let items = service.bridge().list_environment_cookies(&env_uuid).await?;
@@ -782,7 +782,7 @@ environment_uuid_tool!(
     EnvironmentCookieCreateInput,
     EnvironmentMutationOutput,
     "mz_add_environment_cookie",
-    "Add a cookie to a M Z指纹浏览器 environment.",
+    "Add a cookie to a MZ指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         if param.site.trim().is_empty() {
@@ -838,7 +838,7 @@ environment_uuid_tool!(
     EnvironmentIdentityInput,
     EnvironmentMutationOutput,
     "mz_clear_environment_cookies",
-    "Clear all stored cookies for a M Z指纹浏览器 environment.",
+    "Clear all stored cookies for a MZ指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         service.bridge().clear_environment_cookies(&env_uuid).await?;

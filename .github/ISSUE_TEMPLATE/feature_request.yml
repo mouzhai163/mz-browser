@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest an improvement or new feature for M Z指纹浏览器
+description: Suggest an improvement or new feature for MZ指纹浏览器
 title: "[Feature]: "
 labels:
   - enhancement
@@ -24,7 +24,7 @@ body:
     id: proposal
     attributes:
       label: Proposed solution
-      description: What would you like M Z指纹浏览器 to do instead?
+      description: What would you like MZ指纹浏览器 to do instead?
       placeholder: Describe your preferred solution.
     validations:
       required: true

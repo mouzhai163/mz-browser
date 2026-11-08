@@ -118,9 +118,9 @@ FunctionEnd
 
   DeleteRegKey HKCU "Software\${PRODUCTNAME}\RuntimePaths"
 
-  ; 取消"默认浏览器"登记：卸载后 M Z指纹浏览器 不再出现在 Windows 的可选浏览器里。
+  ; 取消"默认浏览器"登记：卸载后 MZ指纹浏览器 不再出现在 Windows 的可选浏览器里。
   ; 登记名与 services/default_browser/registry.rs 的 RELEASE_NAMES 保持一致（开发运行用另一套名字，不受影响）。
   DeleteRegKey HKCU "Software\Classes\MzHTML"
-  DeleteRegKey HKCU "Software\Clients\StartMenuInternet\M Z指纹浏览器"
-  DeleteRegValue HKCU "Software\RegisteredApplications" "M Z指纹浏览器"
+  DeleteRegKey HKCU "Software\Clients\StartMenuInternet\MZ指纹浏览器"
+  DeleteRegValue HKCU "Software\RegisteredApplications" "MZ指纹浏览器"
 !macroend

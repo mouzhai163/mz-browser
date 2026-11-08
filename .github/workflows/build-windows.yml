@@ -124,7 +124,7 @@ jobs:
           tagName: ${{ inputs.release_tag }}
           uploadUpdaterJson: false
           uploadUpdaterSignatures: true
-          releaseAssetNamePattern: M Z指纹浏览器_[version]_[arch]-full[setup].[ext]
+          releaseAssetNamePattern: MZ指纹浏览器_[version]_[arch]-full[setup].[ext]
           args: --features production --target x86_64-pc-windows-msvc
 
       - name: Prepare ARM64 fixed-runtime config
@@ -148,7 +148,7 @@ jobs:
           tagName: ${{ inputs.release_tag }}
           uploadUpdaterJson: false
           uploadUpdaterSignatures: true
-          releaseAssetNamePattern: M Z指纹浏览器_[version]_[arch]-full[setup].[ext]
+          releaseAssetNamePattern: MZ指纹浏览器_[version]_[arch]-full[setup].[ext]
           args: --features production --target aarch64-pc-windows-msvc
 
       - name: Prepare x86 fixed-runtime config
@@ -172,7 +172,7 @@ jobs:
           tagName: ${{ inputs.release_tag }}
           uploadUpdaterJson: false
           uploadUpdaterSignatures: true
-          releaseAssetNamePattern: M Z指纹浏览器_[version]_[arch]-full[setup].[ext]
+          releaseAssetNamePattern: MZ指纹浏览器_[version]_[arch]-full[setup].[ext]
           args: --features production --target i686-pc-windows-msvc
 
       - name: Prepare x64 embedBootstrapper config
@@ -196,7 +196,7 @@ jobs:
           tagName: ${{ inputs.release_tag }}
           uploadUpdaterJson: false
           uploadUpdaterSignatures: true
-          releaseAssetNamePattern: M Z指纹浏览器_[version]_[arch][setup].[ext]
+          releaseAssetNamePattern: MZ指纹浏览器_[version]_[arch][setup].[ext]
           args: --features production --target x86_64-pc-windows-msvc
 
       - name: Prepare ARM64 embedBootstrapper config
@@ -220,7 +220,7 @@ jobs:
           tagName: ${{ inputs.release_tag }}
           uploadUpdaterJson: false
           uploadUpdaterSignatures: true
-          releaseAssetNamePattern: M Z指纹浏览器_[version]_[arch][setup].[ext]
+          releaseAssetNamePattern: MZ指纹浏览器_[version]_[arch][setup].[ext]
           args: --features production --target aarch64-pc-windows-msvc
 
       - name: Prepare x86 embedBootstrapper config
@@ -244,5 +244,5 @@ jobs:
           tagName: ${{ inputs.release_tag }}
           uploadUpdaterJson: false
           uploadUpdaterSignatures: true
-          releaseAssetNamePattern: M Z指纹浏览器_[version]_[arch][setup].[ext]
+          releaseAssetNamePattern: MZ指纹浏览器_[version]_[arch][setup].[ext]
           args: --features production --target i686-pc-windows-msvc

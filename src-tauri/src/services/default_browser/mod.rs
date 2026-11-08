@@ -1,8 +1,8 @@
 //! 默认浏览器：把外部链接固定交给一个"默认环境"打开。
 //!
 //! - 用户在环境管理里把某个环境设为"默认浏览器"，同一时刻只有一个；可随时取消。
-//! - 设置时把 M Z指纹浏览器 登记成 Windows 的可选浏览器（见 `registry`）；Windows 不允许程序替用户
-//!   选择默认浏览器，所以还需要用户在系统"默认应用"里选一次 M Z指纹浏览器。
+//! - 设置时把 MZ指纹浏览器 登记成 Windows 的可选浏览器（见 `registry`）；Windows 不允许程序替用户
+//!   选择默认浏览器，所以还需要用户在系统"默认应用"里选一次 MZ指纹浏览器。
 //! - 之后其他软件里点链接，系统以 `mz-browser.exe "<链接>"` 启动（或交给已在运行的实例），
 //!   链接直接在默认环境里打开，不询问。没有默认环境时只提示、不打开，绝不挑一个环境顶替。
 
@@ -61,7 +61,7 @@ pub struct DefaultBrowserState {
     pub environment_uuid: Option<String>,
     /// 已向系统登记为可选浏览器
     pub registered: bool,
-    /// 系统当前的默认浏览器就是 M Z指纹浏览器
+    /// 系统当前的默认浏览器就是 MZ指纹浏览器
     pub is_system_default: bool,
 }
 
@@ -143,8 +143,8 @@ pub fn set_environment(app: &AppHandle, env_uuid: &str) -> Result<DefaultBrowser
 
 /// 取消默认浏览器：清除默认环境，并取消向系统登记。
 ///
-/// 取消登记后 M Z指纹浏览器 不再出现在 Windows 的可选浏览器里；如果它此刻仍是系统默认，
-/// Windows 下次打开链接时会让用户重新选择，而不是把链接发给一个没有默认环境的 M Z指纹浏览器。
+/// 取消登记后 MZ指纹浏览器 不再出现在 Windows 的可选浏览器里；如果它此刻仍是系统默认，
+/// Windows 下次打开链接时会让用户重新选择，而不是把链接发给一个没有默认环境的 MZ指纹浏览器。
 pub fn clear_environment(app: &AppHandle) -> Result<DefaultBrowserState> {
     store_default_environment(app, None)?;
     #[cfg(windows)]
@@ -156,11 +156,11 @@ pub fn clear_environment(app: &AppHandle) -> Result<DefaultBrowserState> {
     Ok(get_state(app))
 }
 
-/// 打开 Windows 的"默认应用"设置页，让用户把 M Z指纹浏览器 选为默认浏览器。
+/// 打开 Windows 的"默认应用"设置页，让用户把 MZ指纹浏览器 选为默认浏览器。
 pub fn open_default_apps_settings() -> Result<()> {
     #[cfg(windows)]
     {
-        // 直达 M Z指纹浏览器 的页面（Windows 11）；Windows 10 会落到"默认应用"总页。
+        // 直达 MZ指纹浏览器 的页面（Windows 11）；Windows 10 会落到"默认应用"总页。
         let name = registry_names().display_name;
         let uri = format!("ms-settings:defaultapps?registeredAppUser={}", name.replace(' ', "%20"));
         std::process::Command::new("cmd")

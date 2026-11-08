@@ -1,4 +1,4 @@
-//! 把 M Z指纹浏览器 登记为 Windows 的"可选浏览器"（只写 HKCU，不需要管理员权限）。
+//! 把 MZ指纹浏览器 登记为 Windows 的"可选浏览器"（只写 HKCU，不需要管理员权限）。
 //!
 //! Windows 8 起程序不能自己把自己设为默认浏览器（`UserChoice` 有哈希保护），只能先登记成候选，
 //! 再由用户在"设置 → 应用 → 默认应用"里选择。登记的内容与 Chrome / Edge 相同：
@@ -26,9 +26,9 @@ pub struct Names {
 }
 
 pub const RELEASE_NAMES: Names =
-    Names { prog_id: "MzHTML", app_key: "M Z指纹浏览器", display_name: "M Z指纹浏览器" };
+    Names { prog_id: "MzHTML", app_key: "MZ指纹浏览器", display_name: "MZ指纹浏览器" };
 pub const ISOLATED_NAMES: Names =
-    Names { prog_id: "MzDevHTML", app_key: "MzDev", display_name: "M Z指纹浏览器 (Dev)" };
+    Names { prog_id: "MzDevHTML", app_key: "MzDev", display_name: "MZ指纹浏览器 (Dev)" };
 
 fn quoted(exe: &Path) -> String {
     format!("\"{}\"", exe.display())
@@ -69,7 +69,7 @@ pub fn register(root: &str, names: &Names, exe: &Path, data_root: Option<&Path>)
 
     let (capabilities, _) = client.create_subkey("Capabilities")?;
     capabilities.set_value("ApplicationName", &names.display_name)?;
-    capabilities.set_value("ApplicationDescription", &"M Z指纹浏览器 fingerprint browser workbench")?;
+    capabilities.set_value("ApplicationDescription", &"MZ指纹浏览器 fingerprint browser workbench")?;
     capabilities.set_value("ApplicationIcon", &icon)?;
     let (files, _) = capabilities.create_subkey("FileAssociations")?;
     for extension in FILE_TYPES {
@@ -160,7 +160,7 @@ mod tests {
     }
 
     fn exe() -> &'static Path {
-        Path::new("C:\\Program Files\\M Z指纹浏览器\\mz-browser.exe")
+        Path::new("C:\\Program Files\\MZ指纹浏览器\\mz-browser.exe")
     }
 
     #[test]
@@ -174,7 +174,7 @@ mod tests {
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
         let caps_path = format!("{}\\Capabilities", client_path(&root.0, &RELEASE_NAMES));
         let caps = hkcu.open_subkey(&caps_path).unwrap();
-        assert_eq!(caps.get_value::<String, _>("ApplicationName").unwrap(), "M Z指纹浏览器");
+        assert_eq!(caps.get_value::<String, _>("ApplicationName").unwrap(), "MZ指纹浏览器");
         let urls = caps.open_subkey("URLAssociations").unwrap();
         assert_eq!(urls.get_value::<String, _>("http").unwrap(), "MzHTML");
         assert_eq!(urls.get_value::<String, _>("https").unwrap(), "MzHTML");
@@ -183,20 +183,20 @@ mod tests {
             assert_eq!(files.get_value::<String, _>(extension).unwrap(), "MzHTML");
         }
         let registered = hkcu.open_subkey(format!("{}\\RegisteredApplications", root.0)).unwrap();
-        assert_eq!(registered.get_value::<String, _>("M Z指纹浏览器").unwrap(), caps_path);
+        assert_eq!(registered.get_value::<String, _>("MZ指纹浏览器").unwrap(), caps_path);
 
         unregister(&root.0, &RELEASE_NAMES).unwrap();
         assert!(!is_registered(&root.0, &RELEASE_NAMES, exe(), None));
         assert!(hkcu.open_subkey(&caps_path).is_err());
         let registered = hkcu.open_subkey(format!("{}\\RegisteredApplications", root.0)).unwrap();
-        assert!(registered.get_value::<String, _>("M Z指纹浏览器").is_err());
+        assert!(registered.get_value::<String, _>("MZ指纹浏览器").is_err());
     }
 
     #[test]
     fn registration_follows_the_executable_path() {
         let root = TestRoot::new("path");
         register(&root.0, &RELEASE_NAMES, exe(), None).unwrap();
-        let moved = Path::new("D:\\Apps\\M Z指纹浏览器\\mz-browser.exe");
+        let moved = Path::new("D:\\Apps\\MZ指纹浏览器\\mz-browser.exe");
         assert!(!is_registered(&root.0, &RELEASE_NAMES, moved, None));
         register(&root.0, &RELEASE_NAMES, moved, None).unwrap();
         assert!(is_registered(&root.0, &RELEASE_NAMES, moved, None));
@@ -215,11 +215,11 @@ mod tests {
     #[test]
     fn the_command_carries_the_data_root_only_when_there_is_one() {
         // 用正斜杠写路径，避免在测试字符串里处理转义；命令只是原样拼接
-        let exe = Path::new("C:/Program Files/M Z指纹浏览器/mz-browser.exe");
-        assert_eq!(open_command(exe, None), "\"C:/Program Files/M Z指纹浏览器/mz-browser.exe\" -- \"%1\"");
+        let exe = Path::new("C:/Program Files/MZ指纹浏览器/mz-browser.exe");
+        assert_eq!(open_command(exe, None), "\"C:/Program Files/MZ指纹浏览器/mz-browser.exe\" -- \"%1\"");
         assert_eq!(
             open_command(exe, Some(Path::new("F:/My Data/runtime"))),
-            "\"C:/Program Files/M Z指纹浏览器/mz-browser.exe\" \"--mz-root=F:/My Data/runtime\" -- \"%1\""
+            "\"C:/Program Files/MZ指纹浏览器/mz-browser.exe\" \"--mz-root=F:/My Data/runtime\" -- \"%1\""
         );
         // 数据目录变了就要重新登记
         let root = TestRoot::new("dataroot");

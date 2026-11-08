@@ -71,7 +71,7 @@ export const appLayoutResources = {
     },
     update: {
       available: '发现新版本',
-      dialogTitle: 'M Z指纹浏览器 有新版本',
+      dialogTitle: 'MZ指纹浏览器 有新版本',
       versionChange: 'v{{current}} → v{{next}}',
       releaseNotes: '更新内容',
       noReleaseNotes: '本次更新没有提供说明。',
@@ -156,7 +156,7 @@ export const appLayoutResources = {
     },
     update: {
       available: 'Update available',
-      dialogTitle: 'A new M Z指纹浏览器 version is available',
+      dialogTitle: 'A new MZ指纹浏览器 version is available',
       versionChange: 'v{{current}} → v{{next}}',
       releaseNotes: 'What’s new',
       noReleaseNotes: 'No release notes were provided for this update.',

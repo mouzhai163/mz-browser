@@ -148,7 +148,7 @@ impl ToolBase for ListEnvironmentsTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("List M Z指纹浏览器 environments with optional filters.".into())
+        Some("List MZ指纹浏览器 environments with optional filters.".into())
     }
 }
 
@@ -200,7 +200,7 @@ impl ToolBase for GetEnvironmentTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Get a M Z指纹浏览器 environment by UUID.".into())
+        Some("Get a MZ指纹浏览器 environment by UUID.".into())
     }
 }
 
@@ -228,7 +228,7 @@ impl ToolBase for StartEnvironmentTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Start a M Z指纹浏览器 environment by UUID.".into())
+        Some("Start a MZ指纹浏览器 environment by UUID.".into())
     }
 }
 
@@ -256,7 +256,7 @@ impl ToolBase for StopEnvironmentTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Stop a M Z指纹浏览器 environment by UUID.".into())
+        Some("Stop a MZ指纹浏览器 environment by UUID.".into())
     }
 }
 
@@ -284,7 +284,7 @@ impl ToolBase for BatchStartEnvironmentsTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Start multiple M Z指纹浏览器 environments by UUID.".into())
+        Some("Start multiple MZ指纹浏览器 environments by UUID.".into())
     }
 }
 
@@ -316,7 +316,7 @@ impl ToolBase for BatchStopEnvironmentsTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Stop multiple M Z指纹浏览器 environments by UUID.".into())
+        Some("Stop multiple MZ指纹浏览器 environments by UUID.".into())
     }
 }
 
@@ -348,7 +348,7 @@ impl ToolBase for GetEnvironmentStatusTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Get the runtime status of a M Z指纹浏览器 environment.".into())
+        Some("Get the runtime status of a MZ指纹浏览器 environment.".into())
     }
 }
 
@@ -378,7 +378,7 @@ impl ToolBase for GetEnvironmentCdpEndpointTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Get the CDP endpoint of a running M Z指纹浏览器 environment.".into())
+        Some("Get the CDP endpoint of a running MZ指纹浏览器 environment.".into())
     }
 }
 
