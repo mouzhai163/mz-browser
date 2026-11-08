@@ -3,7 +3,7 @@ import {
   type BrowserKernelVersion,
   type ProxyConfig,
   listBrowserKernels,
-  SIMPRINT_KERNEL_CHROMIUM,
+  MZ_KERNEL_CHROMIUM,
 } from '../../../../services/environment/src';
 import { getStorageSettings } from '../../../../services/store/src/stores/storage-settings/storage-settings-store';
 import { getEnvironmentCdpEndpoint, type CdpEndpoint } from './tauri';
@@ -81,8 +81,8 @@ export async function startAnonymousRpaEnvironment(
   const effectiveCache =
     (typeof storage.cachePath === 'string' && storage.cachePath.trim()) || defaultPaths.cache;
 
-  const kernelsMap = await listBrowserKernels(platform, SIMPRINT_KERNEL_CHROMIUM);
-  const kernelList = kernelsMap[SIMPRINT_KERNEL_CHROMIUM] || [];
+  const kernelsMap = await listBrowserKernels(platform, MZ_KERNEL_CHROMIUM);
+  const kernelList = kernelsMap[MZ_KERNEL_CHROMIUM] || [];
   const kernelDetail = pickRunnableKernel(kernelList);
   if (!kernelDetail) {
     throw new Error(`No runnable browser kernel is available for ${platform}.`);

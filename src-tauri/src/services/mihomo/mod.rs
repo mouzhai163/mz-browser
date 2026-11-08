@@ -25,8 +25,6 @@ const LOCAL_PROXY_LISTENER_TYPE: &str = "http";
 const LOCAL_PROXY_STATUS_UNKNOWN: &str = "unknown";
 const LOCAL_PROXY_PORT_BASE: u16 = 17601;
 const MZ_LISTENER_PREFIX: &str = "mz-";
-/// 改名前写进 Mihomo 配置里的监听器前缀，仍然要认得，否则会和新写的监听器重复。
-const LEGACY_LISTENER_PREFIX: &str = "simprint-";
 
 pub struct MihomoManager;
 
@@ -492,7 +490,7 @@ fn is_mz_listener(value: &Value) -> bool {
         .as_mapping()
         .and_then(|mapping| mapping.get(&Value::String("name".to_string())))
         .and_then(Value::as_str)
-        .is_some_and(|name| name.starts_with(MZ_LISTENER_PREFIX) || name.starts_with(LEGACY_LISTENER_PREFIX))
+        .is_some_and(|name| name.starts_with(MZ_LISTENER_PREFIX))
 }
 
 fn build_listener_value(proxy: &MihomoLocalProxy) -> Value {

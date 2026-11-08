@@ -56,7 +56,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/Simprint/simprint/releases/latest/download/latest-fixed.json"
+        "https://github.com/mouzhai163/mz-browser/releases/latest/download/latest-fixed.json"
       ],
       "pubkey": "",
       "windows": {

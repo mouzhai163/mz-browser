@@ -131,11 +131,7 @@ impl PathManager {
 
     /// SQLite database containing the local-first business data.
     pub fn get_business_database_file() -> Result<PathBuf> {
-        let data_dir = Self::get_data_dir()?;
-        let path = data_dir.join("mz.db");
-        // 改名前创建的数据目录里数据库叫 simprint.db：它还在、新名字还没有时继续用旧文件，不动用户数据。
-        let legacy = data_dir.join("simprint.db");
-        let path = if !path.exists() && legacy.is_file() { legacy } else { path };
+        let path = Self::get_data_dir()?.join("mz.db");
         Self::ensure_parent_dir(&path)?;
         Ok(path)
     }

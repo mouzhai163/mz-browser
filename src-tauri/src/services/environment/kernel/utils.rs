@@ -64,9 +64,9 @@ pub fn extract_zip_to_dir(zip_path: &Path, target_dir: &Path) -> Result<()> {
 /// 可执行文件名
 pub fn exe_name() -> &'static str {
     #[cfg(target_os = "windows")]
-    return "simprint.exe";
+    return "mz.exe";
     #[cfg(not(target_os = "windows"))]
-    return "simprint";
+    return "mz";
 }
 
 /// 校验内核目录是否包含启动所需的文件。

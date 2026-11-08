@@ -235,7 +235,7 @@ mod tests {
         assert_ne!(RELEASE_NAMES.app_key, ISOLATED_NAMES.app_key);
         let root = TestRoot::new("isolated");
         register(&root.0, &RELEASE_NAMES, exe(), None).unwrap();
-        register(&root.0, &ISOLATED_NAMES, Path::new("C:\\dev\\simprint.exe"), None).unwrap();
+        register(&root.0, &ISOLATED_NAMES, Path::new("C:\\dev\\mz.exe"), None).unwrap();
         unregister(&root.0, &ISOLATED_NAMES).unwrap();
         assert!(is_registered(&root.0, &RELEASE_NAMES, exe(), None));
     }

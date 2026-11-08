@@ -89,7 +89,7 @@ Current high-value contribution areas include:
 - Frontend UX polish and workflow consistency
 - Tests, regression coverage, and release verification
 
-The environment runtime is maintained in this repository under `src-tauri/crates/runtime`; the browser-kernel layer (`simprint-browser-kernel`) remains a separate component. Changes to environment lifecycle behavior should include tests in the embedded runtime crate whenever possible.
+The environment runtime is maintained in this repository under `src-tauri/crates/runtime`; the browser-kernel layer lives in its own repository, [browser-kernel](https://github.com/mouzhai163/browser-kernel). Changes to environment lifecycle behavior should include tests in the embedded runtime crate whenever possible.
 
 ## Communication
 

@@ -217,7 +217,7 @@ function buildTemplateEnvironmentData(
 /**
  * 获取浏览器内核列表
  * @param platform - 平台：windows/darwin/linux
- * @param type_code - 版本类型，如 SIMPRINT_KERNEL_CHROMIUM
+ * @param type_code - 版本类型，如 MZ_KERNEL_CHROMIUM
  */
 export async function listBrowserKernels(
   platform?: string,

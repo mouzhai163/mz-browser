@@ -246,6 +246,86 @@ mod tests {
         assert_eq!(foreign_keys, 1, "foreign keys must be switched back on");
     }
 
+    /// 回归：改名迁移要下架改名前的内核、解除绑定并清掉环境配置里的旧内核 id，新内核不受影响。
+    #[tokio::test]
+    async fn pre_rename_kernels_are_retired_and_unbound() {
+        const LAST: i64 = 20261109000001;
+        let pool = connect(&memory_config()).await.expect("SQLite should open");
+        let older: Vec<_> = MIGRATOR.iter().filter(|m| m.version < LAST).cloned().collect();
+        Migrator { migrations: std::borrow::Cow::Owned(older), ..Migrator::DEFAULT }
+            .run(&pool)
+            .await
+            .expect("older migrations should apply");
+
+        for (id, type_code, name) in [("old-kernel", "LEGACY_KERNEL_CHROMIUM", "Chrome 156"), ("new-kernel", "MZ_KERNEL_CHROMIUM", "Chrome 157")] {
+            sqlx::query(
+                "INSERT INTO browser_kernel_artifacts (kernel_id, type_code, resource_name, version, platform, \
+                 package_hash, executable_signature, arch, package_format) \
+                 VALUES ($1, $2, $3, '1', 'windows', 'h', 's', 'x86_64', 'zip')",
+            )
+            .bind(id)
+            .bind(type_code)
+            .bind(name)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        let old_env = uuid::Uuid::new_v4();
+        let new_env = uuid::Uuid::new_v4();
+        for (env, kernel) in [(old_env, "old-kernel"), (new_env, "new-kernel")] {
+            sqlx::query("INSERT INTO environments (uuid, name) VALUES ($1, 'E')").bind(env).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO environment_configs (environment_uuid, window_info) VALUES ($1, $2)")
+                .bind(env)
+                .bind(format!(r#"{{"kernel":"Chrome 156","kernel_id":"{kernel}"}}"#))
+                .execute(&pool)
+                .await
+                .unwrap();
+            sqlx::query("INSERT INTO environment_kernel_bindings (environment_uuid, kernel_id) VALUES ($1, $2)")
+                .bind(env)
+                .bind(kernel)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+
+        MIGRATOR.run(&pool).await.expect("the kernel migration should apply");
+
+        let status = |id: &'static str| {
+            let pool = pool.clone();
+            async move {
+                sqlx::query_scalar::<_, String>("SELECT status FROM browser_kernel_artifacts WHERE kernel_id = $1")
+                    .bind(id)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap()
+            }
+        };
+        assert_eq!(status("old-kernel").await, "retired");
+        assert_eq!(status("new-kernel").await, "active");
+
+        let bound: Vec<String> = sqlx::query_scalar("SELECT kernel_id FROM environment_kernel_bindings")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+        assert_eq!(bound, ["new-kernel"], "only the binding to the old kernel is removed");
+
+        let window_info = |env: uuid::Uuid| {
+            let pool = pool.clone();
+            async move {
+                sqlx::query_scalar::<_, String>("SELECT window_info FROM environment_configs WHERE environment_uuid = $1")
+                    .bind(env)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap()
+            }
+        };
+        let old_info: serde_json::Value = serde_json::from_str(&window_info(old_env).await).unwrap();
+        assert!(old_info.get("kernel_id").is_none(), "the stale kernel id is cleared");
+        assert_eq!(old_info["kernel"], "Chrome 156", "the kernel name stays so it can be re-bound by name");
+        let new_info: serde_json::Value = serde_json::from_str(&window_info(new_env).await).unwrap();
+        assert_eq!(new_info["kernel_id"], "new-kernel");
+    }
+
     #[tokio::test]
     async fn core_models_round_trip_on_sqlite() {
         use crate::models::{environments, proxies};

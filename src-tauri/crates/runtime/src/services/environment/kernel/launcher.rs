@@ -385,7 +385,7 @@ async fn spawn_browser_process(
     }
 
     if let Some(id) = display_id {
-        args.push(format!("--simprint-display-id={}", id));
+        args.push(format!("--mz-display-id={}", id));
     }
     if let Some(position) = window_position {
         args.push(format!("--window-position={}", position));
@@ -406,7 +406,7 @@ async fn spawn_browser_process(
     let mut command = tokio::process::Command::new(exe_path);
     command.current_dir(work_dir).args(&args).stdin(Stdio::null());
 
-    // 浏览器日志由内核自己写入 user-data-dir 下的 simprint-browser.log（见 base_browser_args 的
+    // 浏览器日志由内核自己写入 user-data-dir 下的 mz-browser.log（见 base_browser_args 的
     // --log-file）。不要再用 --enable-logging=stderr 并重定向 stderr：Windows 上 Chromium 的
     // 不开沙箱的子进程（如网络服务）拿不到有效的 stderr 时会自己分配一个控制台窗口，
     // 启动后就会弹出黑框。
@@ -471,7 +471,7 @@ fn browser_ui_language_arg(language: &str) -> Option<String> {
 
 fn base_browser_args(env_id: &str, user_data_dir: &str, cdp_port: u16) -> Vec<String> {
     let args = vec![
-        format!("--simprint-env-id={env_id}"),
+        format!("--mz-env-id={env_id}"),
         format!("--user-data-dir={user_data_dir}"),
         format!("--remote-debugging-port={cdp_port}"),
         "--remote-debugging-address=127.0.0.1".into(),
@@ -480,7 +480,7 @@ fn base_browser_args(env_id: &str, user_data_dir: &str, cdp_port: u16) -> Vec<St
         "--enable-logging".into(),
         format!(
             "--log-file={}",
-            Path::new(user_data_dir).join("simprint-browser.log").display()
+            Path::new(user_data_dir).join("mz-browser.log").display()
         ),
     ];
     #[cfg(all(feature = "desktop-e2e", debug_assertions, not(feature = "production")))]
@@ -512,7 +512,7 @@ fn validate_browser_runtime_layout(exe_path: &str) -> Result<()> {
 }
 
 fn read_browser_log_tail(user_data_dir: &str) -> String {
-    let path = Path::new(user_data_dir).join("simprint-browser.log");
+    let path = Path::new(user_data_dir).join("mz-browser.log");
     let Ok(content) = std::fs::read_to_string(path) else {
         return String::new();
     };
@@ -582,7 +582,7 @@ mod policy_tests {
         let args = super::base_browser_args("env-1", "test-profile", 29200);
         assert!(!args.iter().any(|arg| arg.starts_with("--enable-logging=")));
         assert!(args.iter().any(|arg| arg == "--enable-logging"));
-        assert!(args.iter().any(|arg| arg.starts_with("--log-file=") && arg.ends_with("simprint-browser.log")));
+        assert!(args.iter().any(|arg| arg.starts_with("--log-file=") && arg.ends_with("mz-browser.log")));
     }
 
     #[test]
@@ -600,7 +600,7 @@ mod policy_tests {
     #[test]
     fn reads_only_the_tail_of_the_browser_log() {
         let dir = std::env::temp_dir().join(format!(
-            "simprint-browser-log-{}-{}",
+            "mz-browser-log-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -609,7 +609,7 @@ mod policy_tests {
         ));
         std::fs::create_dir_all(&dir).unwrap();
         let lines = (1..=15).map(|line| format!("line-{line}")).collect::<Vec<_>>();
-        std::fs::write(dir.join("simprint-browser.log"), lines.join("\n")).unwrap();
+        std::fs::write(dir.join("mz-browser.log"), lines.join("\n")).unwrap();
 
         let tail = read_browser_log_tail(dir.to_str().unwrap());
 
@@ -622,7 +622,7 @@ mod policy_tests {
     #[test]
     fn missing_browser_log_does_not_add_noise() {
         let dir = std::env::temp_dir().join(format!(
-            "simprint-browser-log-missing-{}-{}",
+            "mz-browser-log-missing-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -644,7 +644,7 @@ mod policy_tests {
                 .as_nanos()
         ));
         std::fs::create_dir_all(&dir).unwrap();
-        let exe = dir.join("simprint.exe");
+        let exe = dir.join("mz.exe");
         std::fs::write(&exe, b"test").unwrap();
 
         let result = validate_browser_runtime_layout(exe.to_str().unwrap());
@@ -663,7 +663,7 @@ mod policy_tests {
                 .unwrap()
                 .as_nanos()
         ));
-        let exe = dir.join("simprint.exe");
+        let exe = dir.join("mz.exe");
 
         let error = validate_browser_runtime_layout(exe.to_str().unwrap()).unwrap_err();
 

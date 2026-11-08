@@ -60,7 +60,7 @@ interface WindowInfoFormProps {
 
 /**
  * 从内核版本列表中获取当前选中内核的完整版本号
- * 优先从 name 字段提取版本号（如 "simprint-browser-144.0.7559.118.zip"），
+ * 优先从 name 字段提取版本号（如 "mz-browser-144.0.7559.118.zip"），
  * 如果提取失败则使用 version 字段
  */
 function getCurrentKernelVersion(
@@ -74,7 +74,7 @@ function getCurrentKernelVersion(
     return undefined;
   }
 
-  // 尝试从 name 字段提取版本号（格式：simprint-browser-144.0.7559.118.zip）
+  // 尝试从 name 字段提取版本号（格式：mz-browser-144.0.7559.118.zip）
   if (kernel.name) {
     const match = kernel.name.match(/(\d+\.\d+\.\d+\.\d+)/);
     if (match) {
@@ -95,7 +95,7 @@ const systemOptions = [
 
 const KERNEL_TYPE_CHROME = 'chrome';
 const KERNEL_TYPE_FIREFOX = 'firefox';
-const SIMPRINT_KERNEL_CHROMIUM = 'SIMPRINT_KERNEL_CHROMIUM';
+const MZ_KERNEL_CHROMIUM = 'MZ_KERNEL_CHROMIUM';
 
 export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
   const { t } = useTranslation('create-window');
@@ -122,9 +122,9 @@ export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
     // 始终使用 Windows 平台的内核版本列表
     const platform = 'windows';
     setKernelLoading(true);
-    listBrowserKernels(platform, SIMPRINT_KERNEL_CHROMIUM)
+    listBrowserKernels(platform, MZ_KERNEL_CHROMIUM)
       .then((data) => {
-        const versions = data[SIMPRINT_KERNEL_CHROMIUM] || [];
+        const versions = data[MZ_KERNEL_CHROMIUM] || [];
         setKernelVersions(versions);
         // 首次加载且 kernel 不在列表中时，设为第一个版本
         if (versions.length > 0) {

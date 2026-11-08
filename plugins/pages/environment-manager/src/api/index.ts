@@ -47,7 +47,7 @@ export interface BrowserKernelVersion {
   url?: string;
   /** zip 包 SHA256，用于下载后校验 */
   hash?: string;
-  /** simprint.exe SHA256，用于校验可执行文件是否被篡改（约定：前 10MB 的 SHA256） */
+  /** mz.exe SHA256，用于校验可执行文件是否被篡改（约定：前 10MB 的 SHA256） */
   signature?: string;
   arch?: string;
   package_format?: string;
@@ -101,7 +101,7 @@ export interface AccountItem {
 
 // ============ 常量 ============
 
-export const SIMPRINT_KERNEL_CHROMIUM = 'SIMPRINT_KERNEL_CHROMIUM';
+export const MZ_KERNEL_CHROMIUM = 'MZ_KERNEL_CHROMIUM';
 
 /** 将 system 转为 list 接口的 platform */
 export const systemToPlatform: Record<string, string> = {

@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Contribution guide
-    url: https://github.com/Simprint/simprint/blob/main/CONTRIBUTING.md
+    url: https://git.1507312.xyz/mouzhai/simprint-mz
     about: Read the contribution workflow, development setup, and PR expectations.
   - name: Project README
-    url: https://github.com/Simprint/simprint/blob/main/README.md
+    url: https://git.1507312.xyz/mouzhai/simprint-mz
     about: Read project overview, local run instructions, and current status.

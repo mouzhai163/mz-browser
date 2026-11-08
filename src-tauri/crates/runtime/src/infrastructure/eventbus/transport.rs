@@ -11,7 +11,7 @@ mod imp {
     use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
     use tokio::sync::Mutex;
 
-    const PIPE_PREFIX: &str = r"\\.\pipe\simprint_";
+    const PIPE_PREFIX: &str = r"\\.\pipe\mz_";
     const READ_BUFFER_SIZE: usize = 65536;
 
     pub fn get_pipe_path(env_id: &str) -> String {
@@ -187,7 +187,7 @@ mod imp {
         #[test]
         fn test_pipe_path() {
             let path = get_pipe_path("env_123");
-            assert_eq!(path, r"\\.\pipe\simprint_env_123");
+            assert_eq!(path, r"\\.\pipe\mz_env_123");
         }
     }
 }
@@ -198,7 +198,7 @@ mod imp {
     use super::*;
 
     pub fn get_pipe_path(env_id: &str) -> String {
-        format!("simprint_{}", env_id)
+        format!("mz_{}", env_id)
     }
 
     pub struct PipeServer {

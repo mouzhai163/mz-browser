@@ -10,7 +10,7 @@ use crate::database::DbPool;
 const DEFAULT_BROWSER_KERNELS_JSON: &str =
     include_str!("../../resources/default-browser-kernels.json");
 const SUPPORTED_SCHEMA_VERSION: u32 = 1;
-const KERNEL_TYPE_PREFIX: &str = "SIMPRINT_KERNEL_";
+const KERNEL_TYPE_PREFIX: &str = "MZ_KERNEL_";
 
 #[derive(Debug, Clone, Deserialize, Serialize, FromRow, PartialEq, Eq)]
 pub struct BrowserKernelVersion {
@@ -175,7 +175,7 @@ fn parse_catalog(contents: &str, source_label: &str) -> Result<BrowserKernelCata
 }
 
 fn parse_default_catalog() -> Result<BrowserKernelCatalog, String> {
-    parse_catalog(DEFAULT_BROWSER_KERNELS_JSON, "simprint-builtin")
+    parse_catalog(DEFAULT_BROWSER_KERNELS_JSON, "mz-builtin")
 }
 
 fn default_catalog() -> Result<&'static BrowserKernelCatalog, String> {
@@ -439,7 +439,7 @@ pub async fn find_browser_kernel_by_name(
 
 pub async fn default_browser_kernel(pool: &DbPool) -> Result<Option<BrowserKernelVersion>, String> {
     sqlx::query_as::<_, BrowserKernelVersion>(&format!(
-        "{KERNEL_SELECT} WHERE a.type_code = 'SIMPRINT_KERNEL_CHROMIUM' \
+        "{KERNEL_SELECT} WHERE a.type_code = 'MZ_KERNEL_CHROMIUM' \
          AND a.status = 'active' ORDER BY a.is_latest DESC, a.version DESC LIMIT 1"
     ))
     .fetch_optional(pool)
@@ -632,10 +632,10 @@ mod tests {
         import_default_catalog(&pool).await.unwrap();
         import_default_catalog(&pool).await.unwrap();
 
-        let groups = list_browser_kernels(&pool, Some("windows"), Some("SIMPRINT_KERNEL_CHROMIUM"))
+        let groups = list_browser_kernels(&pool, Some("windows"), Some("MZ_KERNEL_CHROMIUM"))
             .await
             .unwrap();
-        let kernels = &groups["SIMPRINT_KERNEL_CHROMIUM"];
+        let kernels = &groups["MZ_KERNEL_CHROMIUM"];
         assert_eq!(kernels.len(), 1, "catalog import must be idempotent");
         assert_eq!(kernels[0].resource_name, "Chrome 156");
         assert_eq!(kernels[0].install_dir_name, "Chrome 156");
@@ -659,10 +659,10 @@ mod tests {
 
         import_default_catalog(&pool).await.unwrap();
 
-        let groups = list_browser_kernels(&pool, Some("windows"), Some("SIMPRINT_KERNEL_CHROMIUM"))
+        let groups = list_browser_kernels(&pool, Some("windows"), Some("MZ_KERNEL_CHROMIUM"))
             .await
             .unwrap();
-        let names: Vec<_> = groups["SIMPRINT_KERNEL_CHROMIUM"]
+        let names: Vec<_> = groups["MZ_KERNEL_CHROMIUM"]
             .iter()
             .map(|kernel| kernel.resource_name.as_str())
             .collect();

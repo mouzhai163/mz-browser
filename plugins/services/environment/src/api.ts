@@ -6,7 +6,7 @@ import type {
   EnvironmentProxyLike,
 } from './types';
 
-export const SIMPRINT_KERNEL_CHROMIUM = 'SIMPRINT_KERNEL_CHROMIUM';
+export const MZ_KERNEL_CHROMIUM = 'MZ_KERNEL_CHROMIUM';
 
 export const systemToPlatform: Record<string, string> = {
   Windows: 'windows',

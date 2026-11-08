@@ -467,7 +467,7 @@ mod tests {
 
         let error = kernel_prepare_error(
             crate::core::error::Error::KernelPrepareFailed(
-                "内核包不完整：缺少 simprint.exe".to_string(),
+                "内核包不完整：缺少 mz.exe".to_string(),
             ),
             &staging_dir,
             &kernel_dir,

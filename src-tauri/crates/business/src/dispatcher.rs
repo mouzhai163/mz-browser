@@ -27,7 +27,7 @@ pub async fn dispatch_post(
                 let type_code = data
                     .get("type_code")
                     .and_then(Value::as_str)
-                    .unwrap_or("SIMPRINT_KERNEL_CHROMIUM");
+                    .unwrap_or("MZ_KERNEL_CHROMIUM");
                 value(
                     services::browser_kernels::list_browser_kernels(
                         &context.db,
@@ -832,14 +832,14 @@ mod tests {
             "browser-kernels/list",
             &json!({
                 "platform": "windows",
-                "type_code": "SIMPRINT_KERNEL_CHROMIUM"
+                "type_code": "MZ_KERNEL_CHROMIUM"
             }),
         )
         .await
         .unwrap()
         .expect("browser kernels should be queried from the local registry");
         assert_eq!(
-            kernels["SIMPRINT_KERNEL_CHROMIUM"][0]["kernel_id"].as_str().map(str::len),
+            kernels["MZ_KERNEL_CHROMIUM"][0]["kernel_id"].as_str().map(str::len),
             Some(64)
         );
 
@@ -983,7 +983,7 @@ mod tests {
 
         // 环境：建、查、改、关联、删、回收站
         let kernels = call(&context, "browser-kernels/list", json!({ "platform": "windows" })).await;
-        let kernel = kernels["SIMPRINT_KERNEL_CHROMIUM"][0].clone();
+        let kernel = kernels["MZ_KERNEL_CHROMIUM"][0].clone();
         let environment = call(
             &context,
             "environments/create",
