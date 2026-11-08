@@ -268,8 +268,57 @@ async fn import_catalog(pool: &DbPool, catalog: &BrowserKernelCatalog) -> Result
         .map_err(|error| error.to_string())?;
     }
 
+    retire_unlisted_kernels(&mut tx, catalog).await?;
+
     tx.commit().await.map_err(|error| error.to_string())?;
     Ok(catalog.kernels.len())
+}
+
+/// A kernel that this source used to list but no longer does (for example Chrome 144 after the
+/// bundled catalog moved to 156) stops being offered. Its row, install record and environment
+/// bindings stay, so environments already bound to it keep launching.
+async fn retire_unlisted_kernels(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    catalog: &BrowserKernelCatalog,
+) -> Result<(), String> {
+    let source_id = catalog.source_id.trim();
+    let listed = catalog
+        .kernels
+        .iter()
+        .map(kernel_id)
+        .collect::<Result<Vec<_>, _>>()?;
+    let known: Vec<String> =
+        sqlx::query_scalar("SELECT DISTINCT kernel_id FROM browser_kernel_sources WHERE source_id = $1")
+            .bind(source_id)
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(|error| error.to_string())?;
+
+    for kernel_id in known.into_iter().filter(|id| !listed.contains(id)) {
+        sqlx::query(
+            "UPDATE browser_kernel_sources SET is_active = 0 WHERE kernel_id = $1 AND source_id = $2",
+        )
+        .bind(&kernel_id)
+        .bind(source_id)
+        .execute(&mut **tx)
+        .await
+        .map_err(|error| error.to_string())?;
+        sqlx::query(
+            r#"
+            UPDATE browser_kernel_artifacts SET status = 'retired', updated_at = CURRENT_TIMESTAMP
+            WHERE kernel_id = $1 AND status = 'active'
+              AND NOT EXISTS (
+                SELECT 1 FROM browser_kernel_sources other
+                WHERE other.kernel_id = $1 AND other.is_active = 1
+              )
+            "#,
+        )
+        .bind(&kernel_id)
+        .execute(&mut **tx)
+        .await
+        .map_err(|error| error.to_string())?;
+    }
+    Ok(())
 }
 
 /// Import the bundled manifest into the runtime registry. Import is additive:
@@ -588,15 +637,43 @@ mod tests {
             .unwrap();
         let kernels = &groups["SIMPRINT_KERNEL_CHROMIUM"];
         assert_eq!(kernels.len(), 1, "catalog import must be idempotent");
-        assert_eq!(kernels[0].resource_name, "Chrome 144");
-        assert_eq!(kernels[0].install_dir_name, "Chrome 144");
+        assert_eq!(kernels[0].resource_name, "Chrome 156");
+        assert_eq!(kernels[0].install_dir_name, "Chrome 156");
         assert_eq!(kernels[0].kernel_id.len(), 64);
-        assert_eq!(kernels[0].compatible_signatures.len(), 1);
-        assert_eq!(
-            kernels[0].compatible_signatures[0],
-            "a864f950c2e77d18ef932f2ad3dbde63039c3b467994daab83081ce6b28c4f82"
-        );
-        assert!(kernels[0].url.as_deref().unwrap().starts_with("https://"));
+        assert!(kernels[0].compatible_signatures.is_empty());
+        assert!(kernels[0]
+            .url
+            .as_deref()
+            .unwrap()
+            .starts_with("https://github.com/mouzhai163/browser-kernel/releases/download/"));
+    }
+
+    #[tokio::test]
+    async fn kernels_dropped_from_a_catalog_are_retired_but_stay_resolvable() {
+        let pool = test_pool().await;
+        let mut old = parse_default_catalog().unwrap();
+        old.kernels[0].hash = "1".repeat(64);
+        old.kernels[0].resource_name = "Chrome 144".to_string();
+        import_catalog(&pool, &old).await.unwrap();
+        let old_id = kernel_id(&old.kernels[0]).unwrap();
+
+        import_default_catalog(&pool).await.unwrap();
+
+        let groups = list_browser_kernels(&pool, Some("windows"), Some("SIMPRINT_KERNEL_CHROMIUM"))
+            .await
+            .unwrap();
+        let names: Vec<_> = groups["SIMPRINT_KERNEL_CHROMIUM"]
+            .iter()
+            .map(|kernel| kernel.resource_name.as_str())
+            .collect();
+        assert_eq!(names, ["Chrome 156"], "the dropped kernel must not be offered any more");
+        let still_there = get_browser_kernel(&pool, &old_id).await.unwrap().unwrap();
+        assert_eq!(still_there.status, "retired");
+
+        // listed again later: offered again
+        import_catalog(&pool, &old).await.unwrap();
+        let again = get_browser_kernel(&pool, &old_id).await.unwrap().unwrap();
+        assert_eq!(again.status, "active");
     }
 
     #[tokio::test]
@@ -607,7 +684,7 @@ mod tests {
         catalog.kernels[0].priority = 10;
         catalog.kernels[0].url = "https://example.invalid/first.zip".to_string();
         import_catalog(&pool, &catalog).await.unwrap();
-        catalog.kernels[0].resource_name = "Renamed Chrome 144".to_string();
+        catalog.kernels[0].resource_name = "Renamed Chrome 156".to_string();
         catalog.kernels[0].install_dir_name = Some("Another directory".to_string());
         catalog.kernels[0].url = "https://example.invalid/second.zip".to_string();
         import_catalog(&pool, &catalog).await.unwrap();
@@ -640,7 +717,7 @@ mod tests {
         assert_eq!(artifact_count, 1);
         assert_eq!(active_source_count, 1);
         assert_eq!(active_source, "https://example.invalid/second.zip");
-        assert_eq!(install_dir_name, "Chrome 144");
+        assert_eq!(install_dir_name, "Chrome 156");
     }
 
     #[tokio::test]
@@ -656,14 +733,14 @@ mod tests {
             None,
             None,
             Some("Windows"),
-            Some("Chrome 144"),
+            Some("Chrome 156"),
         )
         .await
         .unwrap();
         crate::models::environments::upsert_environment_config(
             &context.db,
             environment_uuid,
-            &serde_json::json!({ "kernel": "Chrome 144" }),
+            &serde_json::json!({ "kernel": "Chrome 156" }),
             &serde_json::json!({}),
             &serde_json::json!({}),
             &serde_json::json!({}),
@@ -678,7 +755,7 @@ mod tests {
             1
         );
         let bound = get_environment_kernel(&context.db, environment_uuid).await.unwrap().unwrap();
-        assert_eq!(bound.resource_name, "Chrome 144");
+        assert_eq!(bound.resource_name, "Chrome 156");
         assert_eq!(bound.kernel_id.len(), 64);
 
         let stored =
