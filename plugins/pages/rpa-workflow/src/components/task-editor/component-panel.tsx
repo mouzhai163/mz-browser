@@ -1,4 +1,5 @@
-﻿import type { ElementType } from 'react';
+﻿import { useState } from 'react';
+import type { ElementType } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   MousePointer2,
@@ -14,6 +15,7 @@ import {
   Upload,
   Globe,
   Code,
+  Search,
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -152,6 +154,8 @@ interface ComponentPanelProps {
 
 export function ComponentPanel({ selectedComponent, onSelectComponent }: ComponentPanelProps) {
   const { t } = useTranslation('rpa');
+  const [keyword, setKeyword] = useState('');
+  const normalizedKeyword = keyword.trim().toLowerCase();
 
   const categories = [
     { key: 'browser', label: t('editor.categories.browser') },
@@ -173,20 +177,40 @@ export function ComponentPanel({ selectedComponent, onSelectComponent }: Compone
     <div className="w-56 border-r border-border bg-background flex flex-col min-h-0 overflow-hidden">
       <div className="px-3 py-2 border-b border-border shrink-0">
         <h3 className="text-xs font-semibold text-foreground">{t('editor.components')}</h3>
+        <div className="relative mt-2">
+          <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={keyword}
+            onChange={(event) => setKeyword(event.target.value)}
+            placeholder={t('editor.searchComponents', { defaultValue: '搜索组件' })}
+            className="h-8 w-full rounded-md border border-input bg-background pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground focus:border-primary"
+          />
+        </div>
         {selectedComponent && (
           <p className="text-[10px] text-primary mt-1">{t('editor.clickCanvasToAdd')}</p>
         )}
       </div>
       <ScrollArea className="flex-1 min-h-0">
         <div className="p-2 space-y-4">
-          {categories.map((category) => (
+          {categories.map((category) => {
+            const items = components.filter(
+              (c) =>
+                c.category === category.key &&
+                (!normalizedKeyword ||
+                  c.name.toLowerCase().includes(normalizedKeyword) ||
+                  c.description.toLowerCase().includes(normalizedKeyword))
+            );
+            if (items.length === 0) {
+              return null;
+            }
+            return (
             <div key={category.key}>
-              <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                {category.label}
+              <div className="flex items-center justify-between px-2 py-1 text-xs text-muted-foreground">
+                <span>{category.label}</span>
+                <span>{items.length}</span>
               </div>
               <div className="space-y-1">
-                {components
-                  .filter((c) => c.category === category.key)
+                {items
                   .map((component) => {
                     const isSelected = selectedComponent?.id === component.id;
                     return (
@@ -219,7 +243,8 @@ export function ComponentPanel({ selectedComponent, onSelectComponent }: Compone
                   })}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </ScrollArea>
     </div>

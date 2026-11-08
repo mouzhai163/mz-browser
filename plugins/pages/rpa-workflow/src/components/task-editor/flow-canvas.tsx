@@ -6,6 +6,7 @@ import {
   ReactFlow,
   Background,
   Controls,
+  MiniMap,
   Panel,
   applyNodeChanges,
   applyEdgeChanges,
@@ -14,7 +15,7 @@ import {
   ReactFlowProvider,
   useReactFlow,
 } from '@xyflow/react';
-import { Trash2, Undo2 } from 'lucide-react';
+import { Redo2, Trash2, Undo2 } from 'lucide-react';
 import type {
   Node,
   Edge,
@@ -85,8 +86,10 @@ interface FlowCanvasProps {
   ) => void;
   onClearSteps?: () => void;
   onUndo?: () => void;
+  onRedo?: () => void;
   clearStepsDisabled?: boolean;
   undoDisabled?: boolean;
+  redoDisabled?: boolean;
   draggingComponent: ComponentItem | null;
   runStatus?: 'idle' | 'starting' | 'running' | 'success' | 'failed' | 'stopping' | 'stopped';
   stepStatuses?: Record<string, RpaRunnerStepStatus>;
@@ -668,6 +671,8 @@ function FlowCanvasInner({
   onUndo,
   clearStepsDisabled = false,
   undoDisabled = true,
+  redoDisabled = true,
+  onRedo,
   draggingComponent,
   runStatus = 'idle',
   stepStatuses = {},
@@ -1139,6 +1144,14 @@ const styledEdges = useMemo(
             showInteractive={false}
             className="bg-background! border-border! shadow-md! [&>button]:bg-background! [&>button]:border-border! [&>button]:text-muted-foreground! [&>button:hover]:bg-accent!"
           />
+          <MiniMap
+            pannable
+            zoomable
+            position="bottom-right"
+            className="bg-background! border! border-border! rounded-md! shadow-md!"
+            maskColor="rgba(22, 119, 255, 0.08)"
+            nodeColor={(node) => (node.type === 'startNode' || node.type === 'endNode' ? '#262626' : '#91caff')}
+          />
           <Panel position="top-right" className="mt-2 mr-2">
             <div className="flex items-center gap-2">
               <button
@@ -1150,6 +1163,16 @@ const styledEdges = useMemo(
                 title={t('editor.menu.undo', { defaultValue: '撤销' })}
               >
                 <Undo2 className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={onRedo}
+                disabled={redoDisabled}
+                className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground shadow-md transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label={t('editor.menu.redo', { defaultValue: '重做' })}
+                title={t('editor.menu.redo', { defaultValue: '重做' })}
+              >
+                <Redo2 className="h-3.5 w-3.5" />
               </button>
               <button
                 type="button"

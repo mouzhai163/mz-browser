@@ -46,6 +46,7 @@ import {
 } from './flow-canvas';
 import { getLoopAutoDimensions, getLoopAutoPosition } from './loop-layout';
 import { PropertyPanel } from './property-panel';
+import { RunLogPanel } from './run-log-panel';
 import { TaskSettingsForm, type TaskConfig, type TaskVariable } from './task-settings-form';
 import { VariablePanel, type RuntimeVariableItem } from './variable-panel';
 import {
@@ -345,6 +346,7 @@ export function TaskEditor() {
     [selectedAnonymousProxy]
   );
   const canUndo = editorHistory.past.length > 0 && !runButtonBusy;
+  const canRedo = editorHistory.future.length > 0 && !runButtonBusy;
 
   useEffect(() => {
     editorSnapshotRef.current = {
@@ -413,6 +415,26 @@ export function TaskEditor() {
       future: [currentSnapshot, ...prev.future].slice(0, MAX_EDITOR_HISTORY),
     }));
   }, [applyEditorSnapshot, canUndo, editorHistory]);
+  const handleRedo = useCallback(() => {
+    if (!canRedo) {
+      return;
+    }
+
+    const nextSnapshot = editorHistory.future[0];
+    if (!nextSnapshot) {
+      return;
+    }
+
+    const currentSnapshot = normalizeHistorySnapshot(
+      cloneHistorySnapshot(editorSnapshotRef.current)
+    );
+
+    applyEditorSnapshot(nextSnapshot);
+    setEditorHistory((prev) => ({
+      past: [...prev.past, currentSnapshot].slice(-MAX_EDITOR_HISTORY),
+      future: prev.future.slice(1),
+    }));
+  }, [applyEditorSnapshot, canRedo, editorHistory]);
   const normalizeRunError = useCallback(
     (error?: string) => {
       if (!error) {
@@ -1133,23 +1155,32 @@ export function TaskEditor() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.key.toLowerCase() !== 'z') {
+      if (!(event.ctrlKey || event.metaKey) || isEditableUndoTarget(event.target)) {
         return;
       }
 
-      if (isEditableUndoTarget(event.target) || !canUndo) {
-        return;
+      const key = event.key.toLowerCase();
+      // Ctrl+Z 撤销；Ctrl+Shift+Z / Ctrl+Y 重做
+      if (key === 'z' && !event.shiftKey) {
+        if (!canUndo) {
+          return;
+        }
+        event.preventDefault();
+        handleUndo();
+      } else if ((key === 'z' && event.shiftKey) || key === 'y') {
+        if (!canRedo) {
+          return;
+        }
+        event.preventDefault();
+        handleRedo();
       }
-
-      event.preventDefault();
-      handleUndo();
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [canUndo, handleUndo]);
+  }, [canRedo, canUndo, handleRedo, handleUndo]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-50px)] relative">
@@ -1229,6 +1260,7 @@ export function TaskEditor() {
           selectedComponent={selectedComponent}
           onSelectComponent={handleSelectComponent}
         />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <FlowCanvas
           steps={steps}
           specialPositions={specialPositions}
@@ -1239,8 +1271,10 @@ export function TaskEditor() {
           onSpecialPositionsChange={handleSpecialPositionsChange}
           onDropComponent={handleAddComponent}
           onUndo={handleUndo}
+          onRedo={handleRedo}
           onClearSteps={handleClearSteps}
           undoDisabled={!canUndo}
+          redoDisabled={!canRedo}
           clearStepsDisabled={runButtonBusy || steps.length === 0}
           draggingComponent={selectedComponent}
           runStatus={runStatus}
@@ -1249,6 +1283,12 @@ export function TaskEditor() {
           stepLoopProgress={loopProgressMap}
           stepIncomingEdges={stepIncomingEdgeMap}
         />
+        <RunLogPanel
+          items={runStepItems}
+          runStatus={runStatus}
+          onSelectStep={setSelectedStepId}
+        />
+        </div>
         <div className="w-80 border-l border-border bg-background flex flex-col min-h-0 overflow-hidden">
           <Accordion
             type="single"

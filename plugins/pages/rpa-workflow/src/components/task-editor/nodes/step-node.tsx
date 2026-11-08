@@ -50,48 +50,39 @@ const stepIcons: Record<string, ElementType> = {
   notify: MessageSquare,
 };
 
-const stepColors: Record<string, string> = {
-  click: 'border-blue-500/50 bg-blue-500/5',
-  input: 'border-purple-500/50 bg-purple-500/5',
-  navigate: 'border-cyan-500/50 bg-cyan-500/5',
-  select_tab: 'border-blue-600/50 bg-blue-600/5',
-  close_tab: 'border-red-500/50 bg-red-500/5',
-  screenshot: 'border-pink-500/50 bg-pink-500/5',
-  scroll: 'border-teal-500/50 bg-teal-500/5',
-  wait: 'border-amber-500/50 bg-amber-500/5',
-  condition: 'border-orange-500/50 bg-orange-500/5',
-  loop: 'border-green-500/50 bg-green-500/5',
-  break_loop: 'border-amber-600/50 bg-amber-600/5',
-  extract: 'border-indigo-500/50 bg-indigo-500/5',
-  download: 'border-emerald-500/50 bg-emerald-500/5',
-  upload: 'border-rose-500/50 bg-rose-500/5',
-  variable: 'border-violet-500/50 bg-violet-500/5',
-  email: 'border-red-500/50 bg-red-500/5',
-  api: 'border-sky-500/50 bg-sky-500/5',
-  script: 'border-slate-500/50 bg-slate-500/5',
-  notify: 'border-lime-500/50 bg-lime-500/5',
+/**
+ * 节点颜色只按 4 个类别区分（浏览器操作 / 流程控制 / 数据 / 高级），
+ * 不再给每种步骤一个颜色：节点左侧一条色带 + 图标底色，画布整体更安静。
+ */
+type StepCategory = 'browser' | 'flow' | 'data' | 'advanced';
+
+const stepCategories: Record<string, StepCategory> = {
+  click: 'browser',
+  input: 'browser',
+  navigate: 'browser',
+  select_tab: 'browser',
+  close_tab: 'browser',
+  screenshot: 'browser',
+  scroll: 'browser',
+  wait: 'flow',
+  condition: 'flow',
+  loop: 'flow',
+  break_loop: 'flow',
+  extract: 'data',
+  download: 'data',
+  upload: 'data',
+  variable: 'data',
+  api: 'data',
+  email: 'advanced',
+  notify: 'advanced',
+  script: 'advanced',
 };
 
-const iconColors: Record<string, string> = {
-  click: 'text-blue-500',
-  input: 'text-purple-500',
-  navigate: 'text-cyan-500',
-  select_tab: 'text-blue-600',
-  close_tab: 'text-red-500',
-  screenshot: 'text-pink-500',
-  scroll: 'text-teal-500',
-  wait: 'text-amber-500',
-  condition: 'text-orange-500',
-  loop: 'text-green-500',
-  break_loop: 'text-amber-600',
-  extract: 'text-indigo-500',
-  download: 'text-emerald-500',
-  upload: 'text-rose-500',
-  variable: 'text-violet-500',
-  email: 'text-red-500',
-  api: 'text-sky-500',
-  script: 'text-slate-500',
-  notify: 'text-lime-500',
+const categoryStyles: Record<StepCategory, { node: string; icon: string; tile: string }> = {
+  browser: { node: 'border-border bg-card border-l-[3px] border-l-[#1677ff]', icon: 'text-[#1677ff]', tile: 'bg-[#1677ff]/10' },
+  flow: { node: 'border-border bg-card border-l-[3px] border-l-[#fa8c16]', icon: 'text-[#fa8c16]', tile: 'bg-[#fa8c16]/10' },
+  data: { node: 'border-border bg-card border-l-[3px] border-l-[#52c41a]', icon: 'text-[#52c41a]', tile: 'bg-[#52c41a]/10' },
+  advanced: { node: 'border-border bg-card border-l-[3px] border-l-[#8c8c8c]', icon: 'text-[#8c8c8c]', tile: 'bg-[#8c8c8c]/10' },
 };
 
 export interface StepNodeData {
@@ -108,8 +99,9 @@ function StepNodeComponent({ id, data, selected }: NodeProps) {
   const { t } = useTranslation('rpa');
   const nodeData = data as unknown as StepNodeData;
   const Icon = stepIcons[nodeData.type] || Code;
-  const colorClass = stepColors[nodeData.type] || 'border-border bg-background';
-  const iconColor = iconColors[nodeData.type] || 'text-muted-foreground';
+  const categoryStyle = categoryStyles[stepCategories[nodeData.type] ?? 'advanced'];
+  const colorClass = categoryStyle.node;
+  const iconColor = categoryStyle.icon;
   const runStatus = nodeData.runStatus ?? 'pending';
   const errorSummary = nodeData.errorSummary?.trim();
   const subtitle = nodeData.subtitle?.trim();
@@ -121,7 +113,7 @@ function StepNodeComponent({ id, data, selected }: NodeProps) {
   return (
     <div
       className={`
-        w-[210px] px-3 py-2 rounded-lg border-2 shadow-sm transition-all relative
+        w-[210px] px-3 py-2 rounded-lg border shadow-sm transition-all relative
         ${colorClass}
         ${selected ? 'ring-2 ring-primary ring-offset-1 ring-offset-background' : ''}
         ${!nodeData.enabled ? 'opacity-50' : ''}
@@ -138,7 +130,7 @@ function StepNodeComponent({ id, data, selected }: NodeProps) {
       />
 
       <div className="flex items-center gap-2">
-        <div className={`w-7 h-7 rounded flex items-center justify-center bg-background/50 ${iconColor}`}>
+        <div className={`w-7 h-7 rounded flex items-center justify-center ${categoryStyle.tile} ${iconColor}`}>
           <Icon className="h-4 w-4" />
         </div>
         <div className={`flex-1 min-w-0 ${hasMetaRow ? '' : 'flex items-center min-h-7'}`}>
