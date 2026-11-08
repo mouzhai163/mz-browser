@@ -8,6 +8,7 @@ import { useSettingsDialogStore } from '../../../../plugins/services/store/src';
 import { SettingsBootstrap } from '../../../../plugins/services/store/src';
 import { ThemeProvider } from '@/components/theme-provider';
 import { I18nProvider } from '@/components/i18n-provider';
+import { AntdProvider } from '@/components/antd-provider';
 import { commonResources } from '@/i18n/resources/common';
 import { Toaster } from '@/components/ui/sonner';
 import { AppRoutes } from '../AppRoutes';
@@ -79,18 +80,20 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ mode = 'main', pluginsRead
     <SettingsBootstrap>
       <ThemeProvider defaultTheme="system" storageKey="mz-ui-theme">
         <I18nProvider resources={{ common: commonResources }}>
-          <BrowserRouter>
-            {pluginsReady && routesReady && windowManagerComponent
-              ? React.createElement(windowManagerComponent)
-              : null}
-            <AppRoutes onReady={handleRoutesReady} />
-            {isSettingsDialogOpen ? (
-              <Suspense fallback={null}>
-                <SettingsDialog />
-              </Suspense>
-            ) : null}
-            <Toaster />
-          </BrowserRouter>
+          <AntdProvider>
+            <BrowserRouter>
+              {pluginsReady && routesReady && windowManagerComponent
+                ? React.createElement(windowManagerComponent)
+                : null}
+              <AppRoutes onReady={handleRoutesReady} />
+              {isSettingsDialogOpen ? (
+                <Suspense fallback={null}>
+                  <SettingsDialog />
+                </Suspense>
+              ) : null}
+              <Toaster />
+            </BrowserRouter>
+          </AntdProvider>
         </I18nProvider>
       </ThemeProvider>
     </SettingsBootstrap>

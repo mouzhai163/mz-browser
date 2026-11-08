@@ -8,10 +8,9 @@ import {
   ChevronRight,
   Puzzle,
   UserCircle,
+  Plus,
+  LayoutList,
 } from 'lucide-react';
-import { TfiWorld } from "react-icons/tfi";
-import { BsWindowSidebar } from "react-icons/bs";
-import { VscGitPullRequestCreate } from "react-icons/vsc";
 import type { IconType } from 'react-icons'
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
@@ -38,7 +37,14 @@ interface NavGroup {
 function localizeNavGroups(t: (key: string) => string): NavGroup[] {
   return [
     {
-      title: t('nav.group.basic'),
+      title: t('nav.group.workspace'),
+      items: [
+        { label: t('nav.item.envList'), shortLabel: t('nav.item.envList'), href: '/', icon: LayoutList },
+        { label: t('nav.item.groups'), shortLabel: t('nav.item.groups'), href: '/groups', icon: FolderTree },
+      ],
+    },
+    {
+      title: t('nav.group.resources'),
       items: [
         {
           label: t('nav.item.proxy'),
@@ -157,16 +163,15 @@ const NavItem: React.FC<NavItemProps> = ({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {isActive && <div className='absolute -right-1 top-1/2 h-6 w-1 -translate-y-1/2 rounded-2xl bg-primary'>&nbsp;</div>}
       <div
-        className={`relative rounded-lg h-11 text-sm transition-[padding,gap] duration-300 ease-in-out ${isActive
-          ? 'bg-primary/15 text-primary font-semibold border-primary'
-          : 'text-sidebar-foreground/80 hover:bg-accent/60 hover:text-foreground border-transparent'
+        className={`relative rounded-md h-10 text-sm transition-[padding,gap] duration-300 ease-in-out ${isActive
+          ? 'bg-accent text-primary font-medium'
+          : 'text-sidebar-foreground hover:bg-muted hover:text-foreground'
           }`}
       >
         <Link
           to={href}
-          className={`flex h-11 items-center ${collapsed
+          className={`flex h-10 items-center ${collapsed
             ? 'justify-center px-3 w-11'
             : `${(ActionIcon || actionNode) && onActionClick ? 'pr-11' : 'pr-3'} pl-3 gap-3`
             }`}
@@ -187,7 +192,7 @@ const NavItem: React.FC<NavItemProps> = ({
           </Tooltip>
 
           <span
-            className={`text-xs h-4 overflow-hidden font-semibold transition-all duration-300 ${isActive ? 'text-primary' : 'text-sidebar-foreground/90'
+            className={`text-[13px] h-5 leading-5 overflow-hidden transition-all duration-300 ${isActive ? 'text-primary' : 'text-sidebar-foreground'
               } ${collapsed ? 'max-w-0 hidden' : 'max-w-50 block'}`}
           >
             {label}
@@ -275,7 +280,7 @@ const NavGroupComponent: React.FC<NavGroupComponentProps> = ({
   return (
     <div className="space-y-1">
       {group.title && !collapsed && (
-        <div className="px-3 py-1 text-[10px] font-semibold text-sidebar-foreground/50 uppercase tracking-wider">
+        <div className="px-3 pb-1 pt-2 text-xs text-muted-foreground">
           {group.title}
         </div>
       )}
@@ -393,27 +398,16 @@ const CreateEnvironmentButton: React.FC<CreateEnvironmentButtonProps> = ({ colla
     <button
       type="button"
       onClick={handleCreateEnvironment}
-      className={`group relative w-full rounded-lg mb-2 text-sm transition-all duration-300 ease-in-out overflow-hidden cursor-pointer ${collapsed
-        ? 'flex flex-col items-center py-3.5'
-        : 'flex flex-row items-center gap-3 px-3 py-4'
-        } bg-linear-to-r from-blue-500 via-blue-600 to-indigo-600 hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 text-white font-semibold border-blue-500 shadow-sm hover:shadow-md`}
+      className={`group relative w-full rounded-md mb-2 text-sm transition-colors duration-200 overflow-hidden cursor-pointer ${collapsed
+        ? 'flex flex-col items-center py-2.5'
+        : 'flex flex-row items-center justify-center gap-2 px-3 py-2.5'
+        } bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-xs`}
     >
-      {/* 背景装饰图标 - 仅在展开状态下显示 */}
-      {!collapsed && (
-        <>
-          <TfiWorld className="absolute -right-2 -top-2 h-16 w-16 text-sidebar-primary-foreground/10 transition-all duration-200" />
-          {/* <TfiWorld className="absolute right-3 top-3 h-14 w-14 text-sidebar-primary-foreground/10 transition-all duration-200" /> */}
-        </>
-      )}
-
-      {/* 前景内容 */}
-      <div className={`relative z-10 flex items-center ${collapsed ? '' : 'gap-3'}`}>
-        <VscGitPullRequestCreate
-          className={`h-4 w-4 text-sidebar-primary-foreground transition-all duration-200`}
-        />
+      <div className="relative z-10 flex items-center gap-2">
+        <Plus className="h-4 w-4 text-primary-foreground" />
 
         <span
-          className={`text-xs font-semibold text-sidebar-primary-foreground h-4 overflow-hidden transition-all duration-300 ${collapsed ? 'max-w-0 hidden' : 'max-w-[200px] block'
+          className={`text-[13px] text-primary-foreground h-5 leading-5 overflow-hidden transition-all duration-300 ${collapsed ? 'max-w-0 hidden' : 'max-w-[200px] block'
             }`}
         >
           {t('nav.actions.createEnv')}
@@ -433,38 +427,6 @@ const CreateEnvironmentButton: React.FC<CreateEnvironmentButtonProps> = ({ colla
   }
 
   return buttonContent;
-};
-
-interface TopNavItemsProps {
-  collapsed: boolean;
-  currentPath: string;
-}
-
-/**
- * 顶部导航项组件
- * 包含环境列表和分组管理
- */
-const TopNavItems: React.FC<TopNavItemsProps> = ({ collapsed, currentPath }) => {
-  const { t } = useTranslation('appLayout');
-  const topNavItems: NavItemData[] = [
-    { label: t('nav.item.envList'), href: '/', icon: BsWindowSidebar },
-    { label: t('nav.item.groups'), href: '/groups', icon: FolderTree },
-  ];
-
-  return (
-    <>
-      {topNavItems.map((item) => (
-        <NavItem
-          key={item.href}
-          label={item.label}
-          href={item.href}
-          icon={item.icon}
-          isActive={isRouteActive(currentPath, item.href)}
-          collapsed={collapsed}
-        />
-      ))}
-    </>
-  );
 };
 
 // 动画时长常量
@@ -612,14 +574,13 @@ export const AppSidebar: React.FC = () => {
 
   return (
     <aside
-      className={`flex flex-col h-full shrink-0 transition-[width] duration-300 ease-out relative before:absolute before:inset-0 before:bg-background/10 before:backdrop-blur-2xl before:-z-10 px-1 ${collapsed ? 'w-16' : 'w-58'
+      className={`flex flex-col h-full shrink-0 transition-[width] duration-300 ease-out relative bg-sidebar px-1 ${collapsed ? 'w-16' : 'w-58'
         }`}
     >
       <div className={`flex flex-col h-full ${isAnimating ? 'opacity-0' : 'animate-[slideInRight_300ms_ease-in-out]'}`}>
         {/* 顶部导航区域 */}
         <div className="mt-1 mb-2 m-1 space-y-1 flex flex-col shrink-0">
           <CreateEnvironmentButton collapsed={collapsed} />
-          <TopNavItems collapsed={collapsed} currentPath={location.pathname} />
           {collapsed && <div className="mx-3 border-b border-sidebar-border pt-2" />}
         </div>
 

@@ -2,17 +2,19 @@ export const appLayoutResources = {
   'zh-CN': {
     nav: {
       group: {
+        workspace: '工作台',
+        resources: '资源',
         basic: '基础功能',
-        automation: '自动化工具',
+        automation: '自动化',
       },
       item: {
         proxy: '代理中心',
         accounts: '账号管理',
         extensions: '浏览器插件',
-        envList: '环境管理',
-        groups: '分组管理',
+        envList: '环境',
+        groups: '分组与标签',
         rpa: 'RPA 任务流',
-        api: 'API & AI',
+        api: 'AI 与接口',
         settings: '系统设置',
       },
       short: {
@@ -86,6 +88,8 @@ export const appLayoutResources = {
   'en-US': {
     nav: {
       group: {
+        workspace: 'Workspace',
+        resources: 'Resources',
         basic: 'Basics',
         automation: 'Automation',
       },
@@ -94,9 +98,9 @@ export const appLayoutResources = {
         accounts: 'Accounts',
         extensions: 'Extensions',
         envList: 'Environments',
-        groups: 'Groups',
+        groups: 'Groups & Tags',
         rpa: 'RPA Workflows',
-        api: 'API & AI',
+        api: 'AI & API',
         settings: 'System Settings',
       },
       short: {
