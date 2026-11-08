@@ -76,7 +76,7 @@ impl McpManager {
             return Err("请先启用 MCP 服务开关".to_string());
         }
 
-        let (owner_uuid, local_api_config) = fetch_local_api_runtime_config().await?;
+        let local_api_config = fetch_local_api_runtime_config().await?;
         if local_api_config.api_key.trim().is_empty() {
             return Err("Local API 凭证无效，请稍后重试".to_string());
         }
@@ -85,7 +85,6 @@ impl McpManager {
         let server_config = McpServerRuntimeConfig {
             port: runtime.port,
             local_api_api_key: local_api_config.api_key,
-            owner_uuid,
             access: config,
             read_slots: Arc::new(tokio::sync::Semaphore::new(2)),
         };
@@ -108,20 +107,15 @@ impl McpManager {
     }
 }
 
-async fn fetch_local_api_runtime_config() -> Result<(uuid::Uuid, LocalApiRuntimeConfig), String> {
+async fn fetch_local_api_runtime_config() -> Result<LocalApiRuntimeConfig, String> {
     let app = crate::app::handle::get_app_handle().map_err(|error| error.to_string())?;
     let context = app.state::<business::svc_ctx::SvcCtx>();
-    let owner_uuid = context.current_user_uuid().ok_or("请先登录本地用户")?;
-    let config = business::services::local_api::get_local_api_config_service(&context, owner_uuid)
+    let config = business::services::local_api::get_local_api_config_service(&context)
         .await
         .map_err(|error| error.to_string())?;
-    if context.current_user_uuid() != Some(owner_uuid) {
-        return Err("本地用户已切换，请重新启动 MCP".into());
-    }
-    let config = serde_json::to_value(config)
+    serde_json::to_value(config)
         .and_then(serde_json::from_value::<LocalApiRuntimeConfig>)
-        .map_err(|error| error.to_string())?;
-    Ok((owner_uuid, config))
+        .map_err(|error| error.to_string())
 }
 
 async fn wait_for_mcp_server_ready(health_url: &str) -> Result<(), String> {

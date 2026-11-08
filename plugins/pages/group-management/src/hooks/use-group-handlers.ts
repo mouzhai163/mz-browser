@@ -14,7 +14,6 @@ interface UseGroupHandlersReturn {
   // 对话框状态
   createDialogOpen: boolean;
   editDialogOpen: boolean;
-  assignToTeamDialogOpen: boolean;
   deleteDialogOpen: boolean;
   batchDeleteDialogOpen: boolean;
 
@@ -22,9 +21,7 @@ interface UseGroupHandlersReturn {
   newGroup: GroupFormData;
   editGroup: GroupFormData;
   editingGroup: Group | null;
-  assigningGroup: Group | null;
   deletingGroup: { id: string; uuid: string; name: string; description?: string } | null;
-  selectedTeamId: string;
 
   // 操作
   operations: ReturnType<typeof useGroupOperations>;
@@ -37,8 +34,6 @@ interface UseGroupHandlersReturn {
   handleSubmitCreate: () => Promise<void>;
   handleEditGroup: (group: Group) => void;
   handleSubmitEdit: () => Promise<void>;
-  handleAssignToTeam: (group: Group) => void;
-  handleSubmitAssignToTeam: () => Promise<void>;
   handleDeleteGroup: (group: Group) => void;
   handleConfirmDelete: () => Promise<void>;
   handleBatchDelete: () => void;
@@ -47,12 +42,10 @@ interface UseGroupHandlersReturn {
   // 状态更新
   setCreateDialogOpen: (open: boolean) => void;
   setEditDialogOpen: (open: boolean) => void;
-  setAssignToTeamDialogOpen: (open: boolean) => void;
   setDeleteDialogOpen: (open: boolean) => void;
   setBatchDeleteDialogOpen: (open: boolean) => void;
   setNewGroup: (data: GroupFormData) => void;
   setEditGroup: (data: GroupFormData) => void;
-  setSelectedTeamId: (teamId: string) => void;
 }
 
 /**
@@ -66,7 +59,6 @@ export function useGroupHandlers({
   // 对话框状态
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [assignToTeamDialogOpen, setAssignToTeamDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = useState(false);
 
@@ -74,14 +66,12 @@ export function useGroupHandlers({
   const [newGroup, setNewGroup] = useState<GroupFormData>({ name: '', description: '' });
   const [editGroup, setEditGroup] = useState<GroupFormData>({ name: '', description: '' });
   const [editingGroup, setEditingGroup] = useState<Group | null>(null);
-  const [assigningGroup, setAssigningGroup] = useState<Group | null>(null);
   const [deletingGroup, setDeletingGroup] = useState<{
     id: string;
     uuid: string;
     name: string;
     description?: string;
   } | null>(null);
-  const [selectedTeamId, setSelectedTeamId] = useState<string>('');
 
   // 操作逻辑
   const operations = useGroupOperations(() => {
@@ -135,29 +125,6 @@ export function useGroupHandlers({
     }
   }, [editingGroup, editGroup, operations]);
 
-  // 划分到团队
-  const handleAssignToTeam = useCallback((group: Group) => {
-    setAssigningGroup(group);
-    setSelectedTeamId('');
-    setAssignToTeamDialogOpen(true);
-  }, []);
-
-  const handleSubmitAssignToTeam = useCallback(async () => {
-    if (!selectedTeamId || !assigningGroup) {
-      toast.warning('请选择团队');
-      return;
-    }
-    try {
-      await operations.assignToTeam(assigningGroup.uuid, selectedTeamId);
-      toast.success('划分到团队成功');
-      setAssignToTeamDialogOpen(false);
-      setAssigningGroup(null);
-      setSelectedTeamId('');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : '划分失败');
-    }
-  }, [selectedTeamId, assigningGroup, operations]);
-
   // 删除分组
   const handleDeleteGroup = useCallback((group: Group) => {
     setDeletingGroup({
@@ -204,34 +171,27 @@ export function useGroupHandlers({
   return {
     createDialogOpen,
     editDialogOpen,
-    assignToTeamDialogOpen,
     deleteDialogOpen,
     batchDeleteDialogOpen,
     newGroup,
     editGroup,
     editingGroup,
-    assigningGroup,
     deletingGroup,
-    selectedTeamId,
     operations,
     selection,
     handleCreateGroup,
     handleSubmitCreate,
     handleEditGroup,
     handleSubmitEdit,
-    handleAssignToTeam,
-    handleSubmitAssignToTeam,
     handleDeleteGroup,
     handleConfirmDelete,
     handleBatchDelete,
     handleConfirmBatchDelete,
     setCreateDialogOpen,
     setEditDialogOpen,
-    setAssignToTeamDialogOpen,
     setDeleteDialogOpen,
     setBatchDeleteDialogOpen,
     setNewGroup,
     setEditGroup,
-    setSelectedTeamId,
   };
 }

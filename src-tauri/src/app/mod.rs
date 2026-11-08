@@ -6,6 +6,7 @@ pub mod events;
 pub mod handle;
 pub mod init_state;
 pub mod lifecycle;
+pub mod local_session;
 pub mod runtime;
 pub mod runtime_info;
 pub mod setup;

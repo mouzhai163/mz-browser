@@ -5,7 +5,6 @@ import { listEnvironments, listRecycleBin, listGroups, listTags } from '../api';
 import {
   getEnvironmentLocalProxyBindings,
   type EnvironmentLocalProxyBindingMap,
-  useRefreshStore,
 } from '../../../../services/store/src';
 import type { EnvironmentViewType } from '../stores/filters-store';
 import {
@@ -71,7 +70,6 @@ export function useEnvironments({ page, pageSize, groupUuid, keyword, tagUuids, 
   const [tags, setTags] = useState<TagItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { refreshWorkspaces } = useRefreshStore();
 
   const fetchEnvironments = useCallback(async () => {
     setLoading(true);
@@ -212,9 +210,7 @@ export function useEnvironments({ page, pageSize, groupUuid, keyword, tagUuids, 
 
   const refresh = useCallback(async () => {
     await Promise.all([fetchEnvironments(), fetchGroups(), fetchTags()]);
-    // 环境列表变更后，触发工作空间相关数据刷新（包括配额等）
-    refreshWorkspaces();
-  }, [fetchEnvironments, fetchGroups, fetchTags, refreshWorkspaces]);
+  }, [fetchEnvironments, fetchGroups, fetchTags]);
 
   return {
     environments,

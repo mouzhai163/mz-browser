@@ -9,7 +9,6 @@ import { GroupCreateDialog } from './components/group-create-dialog';
 import { GroupEditDialog } from './components/group-edit-dialog';
 import { GroupDeleteDialog } from './components/group-delete-dialog';
 import { GroupBatchDeleteDialog } from './components/group-batch-delete-dialog';
-import { GroupAssignTeamDialog } from './components/group-assign-team-dialog';
 import { useGroups } from './hooks/use-groups';
 import { useGroupFilters } from './hooks/use-group-filters';
 import { useGroupPagination } from './hooks/use-group-pagination';
@@ -55,7 +54,6 @@ const GroupManagementPage: React.FC = () => {
         selectedIds={handlers.selection.selectedIds}
         onSelect={handlers.selection.select}
         onSelectAll={(selected) => handlers.selection.selectAll(paginatedGroups, selected)}
-        onAssignToTeam={handlers.handleAssignToTeam}
         onEdit={handlers.handleEditGroup}
         onDelete={handlers.handleDeleteGroup}
         loading={loading}
@@ -92,16 +90,6 @@ const GroupManagementPage: React.FC = () => {
         onOpenChange={handlers.setEditDialogOpen}
         onFormDataChange={handlers.setEditGroup}
         onSubmit={handlers.handleSubmitEdit}
-      />
-
-      {/* 划分到团队对话框 */}
-      <GroupAssignTeamDialog
-        open={handlers.assignToTeamDialogOpen}
-        group={handlers.assigningGroup}
-        selectedTeamId={handlers.selectedTeamId}
-        onOpenChange={handlers.setAssignToTeamDialogOpen}
-        onTeamIdChange={handlers.setSelectedTeamId}
-        onSubmit={handlers.handleSubmitAssignToTeam}
       />
 
       {/* 删除分组确认对话框 */}

@@ -88,8 +88,6 @@ pub struct EnvironmentCookieGroupInput {
 
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 pub struct CreateEnvironmentInput {
-    pub workspace_uuid: String,
-    pub team_uuid: String,
     pub name: String,
     pub description: Option<String>,
     pub icon: Option<String>,
@@ -341,12 +339,6 @@ environment_uuid_tool!(
     "simprint_create_environment",
     "Create a Simprint environment.",
     |service, param| {
-        if param.workspace_uuid.trim().is_empty() {
-            return Err(McpToolError::invalid_params("workspace_uuid is required"));
-        }
-        if param.team_uuid.trim().is_empty() {
-            return Err(McpToolError::invalid_params("team_uuid is required"));
-        }
         if param.name.trim().is_empty() {
             return Err(McpToolError::invalid_params("name is required"));
         }
@@ -354,8 +346,6 @@ environment_uuid_tool!(
         let data = service
             .bridge()
             .create_environment(&serde_json::json!({
-                "workspace_uuid": param.workspace_uuid.trim(),
-                "team_uuid": param.team_uuid.trim(),
                 "name": param.name.trim(),
                 "description": normalize_optional(param.description),
                 "icon": normalize_optional(param.icon),

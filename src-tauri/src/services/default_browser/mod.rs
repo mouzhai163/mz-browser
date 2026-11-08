@@ -340,9 +340,9 @@ async fn open_in_running_browser(host: &str, port: u16, url: &str) -> Result<Opt
 /// 才显示主窗口并提示原因——不能让用户点了链接却毫无反应。
 pub fn handle_link_in_background(app: AppHandle, link: String) {
     tauri::async_runtime::spawn(async move {
-        // 本地会话在启动时自动建立；这里确保它已就绪。
-        let outcome = match crate::commands::auth::ensure_default_session().await {
-            Ok(_) => open_link_inner(&app, &link).await,
+        // 后台服务在启动时拉起；这里确保它们已就绪。
+        let outcome = match crate::app::local_session::ensure_ready().await {
+            Ok(()) => open_link_inner(&app, &link).await,
             Err(error) => Err(error),
         };
 

@@ -28,7 +28,6 @@ interface GroupTableProps {
   selectedIds?: Set<string>;
   onSelect?: (uuid: string, selected: boolean) => void;
   onSelectAll?: (selected: boolean) => void;
-  onAssignToTeam?: (group: Group) => void;
   onEdit?: (group: Group) => void;
   onDelete?: (group: Group) => void;
   loading?: boolean;
@@ -39,7 +38,6 @@ export function GroupTable({
   selectedIds = new Set(),
   onSelect,
   onSelectAll,
-  onAssignToTeam,
   onEdit,
   onDelete,
   loading = false,
@@ -59,18 +57,6 @@ export function GroupTable({
       header: t('table.headers.environmentsCount'),
       cell: () => null,
       width: 96,
-    },
-    {
-      id: 'team',
-      header: t('table.headers.team'),
-      cell: () => null,
-      width: 160,
-    },
-    {
-      id: 'createdBy',
-      header: t('table.headers.createdBy'),
-      cell: () => null,
-      width: 112,
     },
     {
       id: 'createdAt',
@@ -131,7 +117,6 @@ export function GroupTable({
           group={row}
           isSelected={isSelected}
           onSelect={(_id, selected) => handleSelect(selected)}
-          onAssignToTeam={onAssignToTeam}
           onEdit={onEdit}
           onDelete={onDelete}
         />

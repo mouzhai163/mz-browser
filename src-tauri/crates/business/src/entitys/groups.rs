@@ -26,11 +26,3 @@ pub struct UpdateGroupRequest {
     pub description: Option<String>,
     pub sort_order: Option<i32>,
 }
-
-/// 分配分组到团队请求（已废弃，分组创建时即指定团队）
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[deprecated(note = "分组创建时即指定团队，不再需要分配")]
-pub struct AssignGroupToTeamRequest {
-    pub uuid: Uuid,
-    pub team_uuid: Uuid,
-}

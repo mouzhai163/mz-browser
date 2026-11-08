@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
-import { FolderTree, Eye, Users, MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { FolderTree, Eye, MoreVertical, Edit, Trash2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,7 +21,6 @@ interface GroupTableRowProps {
   group: Group;
   isSelected?: boolean;
   onSelect?: (uuid: string, selected: boolean) => void;
-  onAssignToTeam?: (group: Group) => void;
   onEdit?: (group: Group) => void;
   onDelete?: (group: Group) => void;
 }
@@ -30,7 +29,6 @@ export function GroupTableRow({
   group,
   isSelected = false,
   onSelect,
-  onAssignToTeam,
   onEdit,
   onDelete,
 }: GroupTableRowProps) {
@@ -80,16 +78,6 @@ export function GroupTableRow({
         </span>
       </DataTableCell>
 
-      {/* 团队列 */}
-      <DataTableCell>
-        <span className="text-sm text-foreground">{group.teamName || '-'}</span>
-      </DataTableCell>
-
-      {/* 创建者列 */}
-      <DataTableCell>
-        <span className="text-sm text-foreground">{group.createdByName || '-'}</span>
-      </DataTableCell>
-
       {/* 创建时间列 */}
       <DataTableCell>
         <span className="text-sm text-muted-foreground">{formatDate(group.createdAt)}</span>
@@ -112,15 +100,7 @@ export function GroupTableRow({
         >
           <Eye className="h-4 w-4" />
         </button>
-        {/* 第二个按钮：划分到团队 */}
-        <button
-          onClick={() => onAssignToTeam?.(group)}
-          className="h-7 w-7 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
-          title={t('table.actions.assignToTeam')}
-        >
-          <Users className="h-4 w-4" />
-        </button>
-        {/* 第三个按钮：更多操作 */}
+        {/* 第二个按钮：更多操作 */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button

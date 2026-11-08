@@ -4,7 +4,7 @@ import '../../extension-points';
 import React, { Suspense, useCallback, useEffect, useState } from 'react';
 import { BrowserRouter } from 'react-router';
 import { pluginRegistry } from '@slotkitjs/core';
-import { useAuthStore, useSettingsDialogStore } from '../../../../plugins/services/store/src';
+import { useSettingsDialogStore } from '../../../../plugins/services/store/src';
 import { SettingsBootstrap } from '../../../../plugins/services/store/src';
 import { ThemeProvider } from '@/components/theme-provider';
 import { I18nProvider } from '@/components/i18n-provider';
@@ -32,29 +32,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ mode = 'main', pluginsRead
   const [windowManagerComponent, setWindowManagerComponent] = useState<React.ComponentType | null>(
     null
   );
-  const { initAuth } = useAuthStore();
   const isSettingsDialogOpen = useSettingsDialogStore((state) => state.isOpen);
-  const [authReady, setAuthReady] = useState(mode !== 'main');
   const [routesReady, setRoutesReady] = useState(false);
   useDisableDevTools();
-
-  // 初始化认证状态（仅在 main 模式下）
-  useEffect(() => {
-    if (mode === 'main') {
-      let cancelled = false;
-      initAuth()
-        .catch((error) => {
-          console.error('[AppLayout] 初始化认证状态失败:', error);
-        })
-        .finally(() => {
-          if (!cancelled) setAuthReady(true);
-        });
-
-      return () => {
-        cancelled = true;
-      };
-    }
-  }, [mode, initAuth]);
 
   const handleRoutesReady = useCallback(() => {
     setRoutesReady(true);
@@ -100,7 +80,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ mode = 'main', pluginsRead
       <ThemeProvider defaultTheme="system" storageKey="simprint-ui-theme">
         <I18nProvider resources={{ common: commonResources }}>
           <BrowserRouter>
-            {pluginsReady && authReady && routesReady && windowManagerComponent
+            {pluginsReady && routesReady && windowManagerComponent
               ? React.createElement(windowManagerComponent)
               : null}
             <AppRoutes onReady={handleRoutesReady} />

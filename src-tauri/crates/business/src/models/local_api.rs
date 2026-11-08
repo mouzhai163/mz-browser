@@ -2,7 +2,6 @@ use chrono::{DateTime, Utc};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use sqlx::Error;
-use uuid::Uuid;
 
 use crate::database::{Db, Pool};
 
@@ -10,25 +9,26 @@ use crate::dto::{
     LocalApiKeyDto, LocalApiKeyPermissionDto, LocalApiPermissionDefinitionDto, LocalApiSettingsDto,
 };
 
+/// 本地 API 的设置只有一行（id 固定为 1）。
+const SETTINGS_ROW_ID: i32 = 1;
+
 pub async fn fetch_local_api_settings(
     pool: &Pool<Db>,
-    user_uuid: Uuid,
 ) -> Result<Option<LocalApiSettingsDto>, Error> {
     sqlx::query_as::<_, LocalApiSettingsDto>(
         r#"
-        SELECT id, uuid, user_uuid, enabled, port, remote_access, cors_origins, created_at, updated_at, deleted_at
-        FROM user_local_api_settings
-        WHERE user_uuid = $1 AND deleted_at IS NULL
+        SELECT id, uuid, enabled, port, remote_access, cors_origins, created_at, updated_at, deleted_at
+        FROM local_api_settings
+        WHERE id = $1 AND deleted_at IS NULL
         "#,
     )
-    .bind(user_uuid)
+    .bind(SETTINGS_ROW_ID)
     .fetch_optional(pool)
     .await
 }
 
 pub async fn upsert_local_api_settings(
     pool: &Pool<Db>,
-    user_uuid: Uuid,
     enabled: Option<bool>,
     port: Option<i32>,
     remote_access: Option<bool>,
@@ -36,17 +36,17 @@ pub async fn upsert_local_api_settings(
 ) -> Result<(), Error> {
     sqlx::query(
         r#"
-        INSERT INTO user_local_api_settings (user_uuid, enabled, port, remote_access, cors_origins)
+        INSERT INTO local_api_settings (id, enabled, port, remote_access, cors_origins)
         VALUES ($1, COALESCE($2, FALSE), COALESCE($3, 8080), COALESCE($4, FALSE), COALESCE($5, '[]'))
-        ON CONFLICT (user_uuid) DO UPDATE SET
-            enabled = COALESCE($2, user_local_api_settings.enabled),
-            port = COALESCE($3, user_local_api_settings.port),
-            remote_access = COALESCE($4, user_local_api_settings.remote_access),
-            cors_origins = COALESCE($5, user_local_api_settings.cors_origins),
+        ON CONFLICT (id) DO UPDATE SET
+            enabled = COALESCE($2, local_api_settings.enabled),
+            port = COALESCE($3, local_api_settings.port),
+            remote_access = COALESCE($4, local_api_settings.remote_access),
+            cors_origins = COALESCE($5, local_api_settings.cors_origins),
             updated_at = CURRENT_TIMESTAMP
         "#,
     )
-    .bind(user_uuid)
+    .bind(SETTINGS_ROW_ID)
     .bind(enabled)
     .bind(port)
     .bind(remote_access)
@@ -57,22 +57,18 @@ pub async fn upsert_local_api_settings(
     Ok(())
 }
 
-pub async fn fetch_active_api_key(
-    pool: &Pool<Db>,
-    user_uuid: Uuid,
-) -> Result<Option<LocalApiKeyDto>, Error> {
+pub async fn fetch_active_api_key(pool: &Pool<Db>) -> Result<Option<LocalApiKeyDto>, Error> {
     sqlx::query_as::<_, LocalApiKeyDto>(
         r#"
         SELECT
-            id, uuid, user_uuid, key_prefix, key_hash, api_key, is_active, requests_today,
+            id, uuid, key_prefix, key_hash, api_key, is_active, requests_today,
             daily_limit, last_reset_date, last_used_at, expires_at, created_at, updated_at, deleted_at
-        FROM user_local_api_keys
-        WHERE user_uuid = $1 AND is_active = TRUE AND deleted_at IS NULL
+        FROM local_api_keys
+        WHERE is_active = TRUE AND deleted_at IS NULL
         ORDER BY id DESC
         LIMIT 1
         "#,
     )
-    .bind(user_uuid)
     .fetch_optional(pool)
     .await
 }
@@ -84,9 +80,9 @@ pub async fn fetch_api_key_by_hash(
     sqlx::query_as::<_, LocalApiKeyDto>(
         r#"
         SELECT
-            id, uuid, user_uuid, key_prefix, key_hash, api_key, is_active, requests_today,
+            id, uuid, key_prefix, key_hash, api_key, is_active, requests_today,
             daily_limit, last_reset_date, last_used_at, expires_at, created_at, updated_at, deleted_at
-        FROM user_local_api_keys
+        FROM local_api_keys
         WHERE key_hash = $1 AND is_active = TRUE AND deleted_at IS NULL
         LIMIT 1
         "#,
@@ -96,15 +92,14 @@ pub async fn fetch_api_key_by_hash(
     .await
 }
 
-pub async fn deactivate_api_keys_for_user(pool: &Pool<Db>, user_uuid: Uuid) -> Result<(), Error> {
+pub async fn deactivate_api_keys(pool: &Pool<Db>) -> Result<(), Error> {
     sqlx::query(
         r#"
-        UPDATE user_local_api_keys
+        UPDATE local_api_keys
         SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
-        WHERE user_uuid = $1 AND is_active = TRUE AND deleted_at IS NULL
+        WHERE is_active = TRUE AND deleted_at IS NULL
         "#,
     )
-    .bind(user_uuid)
     .execute(pool)
     .await?;
 
@@ -113,7 +108,6 @@ pub async fn deactivate_api_keys_for_user(pool: &Pool<Db>, user_uuid: Uuid) -> R
 
 pub async fn insert_api_key(
     pool: &Pool<Db>,
-    user_uuid: Uuid,
     key_prefix: &str,
     key_hash: &str,
     api_key: &str,
@@ -121,14 +115,13 @@ pub async fn insert_api_key(
 ) -> Result<LocalApiKeyDto, Error> {
     sqlx::query_as::<_, LocalApiKeyDto>(
         r#"
-        INSERT INTO user_local_api_keys (user_uuid, key_prefix, key_hash, api_key, daily_limit)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO local_api_keys (key_prefix, key_hash, api_key, daily_limit)
+        VALUES ($1, $2, $3, $4)
         RETURNING
-            id, uuid, user_uuid, key_prefix, key_hash, api_key, is_active, requests_today,
+            id, uuid, key_prefix, key_hash, api_key, is_active, requests_today,
             daily_limit, last_reset_date, last_used_at, expires_at, created_at, updated_at, deleted_at
         "#,
     )
-    .bind(user_uuid)
     .bind(key_prefix)
     .bind(key_hash)
     .bind(api_key)
@@ -147,7 +140,7 @@ pub async fn fetch_api_key_permission(
         SELECT
             id, uuid, api_key_id, permission_code, is_enabled, rate_limit_per_minute,
             rate_limit_per_hour, created_at, updated_at, deleted_at
-        FROM user_local_api_key_permissions
+        FROM local_api_key_permissions
         WHERE api_key_id = $1
           AND permission_code = $2
           AND deleted_at IS NULL
@@ -169,7 +162,7 @@ pub async fn insert_api_key_permission(
 ) -> Result<(), Error> {
     sqlx::query(
         r#"
-        INSERT INTO user_local_api_key_permissions (
+        INSERT INTO local_api_key_permissions (
             api_key_id, permission_code, is_enabled, rate_limit_per_minute, rate_limit_per_hour
         )
         VALUES ($1, $2, TRUE, $3, $4)
@@ -231,7 +224,7 @@ pub async fn reset_api_key_daily_usage(
 ) -> Result<(), Error> {
     sqlx::query(
         r#"
-        UPDATE user_local_api_keys
+        UPDATE local_api_keys
         SET requests_today = 0, last_reset_date = $2, updated_at = CURRENT_TIMESTAMP
         WHERE id = $1
         "#,
@@ -251,7 +244,7 @@ pub async fn increment_api_key_usage(
 ) -> Result<(), Error> {
     sqlx::query(
         r#"
-        UPDATE user_local_api_keys
+        UPDATE local_api_keys
         SET requests_today = requests_today + 1, last_used_at = $2, updated_at = CURRENT_TIMESTAMP
         WHERE id = $1
         "#,
@@ -274,7 +267,7 @@ pub async fn fetch_request_count(
     let count = sqlx::query_scalar::<_, i32>(
         r#"
         SELECT request_count
-        FROM user_local_api_request_counters
+        FROM local_api_request_counters
         WHERE api_key_id = $1
           AND permission_code = $2
           AND window_type = $3
@@ -301,12 +294,12 @@ pub async fn increment_request_counter(
 ) -> Result<(), Error> {
     sqlx::query(
         r#"
-        INSERT INTO user_local_api_request_counters (
+        INSERT INTO local_api_request_counters (
             api_key_id, permission_code, window_type, window_start, request_count, updated_at
         )
         VALUES ($1, $2, $3, $4, 1, CURRENT_TIMESTAMP)
         ON CONFLICT (api_key_id, permission_code, window_type, window_start) DO UPDATE SET
-            request_count = user_local_api_request_counters.request_count + 1,
+            request_count = local_api_request_counters.request_count + 1,
             updated_at = CURRENT_TIMESTAMP
         "#,
     )

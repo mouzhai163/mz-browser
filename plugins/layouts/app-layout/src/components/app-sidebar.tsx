@@ -3,12 +3,10 @@ import {
   Network,
   Workflow,
   TerminalSquare,
-  ShieldHalf,
   FolderTree,
   ChevronLeft,
   ChevronRight,
   Puzzle,
-  Users,
   UserCircle,
 } from 'lucide-react';
 import { TfiWorld } from "react-icons/tfi";
@@ -72,12 +70,6 @@ function localizeNavGroups(t: (key: string) => string): NavGroup[] {
           href: '/api',
           icon: TerminalSquare,
         },
-      ],
-    },
-    {
-      title: t('nav.group.collaboration'),
-      items: [
-        { label: t('nav.item.team'), shortLabel: t('nav.short.team'), href: '/team', icon: Users },
       ],
     },
   ];
@@ -475,38 +467,6 @@ const TopNavItems: React.FC<TopNavItemsProps> = ({ collapsed, currentPath }) => 
   );
 };
 
-interface BottomNavItemsProps {
-  collapsed: boolean;
-  currentPath: string;
-}
-
-/**
- * 底部导航项组件
- * 底部保留本地审计入口。
- */
-const BottomNavItems: React.FC<BottomNavItemsProps> = ({ collapsed, currentPath }) => {
-  const { t } = useTranslation('appLayout');
-  const bottomNavItems: NavItemData[] = [
-    { label: t('nav.item.audit'), href: '/audit', icon: ShieldHalf },
-  ];
-
-  return (
-    <div className="m-1 space-y-1">
-      {collapsed && <div className="mx-3 border-t border-sidebar-border mb-1" />}
-      {bottomNavItems.map((item) => (
-        <NavItem
-          key={item.href}
-          label={item.label}
-          href={item.href}
-          icon={item.icon}
-          isActive={isRouteActive(currentPath, item.href)}
-          collapsed={collapsed}
-        />
-      ))}
-    </div>
-  );
-};
-
 // 动画时长常量
 const SIDEBAR_ANIMATION_DURATION = 300;
 
@@ -683,7 +643,6 @@ export const AppSidebar: React.FC = () => {
 
         {/* 底部导航项（指纹审计、系统设置） */}
         <div className="shrink-0">
-          <BottomNavItems collapsed={collapsed} currentPath={location.pathname} />
         </div>
 
         {/* 免费额度使用情况区域 */}

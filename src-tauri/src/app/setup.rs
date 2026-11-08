@@ -89,9 +89,9 @@ pub fn init_simprint_runtime_background(app_handle: AppHandle) {
         let ctx = AppContext::get();
         ctx.simprint_runtime_manager.set_app_handle(app_handle.clone()).await;
 
-        // 没有登录这一步：启动时直接使用默认本地用户，并拉起依赖会话的服务（运行时、本地 API）。
-        if let Err(error) = crate::commands::auth::ensure_default_session().await {
-            log::error!("failed to establish the local session: {error}");
+        // 没有用户和登录：启动时直接把依赖数据库的服务（运行时、本地 API）拉起来。
+        if let Err(error) = crate::app::local_session::ensure_ready().await {
+            log::error!("failed to start the local services: {error}");
         }
 
         // 被系统当作默认浏览器启动（命令行 `-- <链接>`）：会话就绪后在默认环境里打开。

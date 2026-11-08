@@ -8,8 +8,6 @@ use crate::dto::{ProxyDto, ProxyHealthCheckDto};
 /// 创建代理
 pub async fn insert_proxy(
     pool: &Pool<Db>,
-    workspace_uuid: Uuid,
-    owner_uuid: Uuid,
     name: &str,
     host: &str,
     port: i32,
@@ -21,14 +19,12 @@ pub async fn insert_proxy(
 ) -> Result<Uuid, Error> {
     let uuid: Uuid = sqlx::query_scalar(
         r#"
-        INSERT INTO proxies (workspace_uuid, owner_uuid, name, host, port, proxy_type,
+        INSERT INTO proxies (name, host, port, proxy_type,
                               username, password, country, city)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING uuid;
         "#,
     )
-    .bind(workspace_uuid)
-    .bind(owner_uuid)
     .bind(name)
     .bind(host)
     .bind(port)
@@ -43,34 +39,39 @@ pub async fn insert_proxy(
     Ok(uuid)
 }
 
-/// 查询代理列表
+/// 查询代理列表（名称关键字、类型、状态、国家筛选，分页）
 pub async fn fetch_proxies(
     pool: &Pool<Db>,
-    workspace_uuid: Uuid,
+    name_keyword: Option<&str>,
     proxy_type: Option<&str>,
     status: Option<&str>,
+    country: Option<&str>,
     offset: i64,
     limit: i64,
 ) -> Result<Vec<ProxyDto>, Error> {
+    let name_keyword = name_keyword.map(|keyword| format!("%{}%", keyword.trim()));
+
     let recs = sqlx::query_as::<_, ProxyDto>(
         r#"
-        SELECT p.id, p.uuid, p.workspace_uuid, p.owner_uuid, p.name, p.host, p.port, p.proxy_type,
+        SELECT p.id, p.uuid, p.name, p.host, p.port, p.proxy_type,
                p.username, p.password, p.ssh_key_encrypted, p.ssh_passphrase_encrypted,
                p.country, p.city, p.status, p.latency, p.last_check_ip, p.last_checked_at,
                (SELECT COUNT(*) FROM environments e WHERE e.proxy_uuid = p.uuid AND e.deleted_at IS NULL) AS environments_count,
                p.created_at, p.updated_at, p.deleted_at
         FROM proxies p
-        WHERE p.workspace_uuid = $1
+        WHERE p.deleted_at IS NULL
+          AND ($1 IS NULL OR p.name LIKE $1)
           AND ($2 IS NULL OR p.proxy_type = $2)
           AND ($3 IS NULL OR p.status = $3)
-          AND p.deleted_at IS NULL
+          AND ($4 IS NULL OR p.country = $4)
         ORDER BY p.created_at DESC
-        LIMIT $4 OFFSET $5
+        LIMIT $5 OFFSET $6
         "#,
     )
-    .bind(workspace_uuid)
+    .bind(name_keyword)
     .bind(proxy_type)
     .bind(status)
+    .bind(country)
     .bind(limit)
     .bind(offset)
     .fetch_all(pool)
@@ -79,25 +80,30 @@ pub async fn fetch_proxies(
     Ok(recs)
 }
 
-/// 查询代理总数
+/// 查询代理总数（筛选条件与 `fetch_proxies` 一致）
 pub async fn fetch_proxies_count(
     pool: &Pool<Db>,
-    workspace_uuid: Uuid,
+    name_keyword: Option<&str>,
     proxy_type: Option<&str>,
     status: Option<&str>,
+    country: Option<&str>,
 ) -> Result<i64, Error> {
+    let name_keyword = name_keyword.map(|keyword| format!("%{}%", keyword.trim()));
+
     let count: i64 = sqlx::query_scalar(
         r#"
-        SELECT COUNT(*) FROM proxies
-        WHERE workspace_uuid = $1
-          AND ($2 IS NULL OR proxy_type = $2)
-          AND ($3 IS NULL OR status = $3)
-          AND deleted_at IS NULL
+        SELECT COUNT(*) FROM proxies p
+        WHERE p.deleted_at IS NULL
+          AND ($1 IS NULL OR p.name LIKE $1)
+          AND ($2 IS NULL OR p.proxy_type = $2)
+          AND ($3 IS NULL OR p.status = $3)
+          AND ($4 IS NULL OR p.country = $4)
         "#,
     )
-    .bind(workspace_uuid)
+    .bind(name_keyword)
     .bind(proxy_type)
     .bind(status)
+    .bind(country)
     .fetch_one(pool)
     .await?;
 
@@ -111,7 +117,7 @@ pub async fn fetch_proxy_by_uuid(
 ) -> Result<Option<ProxyDto>, Error> {
     let rec = sqlx::query_as::<_, ProxyDto>(
         r#"
-        SELECT p.id, p.uuid, p.workspace_uuid, p.owner_uuid, p.name, p.host, p.port, p.proxy_type,
+        SELECT p.id, p.uuid, p.name, p.host, p.port, p.proxy_type,
                p.username, p.password, p.ssh_key_encrypted, p.ssh_passphrase_encrypted,
                p.country, p.city, p.status, p.latency, p.last_check_ip, p.last_checked_at,
                (SELECT COUNT(*) FROM environments e WHERE e.proxy_uuid = p.uuid AND e.deleted_at IS NULL) AS environments_count,

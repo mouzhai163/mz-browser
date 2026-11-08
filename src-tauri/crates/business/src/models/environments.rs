@@ -15,55 +15,42 @@ use crate::entitys::CookieInput;
 /// 创建分组
 pub async fn insert_group(
     pool: &Pool<Db>,
-    workspace_uuid: Uuid,
-    team_uuid: Uuid,
     name: &str,
     description: Option<&str>,
-    created_by: Uuid,
 ) -> Result<Uuid, Error> {
     let uuid: Uuid = sqlx::query_scalar(
         r#"
-        INSERT INTO groups (workspace_uuid, team_uuid, name, description, created_by)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO groups (name, description)
+        VALUES ($1, $2)
         RETURNING uuid;
         "#,
     )
-    .bind(workspace_uuid)
-    .bind(team_uuid)
     .bind(name)
     .bind(description)
-    .bind(created_by)
     .fetch_one(pool)
     .await?;
 
     Ok(uuid)
 }
 
-/// 查询分组列表（工作空间级别）
+/// 查询分组列表
 pub async fn fetch_groups(
     pool: &Pool<Db>,
-    workspace_uuid: Uuid,
-    team_uuid: Uuid,
     offset: i64,
     limit: i64,
 ) -> Result<Vec<GroupDto>, Error> {
     let recs = sqlx::query_as::<_, GroupDto>(
         r#"
-        SELECT g.id, g.uuid, g.workspace_uuid, g.team_uuid, t.name AS team_name,
+        SELECT g.id, g.uuid,
                g.name, g.description, g.sort_order,
-               g.created_by, ui.nickname AS created_by_name,
                (SELECT COUNT(*) FROM environments e WHERE e.group_uuid = g.uuid AND e.deleted_at IS NULL) AS environments_count,
                g.created_at, g.updated_at, g.deleted_at
         FROM groups g
-        LEFT JOIN teams t ON g.team_uuid = t.uuid
-        LEFT JOIN user_infos ui ON g.created_by = ui.user_uuid
-        WHERE g.workspace_uuid = $1 AND g.team_uuid = $2 AND g.deleted_at IS NULL
+        WHERE g.deleted_at IS NULL
         ORDER BY g.sort_order, g.name
-        LIMIT $3 OFFSET $4
+        LIMIT $1 OFFSET $2
         "#,
     )
-    .bind(workspace_uuid)
-    .bind(team_uuid)
     .bind(limit)
     .bind(offset)
     .fetch_all(pool)
@@ -79,14 +66,11 @@ pub async fn fetch_group_by_uuid(
 ) -> Result<Option<GroupDto>, Error> {
     let rec = sqlx::query_as::<_, GroupDto>(
         r#"
-        SELECT g.id, g.uuid, g.workspace_uuid, g.team_uuid, t.name AS team_name,
+        SELECT g.id, g.uuid,
                g.name, g.description, g.sort_order,
-               g.created_by, ui.nickname AS created_by_name,
                (SELECT COUNT(*) FROM environments e WHERE e.group_uuid = g.uuid AND e.deleted_at IS NULL) AS environments_count,
                g.created_at, g.updated_at, g.deleted_at
         FROM groups g
-        LEFT JOIN teams t ON g.team_uuid = t.uuid
-        LEFT JOIN user_infos ui ON g.created_by = ui.user_uuid
         WHERE g.uuid = $1 AND g.deleted_at IS NULL
         "#,
     )
@@ -144,20 +128,16 @@ pub async fn delete_group(pool: &Pool<Db>, group_uuid: Uuid) -> Result<(), Error
 /// 创建标签
 pub async fn insert_tag(
     pool: &Pool<Db>,
-    user_uuid: Uuid,
-    team_uuid: Option<Uuid>,
     name: &str,
     color: Option<&str>,
 ) -> Result<Uuid, Error> {
     let uuid: Uuid = sqlx::query_scalar(
         r#"
-        INSERT INTO tags (user_uuid, team_uuid, name, color)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO tags (name, color)
+        VALUES ($1, $2)
         RETURNING uuid;
         "#,
     )
-    .bind(user_uuid)
-    .bind(team_uuid)
     .bind(name)
     .bind(color.unwrap_or("gray"))
     .fetch_one(pool)
@@ -167,23 +147,16 @@ pub async fn insert_tag(
 }
 
 /// 查询标签列表
-pub async fn fetch_tags(
-    pool: &Pool<Db>,
-    team_uuid: Option<Uuid>,
-    user_uuid: Uuid,
-) -> Result<Vec<TagDto>, Error> {
+pub async fn fetch_tags(pool: &Pool<Db>) -> Result<Vec<TagDto>, Error> {
     let recs = sqlx::query_as::<_, TagDto>(
         r#"
-        SELECT id, uuid, user_uuid, team_uuid, name, color, sort_order,
+        SELECT id, uuid, name, color, sort_order,
                environments_count, created_at, updated_at, deleted_at
         FROM tags
-        WHERE (team_uuid = $1 OR (team_uuid IS NULL AND user_uuid = $2))
-          AND deleted_at IS NULL
+        WHERE deleted_at IS NULL
         ORDER BY sort_order, name
         "#,
     )
-    .bind(team_uuid)
-    .bind(user_uuid)
     .fetch_all(pool)
     .await?;
 
@@ -194,7 +167,7 @@ pub async fn fetch_tags(
 pub async fn fetch_tag_by_uuid(pool: &Pool<Db>, tag_uuid: Uuid) -> Result<Option<TagDto>, Error> {
     let rec = sqlx::query_as::<_, TagDto>(
         r#"
-        SELECT id, uuid, user_uuid, team_uuid, name, color, sort_order,
+        SELECT id, uuid, name, color, sort_order,
                environments_count, created_at, updated_at, deleted_at
         FROM tags
         WHERE uuid = $1 AND deleted_at IS NULL
@@ -254,9 +227,6 @@ pub async fn delete_tag(pool: &Pool<Db>, tag_uuid: Uuid) -> Result<(), Error> {
 /// 创建环境
 pub async fn insert_environment(
     pool: &Pool<Db>,
-    workspace_uuid: Uuid,
-    user_uuid: Uuid,
-    team_uuid: Uuid,
     name: &str,
     description: Option<&str>,
     group_uuid: Option<Uuid>,
@@ -266,15 +236,12 @@ pub async fn insert_environment(
 ) -> Result<Uuid, Error> {
     let uuid: Uuid = sqlx::query_scalar(
         r#"
-        INSERT INTO environments (workspace_uuid, user_uuid, team_uuid, name, description,
+        INSERT INTO environments (name, description,
                                    group_uuid, proxy_uuid, system_info, kernel_info)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING uuid;
         "#,
     )
-    .bind(workspace_uuid)
-    .bind(user_uuid)
-    .bind(team_uuid)
     .bind(name)
     .bind(description)
     .bind(group_uuid)
@@ -290,8 +257,6 @@ pub async fn insert_environment(
 /// 查询环境列表（基础信息）
 pub async fn fetch_environments_base(
     pool: &Pool<Db>,
-    workspace_uuid: Uuid,
-    team_uuid: Uuid,
     group_uuid: Option<Uuid>,
     status: Option<&str>,
     keyword: Option<&str>,
@@ -302,7 +267,7 @@ pub async fn fetch_environments_base(
     let mut query = String::from(
         r#"
         SELECT DISTINCT
-            e.id, e.uuid, e.workspace_uuid, e.user_uuid, e.team_uuid, e.name, e.description, e.status,
+            e.id, e.uuid, e.name, e.description, e.status,
             e.system_info, e.kernel_info, e.fingerprint_summary,
             e.group_uuid, e.proxy_uuid,
             e.last_opened_at, e.created_at, e.updated_at
@@ -317,13 +282,11 @@ pub async fn fetch_environments_base(
 
     query.push_str(
         r#"
-        WHERE e.workspace_uuid = $1
-          AND e.team_uuid = $2
-          AND e.deleted_at IS NULL
+        WHERE e.deleted_at IS NULL
         "#,
     );
 
-    let mut param_index = 3;
+    let mut param_index = 1;
     let mut conditions = Vec::new();
 
     // 分组过滤
@@ -370,9 +333,7 @@ pub async fn fetch_environments_base(
     ));
 
     // 构建查询
-    let mut sql_query = sqlx::query_as::<_, EnvironmentRowDto>(&query)
-        .bind(workspace_uuid)
-        .bind(team_uuid);
+    let mut sql_query = sqlx::query_as::<_, EnvironmentRowDto>(&query);
 
     // 绑定参数
     if let Some(g) = group_uuid {
@@ -403,8 +364,6 @@ pub async fn fetch_environments_base(
 /// 查询环境列表（基础）
 pub async fn fetch_environments(
     pool: &Pool<Db>,
-    workspace_uuid: Uuid,
-    team_uuid: Uuid,
     group_uuid: Option<Uuid>,
     status: Option<&str>,
     offset: i64,
@@ -412,20 +371,17 @@ pub async fn fetch_environments(
 ) -> Result<Vec<EnvironmentDto>, Error> {
     let recs = sqlx::query_as::<_, EnvironmentDto>(
         r#"
-        SELECT id, uuid, workspace_uuid, user_uuid, team_uuid, name, description,
+        SELECT id, uuid, name, description,
                status, group_uuid, proxy_uuid, system_info, kernel_info, fingerprint_summary,
                last_opened_at, created_at, updated_at, deleted_at
         FROM environments
-        WHERE workspace_uuid = $1 AND team_uuid = $2
-          AND ($3 IS NULL OR group_uuid = $3)
-          AND ($4 IS NULL OR status = $4)
+        WHERE ($1 IS NULL OR group_uuid = $1)
+          AND ($2 IS NULL OR status = $2)
           AND deleted_at IS NULL
         ORDER BY created_at DESC
-        LIMIT $5 OFFSET $6
+        LIMIT $3 OFFSET $4
         "#,
     )
-    .bind(workspace_uuid)
-    .bind(team_uuid)
     .bind(group_uuid)
     .bind(status)
     .bind(limit)
@@ -439,8 +395,6 @@ pub async fn fetch_environments(
 /// 查询环境总数
 pub async fn fetch_environments_count(
     pool: &Pool<Db>,
-    workspace_uuid: Uuid,
-    team_uuid: Uuid,
     group_uuid: Option<Uuid>,
     status: Option<&str>,
     keyword: Option<&str>,
@@ -459,13 +413,11 @@ pub async fn fetch_environments_count(
 
     query.push_str(
         r#"
-        WHERE e.workspace_uuid = $1
-          AND e.team_uuid = $2
-          AND e.deleted_at IS NULL
+        WHERE e.deleted_at IS NULL
         "#,
     );
 
-    let mut param_index = 3;
+    let mut param_index = 1;
     let mut conditions = Vec::new();
 
     // 分组过滤
@@ -505,7 +457,7 @@ pub async fn fetch_environments_count(
     }
 
     // 构建查询
-    let mut sql_query = sqlx::query_scalar::<_, i64>(&query).bind(workspace_uuid).bind(team_uuid);
+    let mut sql_query = sqlx::query_scalar::<_, i64>(&query);
 
     // 绑定参数
     if let Some(g) = group_uuid {
@@ -531,14 +483,14 @@ pub async fn fetch_environments_count(
     Ok(count)
 }
 
-/// 根据 UUID 查询环境（不带工作空间过滤，用于内部查询）
+/// 根据 UUID 查询环境
 pub async fn fetch_environment_by_uuid_unfiltered(
     pool: &Pool<Db>,
     env_uuid: Uuid,
 ) -> Result<Option<EnvironmentDto>, Error> {
     let rec = sqlx::query_as::<_, EnvironmentDto>(
         r#"
-        SELECT id, uuid, workspace_uuid, user_uuid, team_uuid, name, description,
+        SELECT id, uuid, name, description,
                status, group_uuid, proxy_uuid, system_info, kernel_info, fingerprint_summary,
                last_opened_at, created_at, updated_at, deleted_at
         FROM environments
@@ -552,27 +504,12 @@ pub async fn fetch_environment_by_uuid_unfiltered(
     Ok(rec)
 }
 
-/// 根据 UUID 查询环境（带工作空间过滤）
+/// 根据 UUID 查询环境
 pub async fn fetch_environment_by_uuid(
     pool: &Pool<Db>,
-    workspace_uuid: Uuid,
     env_uuid: Uuid,
 ) -> Result<Option<EnvironmentDto>, Error> {
-    let rec = sqlx::query_as::<_, EnvironmentDto>(
-        r#"
-        SELECT id, uuid, workspace_uuid, user_uuid, team_uuid, name, description,
-               status, group_uuid, proxy_uuid, system_info, kernel_info, fingerprint_summary,
-               last_opened_at, created_at, updated_at, deleted_at
-        FROM environments
-        WHERE uuid = $1 AND workspace_uuid = $2 AND deleted_at IS NULL
-        "#,
-    )
-    .bind(env_uuid)
-    .bind(workspace_uuid)
-    .fetch_optional(pool)
-    .await?;
-
-    Ok(rec)
+    fetch_environment_by_uuid_unfiltered(pool, env_uuid).await
 }
 
 /// 更新环境基础信息
@@ -715,8 +652,6 @@ pub async fn batch_delete_environments(pool: &Pool<Db>, env_uuids: &[Uuid]) -> R
 /// 查询回收站环境列表（已删除但未永久删除）
 pub async fn fetch_deleted_environments_base(
     pool: &Pool<Db>,
-    workspace_uuid: Uuid,
-    team_uuid: Uuid,
     group_uuid: Option<Uuid>,
     keyword: Option<&str>,
     offset: i64,
@@ -725,18 +660,16 @@ pub async fn fetch_deleted_environments_base(
     let mut query = String::from(
         r#"
         SELECT DISTINCT
-            e.id, e.uuid, e.workspace_uuid, e.user_uuid, e.team_uuid, e.name, e.description, e.status,
+            e.id, e.uuid, e.name, e.description, e.status,
             e.system_info, e.kernel_info, e.fingerprint_summary,
             e.group_uuid, e.proxy_uuid,
             e.last_opened_at, e.created_at, e.updated_at, e.deleted_at
         FROM environments e
-        WHERE e.workspace_uuid = $1
-          AND e.team_uuid = $2
-          AND e.deleted_at IS NOT NULL
+        WHERE e.deleted_at IS NOT NULL
         "#,
     );
 
-    let mut param_index = 3;
+    let mut param_index = 1;
     let mut conditions = Vec::new();
 
     // 分组过滤
@@ -765,9 +698,7 @@ pub async fn fetch_deleted_environments_base(
     query.push_str(" OFFSET $");
     query.push_str(&param_index.to_string());
 
-    let mut q = sqlx::query_as::<_, EnvironmentRowDto>(&query)
-        .bind(workspace_uuid)
-        .bind(team_uuid);
+    let mut q = sqlx::query_as::<_, EnvironmentRowDto>(&query);
 
     if let Some(gid) = group_uuid {
         q = q.bind(gid);
@@ -787,8 +718,6 @@ pub async fn fetch_deleted_environments_base(
 /// 统计回收站环境总数
 pub async fn fetch_deleted_environments_count(
     pool: &Pool<Db>,
-    workspace_uuid: Uuid,
-    team_uuid: Uuid,
     group_uuid: Option<Uuid>,
     keyword: Option<&str>,
 ) -> Result<i64, Error> {
@@ -796,13 +725,11 @@ pub async fn fetch_deleted_environments_count(
         r#"
         SELECT COUNT(DISTINCT e.id)
         FROM environments e
-        WHERE e.workspace_uuid = $1
-          AND e.team_uuid = $2
-          AND e.deleted_at IS NOT NULL
+        WHERE e.deleted_at IS NOT NULL
         "#,
     );
 
-    let mut param_index = 3;
+    let mut param_index = 1;
     let mut conditions = Vec::new();
 
     if group_uuid.is_some() {
@@ -822,7 +749,7 @@ pub async fn fetch_deleted_environments_count(
         query.push_str(&conditions.join(" AND "));
     }
 
-    let mut q = sqlx::query_scalar::<_, i64>(&query).bind(workspace_uuid).bind(team_uuid);
+    let mut q = sqlx::query_scalar::<_, i64>(&query);
 
     if let Some(gid) = group_uuid {
         q = q.bind(gid);
@@ -1119,7 +1046,7 @@ pub async fn clear_environment_tags(pool: &Pool<Db>, env_uuid: Uuid) -> Result<(
 pub async fn fetch_environment_tags(pool: &Pool<Db>, env_uuid: Uuid) -> Result<Vec<TagDto>, Error> {
     let recs = sqlx::query_as::<_, TagDto>(
         r#"
-        SELECT t.id, t.uuid, t.user_uuid, t.team_uuid, t.name, t.color, t.sort_order,
+        SELECT t.id, t.uuid, t.name, t.color, t.sort_order,
                t.environments_count, t.created_at, t.updated_at, t.deleted_at
         FROM tags t
         INNER JOIN environment_tags et ON t.uuid = et.tag_uuid
@@ -1152,8 +1079,6 @@ pub async fn fetch_tags_for_environments(
             t.name as tag_name,
             t.color as tag_color,
             t.sort_order as tag_sort_order,
-            t.user_uuid as tag_user_uuid,
-            t.team_uuid as tag_team_uuid,
             t.environments_count as tag_environments_count,
             t.created_at as tag_created_at,
             t.updated_at as tag_updated_at,
@@ -1269,8 +1194,6 @@ pub async fn fetch_proxies_by_uuids(
 /// 创建模板
 pub async fn insert_template(
     pool: &Pool<Db>,
-    user_uuid: Uuid,
-    team_uuid: Option<Uuid>,
     name: &str,
     description: Option<&str>,
     is_public: bool,
@@ -1280,14 +1203,12 @@ pub async fn insert_template(
 ) -> Result<Uuid, Error> {
     let uuid: Uuid = sqlx::query_scalar(
         r#"
-        INSERT INTO templates (user_uuid, team_uuid, name, description, is_public,
+        INSERT INTO templates (name, description, is_public,
                                 system_info, kernel_info, config_json)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING uuid;
         "#,
     )
-    .bind(user_uuid)
-    .bind(team_uuid)
     .bind(name)
     .bind(description)
     .bind(is_public)
@@ -1303,26 +1224,21 @@ pub async fn insert_template(
 /// 查询模板列表
 pub async fn fetch_templates(
     pool: &Pool<Db>,
-    team_uuid: Option<Uuid>,
-    user_uuid: Uuid,
     is_public: Option<bool>,
     offset: i64,
     limit: i64,
 ) -> Result<Vec<TemplateDto>, Error> {
     let recs = sqlx::query_as::<_, TemplateDto>(
         r#"
-        SELECT id, uuid, user_uuid, team_uuid, name, description, is_public,
+        SELECT id, uuid, name, description, is_public,
                system_info, kernel_info, config_json, usage_count, created_at, updated_at, deleted_at
         FROM templates
-        WHERE (team_uuid = $1 OR (team_uuid IS NULL AND user_uuid = $2) OR is_public = TRUE)
-          AND ($3 IS NULL OR is_public = $3)
+        WHERE ($1 IS NULL OR is_public = $1)
           AND deleted_at IS NULL
         ORDER BY usage_count DESC, created_at DESC
-        LIMIT $4 OFFSET $5
+        LIMIT $2 OFFSET $3
         "#,
     )
-    .bind(team_uuid)
-    .bind(user_uuid)
     .bind(is_public)
     .bind(limit)
     .bind(offset)
@@ -1335,21 +1251,16 @@ pub async fn fetch_templates(
 /// 查询模板总数
 pub async fn fetch_templates_count(
     pool: &Pool<Db>,
-    team_uuid: Option<Uuid>,
-    user_uuid: Uuid,
     is_public: Option<bool>,
 ) -> Result<i64, Error> {
     let count: i64 = sqlx::query_scalar(
         r#"
         SELECT COUNT(*)
         FROM templates
-        WHERE (team_uuid = $1 OR (team_uuid IS NULL AND user_uuid = $2) OR is_public = TRUE)
-          AND ($3 IS NULL OR is_public = $3)
+        WHERE ($1 IS NULL OR is_public = $1)
           AND deleted_at IS NULL
         "#,
     )
-    .bind(team_uuid)
-    .bind(user_uuid)
     .bind(is_public)
     .fetch_one(pool)
     .await?;
@@ -1364,7 +1275,7 @@ pub async fn fetch_template_by_uuid(
 ) -> Result<Option<TemplateDto>, Error> {
     let rec = sqlx::query_as::<_, TemplateDto>(
         r#"
-        SELECT id, uuid, user_uuid, team_uuid, name, description, is_public,
+        SELECT id, uuid, name, description, is_public,
                system_info, kernel_info, config_json, usage_count, created_at, updated_at, deleted_at
         FROM templates
         WHERE uuid = $1 AND deleted_at IS NULL

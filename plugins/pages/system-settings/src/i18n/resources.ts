@@ -10,7 +10,6 @@ export const settingsResources = {
     saveSettings: '保存设置',
 
     // Navigation items
-    navAccount: '账户与安全',
     navGeneral: '通用设置',
     navBrowser: '浏览器与自动化',
     navNetwork: '网络与同步',
@@ -222,7 +221,6 @@ export const settingsResources = {
     saveSettings: 'Save Settings',
 
     // Navigation items
-    navAccount: 'Account & Security',
     navGeneral: 'General',
     navBrowser: 'Browser & Automation',
     navNetwork: 'Network & Sync',

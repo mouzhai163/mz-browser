@@ -39,8 +39,6 @@ export interface GetEnvironmentRequest {
 }
 
 export interface CreateEnvironmentRequest {
-  workspace_uuid: string;
-  team_uuid: string;
   name: string;
   description?: string;
   icon?: string;
@@ -186,7 +184,7 @@ export interface EnvironmentDetailResponse {
     icon_url?: string;
     download_url?: string;
     hash?: string;
-    scope: 'user' | 'team' | 'group-personal' | 'group-team';
+    scope: 'user' | 'group-personal';
   }>;
   group?: {
     id: number;

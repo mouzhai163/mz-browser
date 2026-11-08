@@ -7,8 +7,6 @@ import {
   Workflow,
   TerminalSquare,
   Puzzle,
-  Users,
-  ShieldHalf,
   Settings,
   SquarePlus,
 } from 'lucide-react';
@@ -27,8 +25,6 @@ const navItems: Array<{ key: string; href: string; icon: LucideIcon | IconType }
   { key: 'rpa', href: '/rpa', icon: Workflow },
   { key: 'api', href: '/api', icon: TerminalSquare },
   { key: 'extensions', href: '/extensions', icon: Puzzle },
-  { key: 'team', href: '/team', icon: Users },
-  { key: 'audit', href: '/audit', icon: ShieldHalf },
   { key: 'settings', href: '/settings', icon: Settings },
   { key: 'createWindow', href: '/create-window', icon: SquarePlus },
 ];

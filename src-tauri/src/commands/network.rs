@@ -22,9 +22,8 @@ pub async fn http_post(
     business_context: tauri::State<'_, business::svc_ctx::SvcCtx>,
 ) -> std::result::Result<JsonRespnse, String> {
     let payload = data.unwrap_or_else(|| Value::Object(Default::default()));
-    let request_context = business_context.for_current_user().map_err(|error| error.to_string())?;
     if let Some(result) =
-        business::dispatcher::dispatch_post(&request_context, &url, &payload).await
+        business::dispatcher::dispatch_post(&business_context, &url, &payload).await
     {
         return Ok(match result {
             Ok(data) => JsonRespnse {

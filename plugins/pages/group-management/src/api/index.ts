@@ -21,10 +21,6 @@ export interface GroupDto {
     name: string;
     description?: string;
     environments_count: number;
-    team_uuid?: string;
-    team_name?: string;
-    created_by?: string;
-    created_by_name?: string;
     created_at: string;
     updated_at: string;
 }
@@ -35,10 +31,6 @@ export interface Group {
     name: string;
     description?: string;
     environmentsCount: number;
-    teamUuid?: string;
-    teamName?: string;
-    createdBy?: string;
-    createdByName?: string;
     createdAt: string;
     updatedAt: string;
 }
@@ -78,10 +70,6 @@ function transformGroupDto(dto: GroupDto): Group {
         name: dto.name || '',
         description: dto.description,
         environmentsCount: dto.environments_count || 0,
-        teamUuid: dto.team_uuid,
-        teamName: dto.team_name,
-        createdBy: dto.created_by,
-        createdByName: dto.created_by_name,
         createdAt: dto.created_at || '',
         updatedAt: dto.updated_at || '',
     };
@@ -90,7 +78,7 @@ function transformGroupDto(dto: GroupDto): Group {
 // ============ API 函数 ============
 
 /**
- * 获取分组列表（后端从 context 获取 workspace_uuid 和 team_uuid，不需要参数）
+ * 获取分组列表
  */
 export async function listGroups(): Promise<Group[]> {
     const result = await post<GroupDto[]>(API_ENDPOINTS.LIST_GROUPS, {});

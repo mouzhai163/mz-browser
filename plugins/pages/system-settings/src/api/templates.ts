@@ -28,8 +28,6 @@ export interface ListTemplatesRequest {
 export interface TemplateDto {
   id: number;
   uuid: string;
-  user_uuid: string;
-  team_uuid?: string;
   name: string;
   description?: string;
   is_public?: boolean;
@@ -63,8 +61,6 @@ export interface TemplateDetailResponse {
   /** 模板数据 */
   id: number;
   uuid: string;
-  user_uuid: string;
-  team_uuid?: string;
   name: string;
   description?: string;
   is_public?: boolean;

@@ -7,16 +7,13 @@ use crate::{models, svc_ctx::SvcCtx};
 
 const DEFAULT_DAILY_LIMIT: i32 = 1000;
 
-pub async fn get_local_api_config_service(
-    context: &SvcCtx,
-    user_uuid: Uuid,
-) -> Result<LocalApiConfigDto, String> {
-    init_local_api_for_user_service(context, user_uuid).await?;
-    let settings = models::local_api::fetch_local_api_settings(&context.db, user_uuid)
+pub async fn get_local_api_config_service(context: &SvcCtx) -> Result<LocalApiConfigDto, String> {
+    init_local_api_service(context).await?;
+    let settings = models::local_api::fetch_local_api_settings(&context.db)
         .await
         .map_err(|error| error.to_string())?
         .ok_or_else(|| "Local API settings do not exist".to_string())?;
-    let api_key = models::local_api::fetch_active_api_key(&context.db, user_uuid)
+    let api_key = models::local_api::fetch_active_api_key(&context.db)
         .await
         .map_err(|error| error.to_string())?
         .ok_or_else(|| "Local API key does not exist".to_string())?;
@@ -34,7 +31,6 @@ pub async fn get_local_api_config_service(
 
 pub async fn update_local_api_config_service(
     context: &SvcCtx,
-    user_uuid: Uuid,
     request: &UpdateLocalApiConfigRequest,
 ) -> Result<LocalApiConfigDto, String> {
     if let Some(port) = request.port {
@@ -43,14 +39,13 @@ pub async fn update_local_api_config_service(
         }
     }
 
-    init_local_api_for_user_service(context, user_uuid).await?;
+    init_local_api_service(context).await?;
     let cors_origins = request
         .cors_origins
         .as_ref()
         .map(|origins| models::local_api::build_cors_origins_value(origins));
     models::local_api::upsert_local_api_settings(
         &context.db,
-        user_uuid,
         request.enabled,
         request.port,
         request.remote_access,
@@ -59,18 +54,15 @@ pub async fn update_local_api_config_service(
     .await
     .map_err(|error| error.to_string())?;
 
-    get_local_api_config_service(context, user_uuid).await
+    get_local_api_config_service(context).await
 }
 
-pub async fn reset_local_api_key_service(
-    context: &SvcCtx,
-    user_uuid: Uuid,
-) -> Result<ResetLocalApiKeyDto, String> {
-    init_local_api_for_user_service(context, user_uuid).await?;
-    models::local_api::deactivate_api_keys_for_user(&context.db, user_uuid)
+pub async fn reset_local_api_key_service(context: &SvcCtx) -> Result<ResetLocalApiKeyDto, String> {
+    init_local_api_service(context).await?;
+    models::local_api::deactivate_api_keys(&context.db)
         .await
         .map_err(|error| error.to_string())?;
-    let (api_key, key_id) = create_api_key(context, user_uuid).await?;
+    let (api_key, key_id) = create_api_key(context).await?;
     ensure_default_permissions(context, key_id).await?;
     Ok(ResetLocalApiKeyDto { api_key })
 }
@@ -166,7 +158,6 @@ pub async fn validate_local_api_key_service(
 
     Ok(ValidateLocalApiKeyDto {
         valid: true,
-        user_uuid: api_key.user_uuid,
         permission_code: definition.permission_code,
         requests_today: api_key.requests_today + 1,
         daily_limit: api_key.daily_limit,
@@ -175,18 +166,14 @@ pub async fn validate_local_api_key_service(
     })
 }
 
-pub async fn init_local_api_for_user_service(
-    context: &SvcCtx,
-    user_uuid: Uuid,
-) -> Result<(), String> {
+pub async fn init_local_api_service(context: &SvcCtx) -> Result<(), String> {
     // 本地 API 默认开启：设置行第一次创建时写入开启；已有的设置（包括用户手动关闭的）不动。
-    let first_time = models::local_api::fetch_local_api_settings(&context.db, user_uuid)
+    let first_time = models::local_api::fetch_local_api_settings(&context.db)
         .await
         .map_err(|error| error.to_string())?
         .is_none();
     models::local_api::upsert_local_api_settings(
         &context.db,
-        user_uuid,
         first_time.then_some(true),
         None,
         None,
@@ -194,28 +181,27 @@ pub async fn init_local_api_for_user_service(
     )
     .await
     .map_err(|error| error.to_string())?;
-    if let Some(key) = models::local_api::fetch_active_api_key(&context.db, user_uuid)
+    if let Some(key) = models::local_api::fetch_active_api_key(&context.db)
         .await
         .map_err(|error| error.to_string())?
     {
         if key.api_key.is_some() {
             return ensure_default_permissions(context, key.id).await;
         }
-        models::local_api::deactivate_api_keys_for_user(&context.db, user_uuid)
+        models::local_api::deactivate_api_keys(&context.db)
             .await
             .map_err(|error| error.to_string())?;
     }
-    let (_, key_id) = create_api_key(context, user_uuid).await?;
+    let (_, key_id) = create_api_key(context).await?;
     ensure_default_permissions(context, key_id).await
 }
 
-async fn create_api_key(context: &SvcCtx, user_uuid: Uuid) -> Result<(String, i32), String> {
+async fn create_api_key(context: &SvcCtx) -> Result<(String, i32), String> {
     let api_key = format!("sk_local_{}", Uuid::new_v4().simple());
     let key_hash = models::local_api::hash_api_key(&api_key);
     let key_prefix = api_key.chars().take(16).collect::<String>();
     let created = models::local_api::insert_api_key(
         &context.db,
-        user_uuid,
         &key_prefix,
         &key_hash,
         &api_key,

@@ -9,7 +9,6 @@
   nextRunAt?: string;
   schedule?: string;
   createdAt: string;
-  createdBy?: string;
   runCount: number;
   successRate: number;
 }

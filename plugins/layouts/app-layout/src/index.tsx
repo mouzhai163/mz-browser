@@ -1,22 +1,14 @@
-import { useEffect } from 'react';
 import { Outlet } from 'react-router';
 import { AppSidebar } from './components/app-sidebar';
 import AppTitlebar from './components/titlebar';
 import { AppBackground } from './components/app-background';
 import { DownloadEventSubscriber } from './components/download-event-subscriber';
-import { useMessagesStore } from './stores/messages-store';
 import { MihomoRuntimeSubscriber } from '../../../services/store/src';
 import './styles.css';
 import { extensionRegistry } from '@slotkitjs/core';
 import { appLayoutResources } from './i18n/resources';
 
 const AppLayoutPlugin: React.FC = () => {
-  // 初始化消息store
-  useEffect(() => {
-    const refresh = useMessagesStore.getState().refresh;
-    void refresh();
-  }, []);
-
   return (
     <div className="relative flex flex-col h-screen w-full min-w-0 overflow-hidden">
       <DownloadEventSubscriber />

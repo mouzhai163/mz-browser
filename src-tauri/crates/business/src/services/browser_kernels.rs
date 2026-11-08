@@ -649,19 +649,8 @@ mod tests {
         config.max_connections = 1;
         config.min_connections = 1;
         let context = crate::svc_ctx::SvcCtx::new(&config).await.unwrap();
-        let (workspace_uuid, team_uuid): (Uuid, Uuid) = sqlx::query_as(
-            "SELECT current_workspace_uuid, current_team_uuid FROM user_infos \
-             WHERE user_uuid = $1",
-        )
-        .bind(context.local_user_uuid)
-        .fetch_one(&context.db)
-        .await
-        .unwrap();
         let environment_uuid = crate::models::environments::insert_environment(
             &context.db,
-            workspace_uuid,
-            context.local_user_uuid,
-            team_uuid,
             "Legacy browser",
             None,
             None,

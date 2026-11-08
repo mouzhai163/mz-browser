@@ -10,8 +10,6 @@ use crate::dto::{RpaTaskDto, RpaTaskEnvironmentDto, RpaTaskRunDto, RpaTaskStepDt
 /// 创建 RPA 任务
 pub async fn insert_rpa_task(
     pool: &Pool<Db>,
-    user_uuid: Uuid,
-    team_uuid: Option<Uuid>,
     name: &str,
     description: Option<&str>,
     tags: Option<&serde_json::Value>,
@@ -29,15 +27,13 @@ pub async fn insert_rpa_task(
 ) -> Result<Uuid, Error> {
     let uuid: Uuid = sqlx::query_scalar(
         r#"
-        INSERT INTO rpa_tasks (user_uuid, team_uuid, name, description, tags, trigger_type,
+        INSERT INTO rpa_tasks (name, description, tags, trigger_type,
                                 schedule, cron_expression, run_mode, retry_count, retry_interval,
                                 timeout, concurrency, stop_on_error, notify_on_complete, notify_on_error)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING uuid;
         "#,
     )
-    .bind(user_uuid)
-    .bind(team_uuid)
     .bind(name)
     .bind(description)
     .bind(tags)
@@ -61,8 +57,6 @@ pub async fn insert_rpa_task(
 /// 查询 RPA 任务列表
 pub async fn fetch_rpa_tasks(
     pool: &Pool<Db>,
-    team_uuid: Option<Uuid>,
-    user_uuid: Uuid,
     keyword: Option<&str>,
     status: Option<&str>,
     trigger_type: Option<&str>,
@@ -71,23 +65,20 @@ pub async fn fetch_rpa_tasks(
 ) -> Result<Vec<RpaTaskDto>, Error> {
     let recs = sqlx::query_as::<_, RpaTaskDto>(
         r#"
-        SELECT id, uuid, user_uuid, team_uuid, name, description, tags, trigger_type,
+        SELECT id, uuid, name, description, tags, trigger_type,
                schedule, cron_expression, run_mode, retry_count, retry_interval, timeout,
                concurrency, stop_on_error, notify_on_complete, notify_on_error, status,
                run_count, success_count, last_run_at, next_run_at, created_at, updated_at, deleted_at
              , (SELECT COUNT(*) FROM rpa_task_environments rte WHERE rte.task_uuid = rpa_tasks.uuid) AS environment_count
         FROM rpa_tasks
-        WHERE (team_uuid = $1 OR (team_uuid IS NULL AND user_uuid = $2))
-          AND ($3 IS NULL OR name LIKE $3 OR COALESCE(description, '') LIKE $3)
-          AND ($4 IS NULL OR status = $4)
-          AND ($5 IS NULL OR trigger_type = $5)
+        WHERE ($1 IS NULL OR name LIKE $1 OR COALESCE(description, '') LIKE $1)
+          AND ($2 IS NULL OR status = $2)
+          AND ($3 IS NULL OR trigger_type = $3)
           AND deleted_at IS NULL
         ORDER BY created_at DESC
-        LIMIT $6 OFFSET $7
+        LIMIT $4 OFFSET $5
         "#,
     )
-    .bind(team_uuid)
-    .bind(user_uuid)
     .bind(keyword.map(|k| format!("%{}%", k)))
     .bind(status)
     .bind(trigger_type)
@@ -102,8 +93,6 @@ pub async fn fetch_rpa_tasks(
 /// 查询 RPA 任务总数
 pub async fn fetch_rpa_tasks_count(
     pool: &Pool<Db>,
-    team_uuid: Option<Uuid>,
-    user_uuid: Uuid,
     keyword: Option<&str>,
     status: Option<&str>,
     trigger_type: Option<&str>,
@@ -111,15 +100,12 @@ pub async fn fetch_rpa_tasks_count(
     let count: i64 = sqlx::query_scalar(
         r#"
         SELECT COUNT(*) FROM rpa_tasks
-        WHERE (team_uuid = $1 OR (team_uuid IS NULL AND user_uuid = $2))
-          AND ($3 IS NULL OR status = $3)
-          AND ($4 IS NULL OR trigger_type = $4)
-          AND ($5 IS NULL OR name LIKE $5 OR COALESCE(description, '') LIKE $5)
+        WHERE ($1 IS NULL OR status = $1)
+          AND ($2 IS NULL OR trigger_type = $2)
+          AND ($3 IS NULL OR name LIKE $3 OR COALESCE(description, '') LIKE $3)
           AND deleted_at IS NULL
         "#,
     )
-    .bind(team_uuid)
-    .bind(user_uuid)
     .bind(status)
     .bind(trigger_type)
     .bind(keyword.map(|k| format!("%{}%", k)))
@@ -136,7 +122,7 @@ pub async fn fetch_rpa_task_by_uuid(
 ) -> Result<Option<RpaTaskDto>, Error> {
     let rec = sqlx::query_as::<_, RpaTaskDto>(
         r#"
-        SELECT id, uuid, user_uuid, team_uuid, name, description, tags, trigger_type,
+        SELECT id, uuid, name, description, tags, trigger_type,
                schedule, cron_expression, run_mode, retry_count, retry_interval, timeout,
                concurrency, stop_on_error, notify_on_complete, notify_on_error, status,
                run_count, success_count, last_run_at, next_run_at, created_at, updated_at, deleted_at

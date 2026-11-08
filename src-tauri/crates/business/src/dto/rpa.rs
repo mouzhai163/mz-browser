@@ -8,8 +8,6 @@ use uuid::Uuid;
 pub struct RpaTaskDto {
     pub id: i32,
     pub uuid: Uuid,
-    pub user_uuid: Uuid,
-    pub team_uuid: Option<Uuid>,
     pub name: String,
     pub description: Option<String>,
     pub tags: Option<serde_json::Value>,

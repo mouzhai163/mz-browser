@@ -24,10 +24,7 @@ impl LocalApiManager {
     }
 
     pub async fn refresh(self: &Arc<Self>, context: &business::svc_ctx::SvcCtx) -> Result<()> {
-        let config = business::services::local_api::get_local_api_config_service(
-            context,
-            context.local_user_uuid,
-        )
+        let config = business::services::local_api::get_local_api_config_service(context)
         .await
         .map_err(anyhow::Error::msg)
         .and_then(|config| serde_json::to_value(config).map_err(Into::into))

@@ -12,29 +12,15 @@ use crate::svc_ctx::SvcCtx;
 /// 创建模板
 pub async fn create_template_service(
     svc_ctx: &SvcCtx,
-    user_uuid: Uuid,
-    team_uuid: Option<Uuid>,
     payload: &CreateTemplateRequest,
 ) -> Result<Uuid, String> {
     // 确定要存储的完整数据
     let environment_data_json: serde_json::Value = if let Some(env_uuid) = payload.environment_uuid
     {
-        // 如果提供了环境 UUID，先查询环境获取 workspace_uuid 和 team_uuid
-        let env = models::fetch_environment_by_uuid_unfiltered(&svc_ctx.db, env_uuid)
+        // 获取完整的环境详情
+        let env_detail = services::environments::get_environment_detail_service(svc_ctx, env_uuid)
             .await
-            .map_err(|e| format!("查询环境失败: {}", e))?
-            .ok_or_else(|| "环境不存在".to_string())?;
-
-        // 获取完整的环境详情（带权限检查）
-        let env_detail = services::environments::get_environment_detail_service(
-            svc_ctx,
-            env.workspace_uuid,
-            env.team_uuid,
-            user_uuid,
-            env_uuid,
-        )
-        .await
-        .map_err(|e| format!("获取环境详情失败: {}", e))?;
+            .map_err(|e| format!("获取环境详情失败: {}", e))?;
         serde_json::to_value(&env_detail).map_err(|e| format!("序列化环境详情失败: {}", e))?
     } else if let Some(ref env_data) = payload.environment_data {
         // 如果直接提供了环境详情数据，使用它
@@ -60,8 +46,6 @@ pub async fn create_template_service(
 
     models::insert_template(
         &svc_ctx.db,
-        user_uuid,
-        team_uuid,
         &payload.name,
         payload.description.as_deref(),
         payload.is_public.unwrap_or(false),
@@ -76,26 +60,17 @@ pub async fn create_template_service(
 /// 获取模板列表
 pub async fn get_templates_service(
     svc_ctx: &SvcCtx,
-    user_uuid: Uuid,
-    team_uuid: Option<Uuid>,
     is_public: Option<bool>,
     page: i64,
     page_size: i64,
 ) -> Result<(Vec<TemplateDto>, i64), String> {
     let offset = (page - 1) * page_size;
 
-    let templates = models::fetch_templates(
-        &svc_ctx.db,
-        team_uuid,
-        user_uuid,
-        is_public,
-        offset,
-        page_size,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
+    let templates = models::fetch_templates(&svc_ctx.db, is_public, offset, page_size)
+        .await
+        .map_err(|e| e.to_string())?;
 
-    let total = models::fetch_templates_count(&svc_ctx.db, team_uuid, user_uuid, is_public)
+    let total = models::fetch_templates_count(&svc_ctx.db, is_public)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -211,9 +186,6 @@ pub async fn delete_template_service(svc_ctx: &SvcCtx, template_uuid: Uuid) -> R
 /// 应用模板到现有环境（更新环境配置）
 pub async fn apply_template_service(
     svc_ctx: &SvcCtx,
-    workspace_uuid: Uuid,
-    team_uuid: Uuid,
-    user_uuid: Uuid,
     payload: &ApplyTemplateRequest,
 ) -> Result<(), String> {
     // 获取模板配置（不需要检查关联数据）
@@ -265,15 +237,9 @@ pub async fn apply_template_service(
         }),
     };
 
-    services::environments::update_environment_service(
-        svc_ctx,
-        workspace_uuid,
-        team_uuid,
-        user_uuid,
-        &update_req,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
+    services::environments::update_environment_service(svc_ctx, &update_req)
+        .await
+        .map_err(|e| e.to_string())?;
 
     // 增加模板使用次数
     let _ = models::increment_template_usage(&svc_ctx.db, payload.template_uuid).await;
@@ -284,9 +250,6 @@ pub async fn apply_template_service(
 /// 从模板创建环境
 pub async fn create_from_template_service(
     svc_ctx: &SvcCtx,
-    user_uuid: Uuid,
-    workspace_uuid: Uuid,
-    team_uuid: Uuid,
     payload: &CreateFromTemplateRequest,
 ) -> Result<Uuid, String> {
     // 获取模板（不需要检查关联数据，因为这是直接创建，不经过前端表单）
@@ -364,15 +327,9 @@ pub async fn create_from_template_service(
     };
 
     // 创建环境
-    let env_uuid = services::environments::create_environment_service(
-        svc_ctx,
-        user_uuid,
-        workspace_uuid,
-        team_uuid,
-        &create_req,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
+    let env_uuid = services::environments::create_environment_service(svc_ctx, &create_req)
+        .await
+        .map_err(|e| e.to_string())?;
 
     // 增加模板使用次数
     let _ = models::increment_template_usage(&svc_ctx.db, payload.template_uuid).await;

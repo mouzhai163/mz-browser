@@ -4,7 +4,6 @@ pub mod groups;
 pub mod proxies;
 pub mod system;
 pub mod tags;
-pub mod workspaces;
 
 use axum::{http::StatusCode, response::IntoResponse};
 use serde::Serialize;

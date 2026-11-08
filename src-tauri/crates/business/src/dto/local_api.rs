@@ -8,7 +8,6 @@ use uuid::Uuid;
 pub struct LocalApiSettingsDto {
     pub id: i32,
     pub uuid: Uuid,
-    pub user_uuid: Uuid,
     pub enabled: bool,
     pub port: i32,
     pub remote_access: bool,
@@ -22,7 +21,6 @@ pub struct LocalApiSettingsDto {
 pub struct LocalApiKeyDto {
     pub id: i32,
     pub uuid: Uuid,
-    pub user_uuid: Uuid,
     pub key_prefix: String,
     pub key_hash: String,
     pub api_key: Option<String>,
@@ -89,7 +87,6 @@ pub struct ResetLocalApiKeyDto {
 #[serde(rename_all = "camelCase")]
 pub struct ValidateLocalApiKeyDto {
     pub valid: bool,
-    pub user_uuid: uuid::Uuid,
     pub permission_code: String,
     pub requests_today: i32,
     pub daily_limit: i32,

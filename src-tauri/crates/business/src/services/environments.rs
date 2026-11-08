@@ -40,9 +40,6 @@ fn window_info_with_kernel_id(
 /// 创建环境
 pub async fn create_environment_service(
     svc_ctx: &SvcCtx,
-    user_uuid: Uuid,
-    workspace_uuid: Uuid,
-    team_uuid: Uuid,
     payload: &CreateEnvironmentRequest,
 ) -> Result<Uuid, String> {
     let selected_kernel = crate::services::browser_kernels::resolve_requested_kernel(
@@ -52,55 +49,6 @@ pub async fn create_environment_service(
     )
     .await?;
     let window_info = window_info_with_kernel_id(&payload.config.window_info, &selected_kernel);
-
-    // 1. 检查用户是否在当前工作空间的团队中（工作空间级别）
-    let team_member =
-        models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
-            .await
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "您不是该团队的成员".to_string())?;
-
-    // 2. 权限检查
-    if let Some(group_uuid) = payload.group_uuid {
-        // 如果指定了分组，检查用户是否有目标分组的 write 或 manage 权限
-        let has_write = models::check_group_permission(
-            &svc_ctx.db,
-            workspace_uuid,
-            group_uuid,
-            user_uuid,
-            "write",
-        )
-        .await
-        .map_err(|e| e.to_string())?;
-
-        let has_manage = models::check_group_permission(
-            &svc_ctx.db,
-            workspace_uuid,
-            group_uuid,
-            user_uuid,
-            "manage",
-        )
-        .await
-        .map_err(|e| e.to_string())?;
-
-        if !has_write && !has_manage {
-            return Err("您没有在该分组中创建环境的权限".to_string());
-        }
-    } else {
-        // 如果未指定分组，检查用户是否有团队级别的环境创建权限（Editor/Admin/Owner）
-        let can_create = matches!(team_member.role.as_str(), "owner" | "admin" | "editor");
-        if !can_create {
-            return Err("您没有创建环境的权限，需要 Editor 及以上角色".to_string());
-        }
-    }
-
-    // 3. 检查工作空间配额是否充足
-    let quota_available = models::check_quota(&svc_ctx.db, workspace_uuid, "environments")
-        .await
-        .map_err(|e| e.to_string())?;
-    if !quota_available {
-        return Err("工作空间环境配额不足，无法创建新环境".to_string());
-    }
 
     // 提取系统信息
     let system_info = payload
@@ -114,9 +62,6 @@ pub async fn create_environment_service(
     // 创建环境
     let env_uuid = models::insert_environment(
         &svc_ctx.db,
-        workspace_uuid,
-        user_uuid,
-        team_uuid,
         &payload.name,
         payload.description.as_deref(),
         payload.group_uuid,
@@ -170,11 +115,6 @@ pub async fn create_environment_service(
             .await;
         }
     }
-
-    // 4. 更新工作空间配额（创建后增加使用数）
-    models::increment_used_environments(&svc_ctx.db, workspace_uuid, 1)
-        .await
-        .map_err(|e| format!("更新配额失败: {}", e))?;
 
     Ok(env_uuid)
 }
@@ -519,18 +459,8 @@ async fn replace_environment_cookies(
 /// 获取环境列表（包含完整关联数据）
 pub async fn get_environments_service(
     svc_ctx: &SvcCtx,
-    user_uuid: Uuid,
-    workspace_uuid: Uuid,
-    team_uuid: Uuid,
     payload: &ListEnvironmentsRequest,
 ) -> Result<(Vec<crate::entitys::EnvironmentDetailResponse>, i64), String> {
-    // 1. 检查用户是否在当前工作空间的团队中
-    let team_member =
-        models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
-            .await
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "您不是该团队的成员".to_string())?;
-
     let offset = (payload.pagination.page - 1) * payload.pagination.page_size;
 
     let group_uuid = payload.filters.as_ref().and_then(|f| f.group_uuid);
@@ -541,8 +471,6 @@ pub async fn get_environments_service(
     // 2. 查询环境总数（用于分页）
     let total_count = models::fetch_environments_count(
         &svc_ctx.db,
-        workspace_uuid,
-        team_uuid,
         group_uuid,
         status,
         keyword,
@@ -554,8 +482,6 @@ pub async fn get_environments_service(
     // 3. 查询环境基础列表
     let env_rows = models::fetch_environments_base(
         &svc_ctx.db,
-        workspace_uuid,
-        team_uuid,
         group_uuid,
         status,
         keyword,
@@ -566,59 +492,14 @@ pub async fn get_environments_service(
     .await
     .map_err(|e| e.to_string())?;
 
-    // 2. 权限过滤：根据分组权限过滤环境
-    let is_owner_or_admin = matches!(team_member.role.as_str(), "owner" | "admin");
+    let filtered_env_rows = env_rows;
 
-    // 收集所有需要检查权限的分组 UUID（去重）
-    let unique_group_uuids: Vec<Uuid> = env_rows
-        .iter()
-        .filter_map(|row| row.group_uuid)
-        .collect::<std::collections::HashSet<_>>()
-        .into_iter()
-        .collect();
-
-    // 批量检查分组权限（如果不是 Owner/Admin）
-    let mut group_permissions_cache: std::collections::HashMap<Uuid, bool> =
-        std::collections::HashMap::new();
-    if !is_owner_or_admin && !unique_group_uuids.is_empty() {
-        for group_uuid in unique_group_uuids {
-            let has_permission = models::check_group_permission(
-                &svc_ctx.db,
-                workspace_uuid,
-                group_uuid,
-                user_uuid,
-                "read",
-            )
-            .await
-            .map_err(|e| e.to_string())?;
-            group_permissions_cache.insert(group_uuid, has_permission);
-        }
-    }
-
-    // 8. 过滤无权限的环境
-    let filtered_env_rows: Vec<_> = env_rows
-        .into_iter()
-        .filter(|row| {
-            if let Some(group_uuid) = row.group_uuid {
-                // 如果环境有分组，检查用户是否有分组的 read 权限
-                if is_owner_or_admin {
-                    true // Owner/Admin 自动拥有所有分组权限
-                } else {
-                    *group_permissions_cache.get(&group_uuid).unwrap_or(&false)
-                }
-            } else {
-                // 如果环境无分组，所有团队成员都可以查看（已在团队成员检查中验证）
-                true
-            }
-        })
-        .collect();
-
-    // 9. 重新收集关联 UUID（基于过滤后的环境）
+    // 收集关联 UUID
     let env_uuids: Vec<Uuid> = filtered_env_rows.iter().map(|e| e.uuid).collect();
     let group_uuids: Vec<Uuid> = filtered_env_rows.iter().filter_map(|e| e.group_uuid).collect();
     let proxy_uuids: Vec<Uuid> = filtered_env_rows.iter().filter_map(|e| e.proxy_uuid).collect();
 
-    // 10. 重新查询关联数据（基于过滤后的环境）
+    // 查询关联数据
     // 批量查询环境配置
     let mut configs_map: HashMap<Uuid, EnvironmentConfigDto> = HashMap::new();
     if !env_uuids.is_empty() {
@@ -665,8 +546,6 @@ pub async fn get_environments_service(
         tags_map.entry(tag_row.environment_uuid).or_default().push(TagDto {
             id: tag_row.tag_id,
             uuid: tag_row.tag_uuid,
-            user_uuid: tag_row.tag_user_uuid,
-            team_uuid: tag_row.tag_team_uuid,
             name: tag_row.tag_name,
             color: tag_row.tag_color,
             sort_order: tag_row.tag_sort_order,
@@ -718,9 +597,6 @@ pub async fn get_environments_service(
             let environment = EnvironmentDto {
                 id: row.id,
                 uuid: row.uuid,
-                workspace_uuid: row.workspace_uuid,
-                user_uuid: row.user_uuid,
-                team_uuid: row.team_uuid,
                 name: row.name,
                 description: row.description,
                 status: row.status,
@@ -781,55 +657,18 @@ pub async fn get_environments_service(
 
     // 返回过滤后的环境列表和数据库总数（用于分页显示）
     // 注意：total 是数据库中符合条件的总数，不考虑权限过滤
-    // 权限过滤只影响当前页返回的数据，不影响总数统计
     Ok((environments, total_count))
 }
 
 /// 获取环境详情
 pub async fn get_environment_service(
     svc_ctx: &SvcCtx,
-    workspace_uuid: Uuid,
-    team_uuid: Uuid,
-    user_uuid: Uuid,
     env_uuid: Uuid,
 ) -> Result<EnvironmentDto, String> {
-    // 1. 检查用户是否在当前工作空间的团队中
-    let _team_member =
-        models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
-            .await
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "您不是该团队的成员".to_string())?;
-
-    // 2. 查询环境（带工作空间过滤）
-    let environment = models::fetch_environment_by_uuid(&svc_ctx.db, workspace_uuid, env_uuid)
+    let environment = models::fetch_environment_by_uuid(&svc_ctx.db, env_uuid)
         .await
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| "环境不存在或不属于当前工作空间".to_string())?;
-
-    // 3. 验证环境属于指定团队
-    if environment.team_uuid != team_uuid {
-        return Err("环境不属于指定团队".to_string());
-    }
-
-    // 4. 权限检查
-    if let Some(group_uuid) = environment.group_uuid {
-        // 如果环境有分组，检查用户是否有分组的 read/write/manage 权限
-        // Owner/Admin 自动拥有所有分组权限（已在 check_group_permission 中处理）
-        let has_permission = models::check_group_permission(
-            &svc_ctx.db,
-            workspace_uuid,
-            group_uuid,
-            user_uuid,
-            "read",
-        )
-        .await
-        .map_err(|e| e.to_string())?;
-
-        if !has_permission {
-            return Err("您没有查看该环境的权限".to_string());
-        }
-    }
-    // 如果环境无分组，所有团队成员都可以查看（已在团队成员检查中验证）
+        .ok_or_else(|| "环境不存在".to_string())?;
 
     Ok(environment)
 }
@@ -858,13 +697,9 @@ pub async fn get_environment_tags_service(
 /// 获取环境详情（包含完整关联数据）
 pub async fn get_environment_detail_service(
     svc_ctx: &SvcCtx,
-    workspace_uuid: Uuid,
-    team_uuid: Uuid,
-    user_uuid: Uuid,
     env_uuid: Uuid,
 ) -> Result<crate::entitys::EnvironmentDetailResponse, String> {
-    let environment =
-        get_environment_service(svc_ctx, workspace_uuid, team_uuid, user_uuid, env_uuid).await?;
+    let environment = get_environment_service(svc_ctx, env_uuid).await?;
 
     let config = get_environment_config_service(svc_ctx, env_uuid).await.ok();
     let cookies = get_environment_cookies_service(svc_ctx, env_uuid).await.unwrap_or_default();
@@ -952,62 +787,13 @@ pub async fn get_proxy_summary_service(
 /// 更新环境
 pub async fn update_environment_service(
     svc_ctx: &SvcCtx,
-    workspace_uuid: Uuid,
-    team_uuid: Uuid,
-    user_uuid: Uuid,
     payload: &UpdateEnvironmentRequest,
 ) -> Result<(), String> {
-    // 1. 检查用户是否在当前工作空间的团队中
-    let team_member =
-        models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
-            .await
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "您不是该团队的成员".to_string())?;
-
-    // 2. 查询环境（带工作空间过滤）
-    let environment = models::fetch_environment_by_uuid(&svc_ctx.db, workspace_uuid, payload.uuid)
+    // 确认环境存在
+    models::fetch_environment_by_uuid(&svc_ctx.db, payload.uuid)
         .await
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| "环境不存在或不属于当前工作空间".to_string())?;
-
-    // 3. 验证环境属于指定团队
-    if environment.team_uuid != team_uuid {
-        return Err("环境不属于指定团队".to_string());
-    }
-
-    // 4. 权限检查
-    if let Some(group_uuid) = environment.group_uuid {
-        // 如果环境有分组，检查用户是否有分组的 write 或 manage 权限
-        let has_write = models::check_group_permission(
-            &svc_ctx.db,
-            workspace_uuid,
-            group_uuid,
-            user_uuid,
-            "write",
-        )
-        .await
-        .map_err(|e| e.to_string())?;
-
-        let has_manage = models::check_group_permission(
-            &svc_ctx.db,
-            workspace_uuid,
-            group_uuid,
-            user_uuid,
-            "manage",
-        )
-        .await
-        .map_err(|e| e.to_string())?;
-
-        if !has_write && !has_manage {
-            return Err("您没有编辑该环境的权限".to_string());
-        }
-    } else {
-        // 如果环境无分组，检查用户是否有团队级别的编辑权限（Editor/Admin/Owner）
-        let can_edit = matches!(team_member.role.as_str(), "owner" | "admin" | "editor");
-        if !can_edit {
-            return Err("您没有编辑环境的权限，需要 Editor 及以上角色".to_string());
-        }
-    }
+        .ok_or_else(|| "环境不存在".to_string())?;
 
     models::update_environment(
         &svc_ctx.db,
@@ -1176,64 +962,17 @@ pub async fn batch_remove_tags_service(
 /// 删除环境
 pub async fn delete_environment_service(
     svc_ctx: &SvcCtx,
-    workspace_uuid: Uuid,
-    team_uuid: Uuid,
-    user_uuid: Uuid,
     env_uuid: Uuid,
 ) -> Result<(), String> {
-    // 1. 检查用户是否在当前工作空间的团队中
-    let team_member =
-        models::teams::fetch_team_member(&svc_ctx.db, workspace_uuid, team_uuid, user_uuid)
-            .await
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "您不是该团队的成员".to_string())?;
-
-    // 2. 查询环境（带工作空间过滤）
-    let environment = models::fetch_environment_by_uuid(&svc_ctx.db, workspace_uuid, env_uuid)
+    // 确认环境存在，再放进回收站
+    models::fetch_environment_by_uuid(&svc_ctx.db, env_uuid)
         .await
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| "环境不存在或不属于当前工作空间".to_string())?;
+        .ok_or_else(|| "环境不存在".to_string())?;
 
-    // 3. 验证环境属于指定团队
-    if environment.team_uuid != team_uuid {
-        return Err("环境不属于指定团队".to_string());
-    }
-
-    // 4. 权限检查
-    if let Some(group_uuid) = environment.group_uuid {
-        // 如果环境有分组，检查用户是否有分组的 manage 权限
-        let has_manage = models::check_group_permission(
-            &svc_ctx.db,
-            workspace_uuid,
-            group_uuid,
-            user_uuid,
-            "manage",
-        )
-        .await
-        .map_err(|e| e.to_string())?;
-
-        if !has_manage {
-            return Err("您没有删除该环境的权限".to_string());
-        }
-    } else {
-        // 如果环境无分组，检查用户是否有团队级别的删除权限（Owner/Admin）
-        let can_delete = matches!(team_member.role.as_str(), "owner" | "admin");
-        if !can_delete {
-            return Err("您没有删除环境的权限，需要 Owner 或 Admin 角色".to_string());
-        }
-    }
-
-    // 5. 删除环境
     models::delete_environment(&svc_ctx.db, env_uuid)
         .await
-        .map_err(|e| e.to_string())?;
-
-    // 6. 更新工作空间配额（删除后减少使用数）
-    models::decrement_used_environments(&svc_ctx.db, workspace_uuid, 1)
-        .await
-        .map_err(|e| format!("更新配额失败: {}", e))?;
-
-    Ok(())
+        .map_err(|e| e.to_string())
 }
 
 /// 批量删除环境
@@ -1251,9 +990,6 @@ pub async fn batch_delete_environments_service(
 /// 查询回收站环境列表
 pub async fn get_recycle_bin_environments_service(
     svc_ctx: &SvcCtx,
-    workspace_uuid: Uuid,
-    team_uuid: Uuid,
-    _user_uuid: Uuid,
     payload: &ListEnvironmentsRequest,
 ) -> Result<(Vec<crate::entitys::EnvironmentDetailResponse>, i64), String> {
     // 1. 提取过滤参数
@@ -1267,21 +1003,13 @@ pub async fn get_recycle_bin_environments_service(
     let limit = page_size;
 
     // 3. 查询回收站环境总数
-    let total_count = models::fetch_deleted_environments_count(
-        &svc_ctx.db,
-        workspace_uuid,
-        team_uuid,
-        group_uuid,
-        keyword,
-    )
+    let total_count = models::fetch_deleted_environments_count(&svc_ctx.db, group_uuid, keyword)
     .await
     .map_err(|e| e.to_string())?;
 
     // 4. 查询回收站环境基础列表
     let env_rows = models::fetch_deleted_environments_base(
         &svc_ctx.db,
-        workspace_uuid,
-        team_uuid,
         group_uuid,
         keyword,
         offset,
@@ -1368,8 +1096,6 @@ pub async fn get_recycle_bin_environments_service(
         env_tags_map.entry(tag_row.environment_uuid).or_default().push(TagDto {
             id: tag_row.tag_id,
             uuid: tag_row.tag_uuid,
-            user_uuid: tag_row.tag_user_uuid,
-            team_uuid: tag_row.tag_team_uuid,
             name: tag_row.tag_name,
             color: tag_row.tag_color,
             sort_order: tag_row.tag_sort_order,
@@ -1424,9 +1150,6 @@ pub async fn get_recycle_bin_environments_service(
                 environment: EnvironmentDto {
                     id: row.id,
                     uuid: row.uuid,
-                    workspace_uuid: row.workspace_uuid,
-                    user_uuid: row.user_uuid,
-                    team_uuid: row.team_uuid,
                     name: row.name,
                     description: row.description,
                     status: row.status,
@@ -1476,39 +1199,20 @@ pub async fn batch_restore_environments_service(
 pub async fn permanent_delete_environment_service(
     svc_ctx: &SvcCtx,
     env_uuid: Uuid,
-    workspace_uuid: Uuid,
 ) -> Result<(), String> {
-    // 永久删除环境
     models::permanent_delete_environment(&svc_ctx.db, env_uuid)
         .await
-        .map_err(|e| e.to_string())?;
-
-    // 更新工作空间配额（永久删除后减少使用数）
-    models::decrement_used_environments(&svc_ctx.db, workspace_uuid, 1)
-        .await
-        .map_err(|e| format!("更新配额失败: {}", e))?;
-
-    Ok(())
+        .map_err(|e| e.to_string())
 }
 
 /// 批量永久删除环境
 pub async fn batch_permanent_delete_environments_service(
     svc_ctx: &SvcCtx,
     env_uuids: &[Uuid],
-    workspace_uuid: Uuid,
 ) -> Result<u64, String> {
-    let count = models::batch_permanent_delete_environments(&svc_ctx.db, env_uuids)
+    models::batch_permanent_delete_environments(&svc_ctx.db, env_uuids)
         .await
-        .map_err(|e| e.to_string())?;
-
-    // 更新工作空间配额
-    if count > 0 {
-        models::decrement_used_environments(&svc_ctx.db, workspace_uuid, count as i32)
-            .await
-            .map_err(|e| format!("更新配额失败: {}", e))?;
-    }
-
-    Ok(count)
+        .map_err(|e| e.to_string())
 }
 
 // ============ Environment URLs ============
@@ -1624,18 +1328,14 @@ pub async fn clear_environment_cookies_service(
 /// 批量创建环境
 pub async fn batch_create_environments_service(
     svc_ctx: &SvcCtx,
-    user_uuid: Uuid,
-    workspace_uuid: Uuid,
-    team_uuid: Uuid,
     payload: &BatchCreateEnvironmentRequest,
 ) -> Result<Vec<Uuid>, String> {
     let mut created_uuids = Vec::new();
 
     for env_request in &payload.environments {
-        let env_uuid =
-            create_environment_service(svc_ctx, user_uuid, workspace_uuid, team_uuid, env_request)
-                .await
-                .map_err(|e| format!("创建环境 '{}' 失败: {}", env_request.name, e))?;
+        let env_uuid = create_environment_service(svc_ctx, env_request)
+            .await
+            .map_err(|e| format!("创建环境 '{}' 失败: {}", env_request.name, e))?;
 
         created_uuids.push(env_uuid);
     }

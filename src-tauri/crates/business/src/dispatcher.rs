@@ -1,8 +1,7 @@
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
-use uuid::Uuid;
 
-use crate::{entitys::*, models, services, svc_ctx::SvcCtx};
+use crate::{entitys::*, services, svc_ctx::SvcCtx};
 
 fn payload<T: DeserializeOwned>(data: &Value) -> Result<T, String> {
     serde_json::from_value(data.clone())
@@ -11,19 +10,6 @@ fn payload<T: DeserializeOwned>(data: &Value) -> Result<T, String> {
 
 fn value<T: Serialize>(data: T) -> Result<Value, String> {
     serde_json::to_value(data).map_err(|error| format!("Failed to serialize response: {error}"))
-}
-
-async fn current_workspace(context: &SvcCtx) -> Result<Uuid, String> {
-    models::user::fetch_user_current_workspace(&context.db, context.local_user_uuid)
-        .await
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| "No local workspace is selected".to_string())
-}
-
-async fn current_team(context: &SvcCtx) -> Result<Uuid, String> {
-    services::teams::get_current_team_service(context, context.local_user_uuid)
-        .await?
-        .ok_or_else(|| "No local team is selected".to_string())
 }
 
 /// Dispatch a migrated business POST route locally.
@@ -58,7 +44,6 @@ pub async fn dispatch_post(
                 value(
                     services::local_api::get_local_api_config_service(
                         context,
-                        context.local_user_uuid,
                     )
                     .await?,
                 )
@@ -71,7 +56,6 @@ pub async fn dispatch_post(
                 value(
                     services::local_api::update_local_api_config_service(
                         context,
-                        context.local_user_uuid,
                         &request,
                     )
                     .await?,
@@ -84,274 +68,17 @@ pub async fn dispatch_post(
                 value(
                     services::local_api::reset_local_api_key_service(
                         context,
-                        context.local_user_uuid,
                     )
                     .await?,
                 )
             }
             .await
         }
-        "workspaces/list" => {
-            let workspaces =
-                services::workspaces::get_user_workspaces_service(context, context.local_user_uuid)
-                    .await;
-            match workspaces {
-                Ok(workspaces) => {
-                    let current = current_workspace(context).await.ok();
-                    value(WorkspaceListResponse {
-                        current_workspace_uuid: current,
-                        workspaces: workspaces
-                            .into_iter()
-                            .map(|workspace| WorkspaceItem {
-                                uuid: workspace.uuid,
-                                name: workspace.name,
-                                workspace_type: workspace.workspace_type,
-                                is_current: current == Some(workspace.uuid),
-                            })
-                            .collect(),
-                    })
-                }
-                Err(error) => Err(error),
-            }
-        }
-        "workspaces/get" => {
-            async {
-                let request: UuidRequest = payload(data)?;
-                value(services::workspaces::get_workspace_service(context, request.uuid).await?)
-            }
-            .await
-        }
-        "workspaces/create" => {
-            async {
-                let request: CreateWorkspaceRequest = payload(data)?;
-                let uuid = services::workspaces::create_workspace_service(
-                    context,
-                    context.local_user_uuid,
-                    &request,
-                )
-                .await?;
-                Ok(json!({ "uuid": uuid }))
-            }
-            .await
-        }
-        "workspaces/update" => {
-            async {
-                let request: UpdateWorkspaceRequest = payload(data)?;
-                services::workspaces::update_workspace_service(
-                    context,
-                    context.local_user_uuid,
-                    &request,
-                )
-                .await?;
-                Ok(Value::Null)
-            }
-            .await
-        }
-        "workspaces/delete" => {
-            async {
-                let request: UuidRequest = payload(data)?;
-                services::workspaces::delete_workspace_service(
-                    context,
-                    context.local_user_uuid,
-                    request.uuid,
-                )
-                .await?;
-                Ok(Value::Null)
-            }
-            .await
-        }
-        "workspaces/switch" => {
-            async {
-                let request: SwitchWorkspaceRequest = payload(data)?;
-                services::workspaces::switch_workspace_service(
-                    context,
-                    request.workspace_uuid,
-                    context.local_user_uuid,
-                )
-                .await?;
-                Ok(Value::Null)
-            }
-            .await
-        }
-
-        "teams/my-teams" => {
-            async {
-                let teams =
-                    services::teams::get_user_teams_service(context, context.local_user_uuid)
-                        .await?;
-                let current =
-                    services::teams::get_current_team_service(context, context.local_user_uuid)
-                        .await?;
-                let mut items = Vec::with_capacity(teams.len());
-                for team in teams {
-                    let role = if team.owner_uuid == context.local_user_uuid {
-                        "owner".to_string()
-                    } else {
-                        models::teams::fetch_team_member(
-                            &context.db,
-                            team.workspace_uuid,
-                            team.uuid,
-                            context.local_user_uuid,
-                        )
-                        .await
-                        .ok()
-                        .flatten()
-                        .map(|member| member.role)
-                        .unwrap_or_else(|| "member".to_string())
-                    };
-                    let members_count = models::teams::fetch_team_member_count(
-                        &context.db,
-                        team.uuid,
-                        None,
-                        None,
-                        None,
-                    )
-                    .await
-                    .unwrap_or(0);
-                    items.push(TeamItem {
-                        uuid: team.uuid,
-                        name: team.name,
-                        description: team.description,
-                        role,
-                        members_count,
-                        is_current: current == Some(team.uuid),
-                    });
-                }
-                value(TeamListResponse {
-                    current_team_uuid: current,
-                    teams: items,
-                })
-            }
-            .await
-        }
-        "teams/create" => {
-            async {
-                let request: CreateTeamRequest = payload(data)?;
-                let uuid = services::teams::create_team_service(
-                    context,
-                    context.local_user_uuid,
-                    &request,
-                )
-                .await?;
-                Ok(json!({ "uuid": uuid }))
-            }
-            .await
-        }
-        "teams/get" | "teams/detail" => {
-            async {
-                let request: UuidRequest = payload(data)?;
-                value(services::teams::get_team_service(context, request.uuid).await?)
-            }
-            .await
-        }
-        "teams/switch" => {
-            async {
-                let request: SwitchTeamRequest = payload(data)?;
-                services::teams::switch_team_service(context, context.local_user_uuid, &request)
-                    .await?;
-                Ok(Value::Null)
-            }
-            .await
-        }
-        "teams/update" => {
-            async {
-                let request: UpdateTeamRequest = payload(data)?;
-                services::teams::update_team_service(
-                    context,
-                    current_workspace(context).await?,
-                    context.local_user_uuid,
-                    &request,
-                )
-                .await?;
-                Ok(Value::Null)
-            }
-            .await
-        }
-        "teams/members" => {
-            async {
-                let request: ListTeamMembersRequest = payload(data)?;
-                let (items, total) = services::teams::get_team_members_service(
-                    context,
-                    current_team(context).await?,
-                    &request,
-                )
-                .await?;
-                value(MemberListResponse {
-                    items,
-                    total,
-                    page: request.pagination.page,
-                    page_size: request.pagination.page_size,
-                })
-            }
-            .await
-        }
-        "teams/member/add" => {
-            async {
-                let request: AddMemberRequest = payload(data)?;
-                let member_uuid = services::teams::add_member_service(
-                    context,
-                    current_workspace(context).await?,
-                    current_team(context).await?,
-                    context.local_user_uuid,
-                    &request,
-                )
-                .await?;
-                Ok(json!({ "member_uuid": member_uuid }))
-            }
-            .await
-        }
-        "teams/member/role" => {
-            async {
-                let request: UpdateMemberRoleRequest = payload(data)?;
-                value(
-                    services::teams::update_member_role_service(
-                        context,
-                        current_workspace(context).await?,
-                        current_team(context).await?,
-                        context.local_user_uuid,
-                        &request,
-                    )
-                    .await?,
-                )
-            }
-            .await
-        }
-        "teams/member/remove" => {
-            async {
-                let request: RemoveMemberRequest = payload(data)?;
-                services::teams::remove_member_service(
-                    context,
-                    current_workspace(context).await?,
-                    current_team(context).await?,
-                    context.local_user_uuid,
-                    request.member_uuid,
-                )
-                .await?;
-                Ok(Value::Null)
-            }
-            .await
-        }
-        "teams/leave" => {
-            async {
-                services::teams::leave_team_service(
-                    context,
-                    current_workspace(context).await?,
-                    current_team(context).await?,
-                    context.local_user_uuid,
-                )
-                .await?;
-                Ok(Value::Null)
-            }
-            .await
-        }
-
         "groups/list" => {
             async {
                 value(
                     services::groups::get_groups_service(
                         context,
-                        current_workspace(context).await?,
-                        current_team(context).await?,
                         1,
                         10_000,
                     )
@@ -365,9 +92,6 @@ pub async fn dispatch_post(
                 let request: CreateGroupRequest = payload(data)?;
                 let uuid = services::groups::create_group_service(
                     context,
-                    context.local_user_uuid,
-                    current_workspace(context).await?,
-                    current_team(context).await?,
                     &request,
                 )
                 .await?;
@@ -380,9 +104,6 @@ pub async fn dispatch_post(
                 let request: UpdateGroupRequest = payload(data)?;
                 services::groups::update_group_service(
                     context,
-                    current_workspace(context).await?,
-                    current_team(context).await?,
-                    context.local_user_uuid,
                     &request,
                 )
                 .await?;
@@ -395,9 +116,6 @@ pub async fn dispatch_post(
                 let request: UuidRequest = payload(data)?;
                 services::groups::delete_group_service(
                     context,
-                    current_workspace(context).await?,
-                    current_team(context).await?,
-                    context.local_user_uuid,
                     request.uuid,
                 )
                 .await?;
@@ -411,9 +129,6 @@ pub async fn dispatch_post(
                 for uuid in request.uuids {
                     services::groups::delete_group_service(
                         context,
-                        current_workspace(context).await?,
-                        current_team(context).await?,
-                        context.local_user_uuid,
                         uuid,
                     )
                     .await?;
@@ -423,75 +138,10 @@ pub async fn dispatch_post(
             .await
         }
 
-        "group-permissions/grant" => {
-            async {
-                let request: GrantGroupPermissionRequest = payload(data)?;
-                services::group_permissions::grant_group_permission_service(
-                    context,
-                    context.local_user_uuid,
-                    &request,
-                )
-                .await?;
-                Ok(Value::Null)
-            }
-            .await
-        }
-        "group-permissions/revoke" => {
-            async {
-                let request: RevokeGroupPermissionRequest = payload(data)?;
-                services::group_permissions::revoke_group_permission_service(
-                    context,
-                    context.local_user_uuid,
-                    &request,
-                )
-                .await?;
-                Ok(Value::Null)
-            }
-            .await
-        }
-        "group-permissions/check" => {
-            async {
-                let request: CheckGroupPermissionRequest = payload(data)?;
-                let has_permission = services::group_permissions::check_group_permission_service(
-                    context,
-                    current_workspace(context).await?,
-                    &request,
-                )
-                .await?;
-                value(CheckPermissionResponse {
-                    has_permission,
-                    permission_type: has_permission.then_some(request.permission_type),
-                })
-            }
-            .await
-        }
-        "group-permissions/list" => {
-            async {
-                let request: ListUserGroupPermissionsRequest = payload(data)?;
-                let items = services::group_permissions::list_user_group_permissions_service(
-                    context, &request,
-                )
-                .await?;
-                value(GroupPermissionListResponse {
-                    total: items.len() as i64,
-                    items,
-                    page: request.pagination.page,
-                    page_size: request.pagination.page_size,
-                })
-            }
-            .await
-        }
-
         "tags/list" => {
             async {
                 value(
-                    services::tags::get_tags_service(
-                        context,
-                        context.local_user_uuid,
-                        services::teams::get_current_team_service(context, context.local_user_uuid)
-                            .await?,
-                    )
-                    .await?,
+                    services::tags::get_tags_service(context).await?,
                 )
             }
             .await
@@ -501,8 +151,6 @@ pub async fn dispatch_post(
                 let request: CreateTagRequest = payload(data)?;
                 let uuid = services::tags::create_tag_service(
                     context,
-                    context.local_user_uuid,
-                    Some(current_team(context).await?),
                     &request,
                 )
                 .await?;
@@ -532,9 +180,6 @@ pub async fn dispatch_post(
                 let request: ListProxiesRequest = payload(data)?;
                 let (items, total) = services::proxies::get_proxies_service(
                     context,
-                    context.local_user_uuid,
-                    current_workspace(context).await?,
-                    Some(current_team(context).await?),
                     &request,
                 )
                 .await?;
@@ -559,8 +204,6 @@ pub async fn dispatch_post(
                 let request: CreateProxyRequest = payload(data)?;
                 let uuid = services::proxies::create_proxy_service(
                     context,
-                    context.local_user_uuid,
-                    current_workspace(context).await?,
                     &request,
                 )
                 .await?;
@@ -600,79 +243,7 @@ pub async fn dispatch_post(
                 value(
                     services::proxies::batch_import_proxies_service(
                         context,
-                        context.local_user_uuid,
-                        current_workspace(context).await?,
                         &request,
-                    )
-                    .await?,
-                )
-            }
-            .await
-        }
-
-        "proxy-visibility/set" => {
-            async {
-                let request: SetProxyVisibleRequest = payload(data)?;
-                services::proxy_visibility::set_proxy_visible_to_team_service(
-                    context,
-                    context.local_user_uuid,
-                    &request,
-                )
-                .await?;
-                Ok(Value::Null)
-            }
-            .await
-        }
-        "proxy-visibility/remove" => {
-            async {
-                let request: RemoveProxyVisibleRequest = payload(data)?;
-                services::proxy_visibility::remove_proxy_visible_from_team_service(
-                    context,
-                    context.local_user_uuid,
-                    &request,
-                )
-                .await?;
-                Ok(Value::Null)
-            }
-            .await
-        }
-        "proxy-visibility/batch-set" => {
-            async {
-                let request: BatchSetProxyVisibleRequest = payload(data)?;
-                services::proxy_visibility::batch_set_proxy_visible_service(
-                    context,
-                    context.local_user_uuid,
-                    &request,
-                )
-                .await?;
-                Ok(Value::Null)
-            }
-            .await
-        }
-        "proxy-visibility/list-visible" => {
-            async {
-                let mut request: ListVisibleProxiesRequest = payload(data)?;
-                if request.workspace_uuid.is_nil() {
-                    request.workspace_uuid = current_workspace(context).await?;
-                }
-                value(VisibleProxyListResponse {
-                    items: services::proxy_visibility::get_visible_proxies_service(
-                        context,
-                        context.local_user_uuid,
-                        &request,
-                    )
-                    .await?,
-                })
-            }
-            .await
-        }
-        "proxy-visibility/list-teams" => {
-            async {
-                let request: ListProxyVisibleTeamsRequest = payload(data)?;
-                value(
-                    services::proxy_visibility::get_proxy_visible_teams_service(
-                        context,
-                        request.proxy_uuid,
                     )
                     .await?,
                 )
@@ -685,8 +256,6 @@ pub async fn dispatch_post(
                 let request: ListAccountsRequest = payload(data)?;
                 let (items, total) = services::accounts::get_accounts_service(
                     context,
-                    context.local_user_uuid,
-                    Some(current_team(context).await?),
                     &request,
                 )
                 .await?;
@@ -711,8 +280,6 @@ pub async fn dispatch_post(
                 let request: CreateAccountRequest = payload(data)?;
                 let uuid = services::accounts::create_account_service(
                     context,
-                    context.local_user_uuid,
-                    Some(current_team(context).await?),
                     &request,
                 )
                 .await?;
@@ -752,8 +319,6 @@ pub async fn dispatch_post(
                 value(
                     services::accounts::batch_import_accounts_service(
                         context,
-                        context.local_user_uuid,
-                        Some(current_team(context).await?),
                         &request,
                     )
                     .await?,
@@ -767,9 +332,6 @@ pub async fn dispatch_post(
                 let request: ListEnvironmentsRequest = payload(data)?;
                 let (items, total) = services::environments::get_environments_service(
                     context,
-                    context.local_user_uuid,
-                    current_workspace(context).await?,
-                    current_team(context).await?,
                     &request,
                 )
                 .await?;
@@ -788,9 +350,6 @@ pub async fn dispatch_post(
                 value(
                     services::environments::get_environment_detail_service(
                         context,
-                        current_workspace(context).await?,
-                        current_team(context).await?,
-                        context.local_user_uuid,
                         request.uuid,
                     )
                     .await?,
@@ -801,18 +360,10 @@ pub async fn dispatch_post(
         "environments/batch-detail" => {
             async {
                 let request: BatchUuidRequest = payload(data)?;
-                let workspace_uuid = current_workspace(context).await?;
-                let team_uuid = current_team(context).await?;
                 let mut items = std::collections::HashMap::new();
                 for uuid in request.uuids {
-                    if let Ok(detail) = services::environments::get_environment_detail_service(
-                        context,
-                        workspace_uuid,
-                        team_uuid,
-                        context.local_user_uuid,
-                        uuid,
-                    )
-                    .await
+                    if let Ok(detail) = services::environments::get_environment_detail_service(context, uuid)
+                        .await
                     {
                         items.insert(uuid.to_string(), detail);
                     }
@@ -826,9 +377,6 @@ pub async fn dispatch_post(
                 let request: CreateEnvironmentRequest = payload(data)?;
                 let uuid = services::environments::create_environment_service(
                     context,
-                    context.local_user_uuid,
-                    current_workspace(context).await?,
-                    current_team(context).await?,
                     &request,
                 )
                 .await?;
@@ -842,9 +390,6 @@ pub async fn dispatch_post(
                 value(
                     services::environments::batch_create_environments_service(
                         context,
-                        context.local_user_uuid,
-                        current_workspace(context).await?,
-                        current_team(context).await?,
                         &request,
                     )
                     .await?,
@@ -857,9 +402,6 @@ pub async fn dispatch_post(
                 let request: UpdateEnvironmentRequest = payload(data)?;
                 services::environments::update_environment_service(
                     context,
-                    current_workspace(context).await?,
-                    current_team(context).await?,
-                    context.local_user_uuid,
                     &request,
                 )
                 .await?;
@@ -872,9 +414,6 @@ pub async fn dispatch_post(
                 let request: UuidRequest = payload(data)?;
                 services::environments::delete_environment_service(
                     context,
-                    current_workspace(context).await?,
-                    current_team(context).await?,
-                    context.local_user_uuid,
                     request.uuid,
                 )
                 .await?;
@@ -970,9 +509,6 @@ pub async fn dispatch_post(
                 let request: ListEnvironmentsRequest = payload(data)?;
                 let (items, total) = services::environments::get_recycle_bin_environments_service(
                     context,
-                    current_workspace(context).await?,
-                    current_team(context).await?,
-                    context.local_user_uuid,
                     &request,
                 )
                 .await?;
@@ -1008,7 +544,6 @@ pub async fn dispatch_post(
                 services::environments::permanent_delete_environment_service(
                     context,
                     request.uuid,
-                    current_workspace(context).await?,
                 )
                 .await?;
                 Ok(Value::Null)
@@ -1021,7 +556,6 @@ pub async fn dispatch_post(
                 services::environments::batch_permanent_delete_environments_service(
                     context,
                     &request.uuids,
-                    current_workspace(context).await?,
                 )
                 .await?;
                 Ok(Value::Null)
@@ -1115,8 +649,6 @@ pub async fn dispatch_post(
                 let request: ListTemplatesRequest = payload(data)?;
                 let (items, total) = services::templates::get_templates_service(
                     context,
-                    context.local_user_uuid,
-                    Some(current_team(context).await?),
                     request.is_public,
                     request.pagination.page,
                     request.pagination.page_size,
@@ -1150,8 +682,6 @@ pub async fn dispatch_post(
                 let request: CreateTemplateRequest = payload(data)?;
                 let uuid = services::templates::create_template_service(
                     context,
-                    context.local_user_uuid,
-                    Some(current_team(context).await?),
                     &request,
                 )
                 .await?;
@@ -1180,9 +710,6 @@ pub async fn dispatch_post(
                 let request: ApplyTemplateRequest = payload(data)?;
                 services::templates::apply_template_service(
                     context,
-                    current_workspace(context).await?,
-                    current_team(context).await?,
-                    context.local_user_uuid,
                     &request,
                 )
                 .await?;
@@ -1195,9 +722,6 @@ pub async fn dispatch_post(
                 let request: CreateFromTemplateRequest = payload(data)?;
                 let uuid = services::templates::create_from_template_service(
                     context,
-                    context.local_user_uuid,
-                    current_workspace(context).await?,
-                    current_team(context).await?,
                     &request,
                 )
                 .await?;
@@ -1211,8 +735,6 @@ pub async fn dispatch_post(
                 let request: ListRpaTasksRequest = payload(data)?;
                 let (items, total) = services::rpa::get_rpa_tasks_service(
                     context,
-                    context.local_user_uuid,
-                    Some(current_team(context).await?),
                     &request,
                 )
                 .await?;
@@ -1243,8 +765,6 @@ pub async fn dispatch_post(
                 let request: CreateRpaTaskRequest = payload(data)?;
                 let uuid = services::rpa::create_rpa_task_service(
                     context,
-                    context.local_user_uuid,
-                    Some(current_team(context).await?),
                     &request,
                 )
                 .await?;
@@ -1281,8 +801,6 @@ pub async fn dispatch_post(
                 let request: DuplicateRpaTaskRequest = payload(data)?;
                 let uuid = services::rpa::duplicate_rpa_task_service(
                     context,
-                    context.local_user_uuid,
-                    Some(current_team(context).await?),
                     &request,
                 )
                 .await?;
@@ -1291,178 +809,6 @@ pub async fn dispatch_post(
             .await
         }
 
-        "messages/list" => {
-            async {
-                let request: ListMessagesRequest = payload(data)?;
-                value(
-                    services::messages::get_user_messages_service(
-                        context,
-                        context.local_user_uuid,
-                        &request,
-                    )
-                    .await?,
-                )
-            }
-            .await
-        }
-        "messages/read" => {
-            async {
-                let request: MarkMessageReadRequest = payload(data)?;
-                services::messages::mark_message_read_service(
-                    context,
-                    context.local_user_uuid,
-                    &request,
-                )
-                .await?;
-                Ok(Value::Null)
-            }
-            .await
-        }
-        "messages/batch-read" => {
-            async {
-                let request: BatchMarkReadRequest = payload(data)?;
-                services::messages::batch_mark_messages_read_service(
-                    context,
-                    context.local_user_uuid,
-                    &request,
-                )
-                .await?;
-                Ok(Value::Null)
-            }
-            .await
-        }
-        "messages/handle" => {
-            async {
-                let request: HandleMessageRequest = payload(data)?;
-                services::messages::handle_message_service(
-                    context,
-                    context.local_user_uuid,
-                    &request,
-                )
-                .await?;
-                Ok(Value::Null)
-            }
-            .await
-        }
-        "messages/stats" => {
-            async {
-                value(
-                    services::messages::get_user_message_stats_service(
-                        context,
-                        context.local_user_uuid,
-                    )
-                    .await?,
-                )
-            }
-            .await
-        }
-
-        "audit/logs" => {
-            async {
-                let request: ListAuditLogsRequest = payload(data)?;
-                let (items, total) = services::audit::get_audit_logs_service(
-                    context,
-                    context.local_user_uuid,
-                    Some(current_team(context).await?),
-                    &request,
-                )
-                .await?;
-                value(AuditLogsListResponse {
-                    items,
-                    total,
-                    page: request.pagination.page,
-                    page_size: request.pagination.page_size,
-                })
-            }
-            .await
-        }
-        "audit/logs/detail" => {
-            async {
-                let request: UuidRequest = payload(data)?;
-                value(services::audit::get_audit_log_service(context, request.uuid).await?)
-            }
-            .await
-        }
-        "audit/stats" => {
-            async {
-                value(
-                    services::audit::get_audit_stats_service(
-                        context,
-                        context.local_user_uuid,
-                        Some(current_team(context).await?),
-                    )
-                    .await?,
-                )
-            }
-            .await
-        }
-        "audit/logs/export" => {
-            async {
-                let request: ExportAuditLogsRequest = payload(data)?;
-                let (content, filename, mime_type) = services::audit::export_audit_logs_service(
-                    context,
-                    context.local_user_uuid,
-                    Some(current_team(context).await?),
-                    &request,
-                )
-                .await?;
-                value(ExportResponse {
-                    content,
-                    filename,
-                    mime_type,
-                })
-            }
-            .await
-        }
-
-        "workspace-quotas/get" => {
-            async {
-                let mut request: GetWorkspaceQuotaRequest = payload(data)?;
-                if request.workspace_uuid.is_none() {
-                    request.workspace_uuid = Some(current_workspace(context).await?);
-                }
-                value(
-                    services::workspace_quotas::get_workspace_quota_service(context, &request)
-                        .await?,
-                )
-            }
-            .await
-        }
-        "workspace-quotas/update" => {
-            async {
-                let request: UpdateQuotaUsageRequest = payload(data)?;
-                services::workspace_quotas::update_quota_usage_service(context, &request).await?;
-                Ok(Value::Null)
-            }
-            .await
-        }
-
-        "preferences/get" => {
-            async {
-                value(
-                    services::preferences::get_preferences_service(
-                        context,
-                        context.local_user_uuid,
-                    )
-                    .await?,
-                )
-            }
-            .await
-        }
-        "preferences/update" => {
-            async {
-                let request: UpdatePreferencesRequest = payload(data)?;
-                value(
-                    services::preferences::update_preferences_service(
-                        context,
-                        context.local_user_uuid,
-                        &request,
-                    )
-                    .await?,
-                )
-            }
-            .await
-        }
         _ => return None,
     };
 
@@ -1480,12 +826,6 @@ mod tests {
         config.max_connections = 1;
         config.min_connections = 1;
         let context = SvcCtx::new(&config).await.expect("context should initialize");
-
-        let workspace_list = dispatch_post(&context, "workspaces/list", &json!({}))
-            .await
-            .expect("route should be local")
-            .expect("workspace list should succeed");
-        assert_eq!(workspace_list["workspaces"].as_array().unwrap().len(), 1);
 
         let kernels = dispatch_post(
             &context,
@@ -1555,12 +895,190 @@ mod tests {
             &context,
             &ValidateLocalApiKeyRequest {
                 api_key,
-                permission_code: "workspaces.list".to_string(),
+                permission_code: "environments.list".to_string(),
             },
         )
         .await
         .expect("local API key should validate without a remote cache");
 
         assert!(dispatch_post(&context, "auth/login", &json!({})).await.is_none());
+        // 用户、团队、工作空间已经不存在，对应的路由也不再属于本地业务服务
+        for gone in ["workspaces/list", "teams/my-teams", "messages/list", "audit/logs", "preferences/get"] {
+            assert!(dispatch_post(&context, gone, &json!({})).await.is_none(), "{gone}");
+        }
+    }
+
+    /// 用户、团队、工作空间删除之后，每个业务模块都要能走通完整流程（建、查、改、关联、删、回收站）。
+    #[tokio::test]
+    async fn every_business_module_works_without_users_teams_or_workspaces() {
+        let mut config = DatabaseConfig::embedded("sqlite::memory:");
+        config.max_connections = 1;
+        config.min_connections = 1;
+        let context = SvcCtx::new(&config).await.expect("context should initialize");
+
+        async fn call(context: &SvcCtx, route: &str, body: Value) -> Value {
+            dispatch_post(context, route, &body)
+                .await
+                .unwrap_or_else(|| panic!("{route} should be a local route"))
+                .unwrap_or_else(|error| panic!("{route} failed: {error}"))
+        }
+
+        // 分组 / 标签 / 代理 / 账号
+        let group = call(&context, "groups/create", json!({ "name": "G1", "description": "d" })).await["uuid"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let groups = call(&context, "groups/list", json!({})).await;
+        assert_eq!(groups.as_array().unwrap().len(), 1);
+        assert!(groups[0].get("team_uuid").is_none() && groups[0].get("created_by").is_none());
+        call(&context, "groups/update", json!({ "uuid": group, "name": "G1b" })).await;
+
+        let tag = call(&context, "tags/create", json!({ "name": "T1", "color": "blue" })).await["uuid"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert_eq!(call(&context, "tags/list", json!({})).await.as_array().unwrap().len(), 1);
+
+        let proxy = call(
+            &context,
+            "proxies/create",
+            json!({ "name": "P1", "host": "127.0.0.1", "port": 1080, "proxy_type": "http" }),
+        )
+        .await["uuid"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let found = call(
+            &context,
+            "proxies/list",
+            json!({ "page": 1, "page_size": 20, "filters": { "keyword": "P1", "proxy_type": "http" } }),
+        )
+        .await;
+        assert_eq!(found["total"], 1);
+        let none = call(
+            &context,
+            "proxies/list",
+            json!({ "page": 1, "page_size": 20, "filters": { "keyword": "nothing-like-this" } }),
+        )
+        .await;
+        assert_eq!(none["total"], 0);
+        call(
+            &context,
+            "proxies/batch-import",
+            json!({ "proxies": [{ "name": "P2", "host": "127.0.0.2", "port": 1081, "proxy_type": "http" }] }),
+        )
+        .await;
+        assert_eq!(call(&context, "proxies/list", json!({ "page": 1, "page_size": 20 })).await["total"], 2);
+
+        let account = call(
+            &context,
+            "accounts/create",
+            json!({ "platform_url": "https://example.com", "account": "me" }),
+        )
+        .await["uuid"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert_eq!(call(&context, "accounts/list", json!({ "page": 1, "page_size": 20 })).await["total"], 1);
+
+        // 环境：建、查、改、关联、删、回收站
+        let kernels = call(&context, "browser-kernels/list", json!({ "platform": "windows" })).await;
+        let kernel = kernels["SIMPRINT_KERNEL_CHROMIUM"][0].clone();
+        let environment = call(
+            &context,
+            "environments/create",
+            json!({
+                "name": "E1",
+                "group_uuid": group,
+                "tag_uuids": [tag],
+                "account_uuids": [account],
+                "proxy_uuid": proxy,
+                "config": {
+                    "window_info": { "system": "Windows", "kernel": kernel["resource_name"], "kernel_id": kernel["kernel_id"] },
+                    "basic_settings": {},
+                    "fingerprint_settings": {},
+                    "device_settings": {},
+                    "preference_settings": {}
+                }
+            }),
+        )
+        .await["uuid"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let listed = call(&context, "environments/list", json!({ "page": 1, "page_size": 20 })).await;
+        assert_eq!(listed["total"], 1);
+        let env = &listed["items"][0]["environment"];
+        for owner in ["user_uuid", "team_uuid", "workspace_uuid"] {
+            assert!(env.get(owner).is_none(), "{owner} should not be in the environment payload");
+        }
+        let detail = call(&context, "environments/detail", json!({ "uuid": environment })).await;
+        assert_eq!(detail["group"]["name"], "G1b");
+        assert_eq!(detail["tags"].as_array().unwrap().len(), 1);
+        assert_eq!(detail["proxy"]["name"], "P1");
+        assert_eq!(detail["accounts"].as_array().unwrap().len(), 1);
+        // 更新会按请求里的分组覆盖环境的分组，所以要带上
+        call(&context, "environments/update", json!({ "uuid": environment, "name": "E1b", "group_uuid": group })).await;
+        let filtered = call(
+            &context,
+            "environments/list",
+            json!({ "page": 1, "page_size": 20, "filters": { "keyword": "E1b", "group_uuid": group } }),
+        )
+        .await;
+        assert_eq!(filtered["total"], 1);
+
+        // 模板：由环境生成、再从模板创建环境
+        let template = call(
+            &context,
+            "templates/create",
+            json!({ "name": "TPL", "environment_uuid": environment }),
+        )
+        .await["uuid"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert_eq!(call(&context, "templates/list", json!({ "page": 1, "page_size": 20 })).await["total"], 1);
+        let from_template = call(
+            &context,
+            "templates/create-from",
+            json!({ "template_uuid": template, "name": "E2" }),
+        )
+        .await["uuid"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert_eq!(call(&context, "environments/list", json!({ "page": 1, "page_size": 20 })).await["total"], 2);
+
+        // RPA
+        let task = call(
+            &context,
+            "rpa/tasks/create",
+            json!({ "name": "R1", "trigger_type": "manual", "run_mode": "sequential", "environment_uuids": [environment] }),
+        )
+        .await["uuid"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert_eq!(call(&context, "rpa/tasks", json!({ "page": 1, "page_size": 20 })).await["total"], 1);
+        call(&context, "rpa/tasks/duplicate", json!({ "uuid": task })).await;
+        assert_eq!(call(&context, "rpa/tasks", json!({ "page": 1, "page_size": 20 })).await["total"], 2);
+
+        // 回收站：删除、列出、恢复；删除后其余关联数据不能被连带清掉
+        call(&context, "environments/delete", json!({ "uuid": from_template })).await;
+        let bin = call(&context, "environments/recycle-bin/list", json!({ "page": 1, "page_size": 20 })).await;
+        assert_eq!(bin["total"], 1);
+        call(&context, "environments/recycle-bin/restore", json!({ "uuid": from_template })).await;
+        assert_eq!(call(&context, "environments/list", json!({ "page": 1, "page_size": 20 })).await["total"], 2);
+        call(&context, "environments/delete", json!({ "uuid": from_template })).await;
+        call(&context, "environments/recycle-bin/permanent-delete", json!({ "uuid": from_template })).await;
+        assert_eq!(call(&context, "environments/recycle-bin/list", json!({ "page": 1, "page_size": 20 })).await["total"], 0);
+
+        // 清理
+        call(&context, "tags/delete", json!({ "uuid": tag })).await;
+        call(&context, "groups/delete", json!({ "uuid": group })).await;
+        call(&context, "accounts/delete", json!({ "uuid": account })).await;
+        call(&context, "proxies/delete", json!({ "uuid": proxy })).await;
+        call(&context, "templates/delete", json!({ "uuid": template })).await;
+        call(&context, "rpa/tasks/delete", json!({ "uuid": task })).await;
     }
 }

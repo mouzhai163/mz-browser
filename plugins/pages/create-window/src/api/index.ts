@@ -127,8 +127,6 @@ function buildTemplateEnvironmentData(
     environment: {
       id: 0,
       uuid: environmentUuid,
-      user_uuid: environmentUuid,
-      team_uuid: null,
       name,
       description: description || null,
       status: 'active',
@@ -166,8 +164,6 @@ function buildTemplateEnvironmentData(
     tags: (options?.tags || []).map((tag) => ({
       id: tag.id,
       uuid: tag.uuid,
-      user_uuid: environmentUuid,
-      team_uuid: null,
       name: tag.name,
       color: tag.color || null,
       sort_order: tag.sort_order || null,
@@ -179,8 +175,6 @@ function buildTemplateEnvironmentData(
     accounts: (options?.accounts || []).map((account) => ({
       id: account.id,
       uuid: account.uuid,
-      user_uuid: environmentUuid,
-      team_uuid: null,
       platform_url: account.platform_url,
       platform_name: account.platform_name || null,
       account: account.account,

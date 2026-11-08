@@ -37,10 +37,10 @@ Core data stays on your machine by default; neither daily use nor development de
 
 - **Strictly isolated environments**: a separate user-data directory per environment; localStorage, cookies and IndexedDB are never shared.
 - **Per-environment fingerprint seed**: derived from the environment ID, so Canvas / WebGL / audio noise differs between environments and stays stable across restarts.
-- **Persistent configuration**: environment settings, account context and workspace state are kept long term, with groups, tags and batch operations.
+- **Persistent configuration**: environment settings and account context are kept long term, with groups, tags and batch operations.
 - **Launch guarantee**: an environment only counts as started after the browser confirms the fingerprint config was applied. If the confirmation fails or times out, the launch fails instead of opening pages with a default fingerprint.
 - **Default browser**: mark one environment as the default browser in its menu and links clicked in other apps open in it directly, without asking; unset it any time. Windows only lets the user pick the default browser, so after setting it you choose Simprint once under Default apps. If Simprint is already running the link is handed to it, otherwise it starts quietly without showing the main window.
-- **No sign-in**: Simprint is a local single-user workbench; there is no login, user picker or lock screen. It just opens.
+- **Single-user and local**: Simprint is a personal workbench. There are no users, teams, workspaces, login, lock screen or quotas; it just opens.
 
 ### Fingerprint
 
@@ -68,7 +68,7 @@ New environments get GPU, core count, memory, resolution and scaling from one ti
 - **RPA workflows**: build and run repeatable browser automation flows.
 - **Syncer**: pick a controller window and mirror interactions to other running windows.
 - **Local API**: control environments, proxies, tags, groups and browser kernels through a local API protected by an API key. Enabled by default.
-- **MCP**: an optional local Model Context Protocol server (off by default) that lets external AI clients use workspace resources.
+- **MCP**: an optional local Model Context Protocol server (off by default) that lets external AI clients use your environments.
 
 ### Browser kernel
 

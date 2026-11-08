@@ -13,7 +13,6 @@ interface UseGroupOperationsReturn {
   updateGroup: (uuid: string, data: GroupFormData) => Promise<void>;
   deleteGroup: (uuid: string) => Promise<void>;
   batchDeleteGroups: (uuids: string[]) => Promise<void>;
-  assignToTeam: (uuid: string, teamUuid: string) => Promise<void>;
 }
 
 /**
@@ -60,17 +59,11 @@ export function useGroupOperations(onComplete?: () => void): UseGroupOperationsR
     onComplete?.();
   };
 
-  const assignToTeam = async (): Promise<void> => {
-    // TODO: 实现划分到团队的 API
-    onComplete?.();
-  };
-
   return {
     submitting,
     createGroup,
     updateGroup,
     deleteGroup,
     batchDeleteGroups,
-    assignToTeam,
   };
 }

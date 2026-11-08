@@ -27,14 +27,6 @@ export function GroupTableSkeleton({ rows = 8 }: GroupTableSkeletonProps) {
           <td className="px-4 py-2.5 border-b border-border text-[13px]">
             <Skeleton className="h-4 w-8" />
           </td>
-          {/* 团队列 */}
-          <td className="px-4 py-2.5 border-b border-border text-[13px]">
-            <Skeleton className="h-4 w-20" />
-          </td>
-          {/* 创建者列 */}
-          <td className="px-4 py-2.5 border-b border-border text-[13px]">
-            <Skeleton className="h-4 w-16" />
-          </td>
           {/* 创建时间列 */}
           <td className="px-4 py-2.5 border-b border-border text-[13px]">
             <Skeleton className="h-4 w-20" />

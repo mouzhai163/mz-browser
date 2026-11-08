@@ -10,9 +10,8 @@ pub(super) async fn get_environment_launch_detail(
 ) -> Result<EnvironmentLaunchDetail> {
     let app = crate::app::handle::get_app_handle()?;
     let context = app.state::<business::svc_ctx::SvcCtx>();
-    let request_context = context.for_current_user()?;
     let data = business::dispatcher::dispatch_post(
-        &request_context,
+        &context,
         "environments/detail",
         &json!({ "uuid": env_uuid }),
     )

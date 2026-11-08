@@ -10,14 +10,10 @@ use crate::svc_ctx::SvcCtx;
 /// 创建账号
 pub async fn create_account_service(
     svc_ctx: &SvcCtx,
-    user_uuid: Uuid,
-    team_uuid: Option<Uuid>,
     payload: &CreateAccountRequest,
 ) -> Result<Uuid, String> {
     models::insert_platform_account(
         &svc_ctx.db,
-        user_uuid,
-        team_uuid,
         &payload.platform_url,
         payload.platform_name.as_deref(),
         &payload.account,
@@ -31,8 +27,6 @@ pub async fn create_account_service(
 /// 获取账号列表
 pub async fn get_accounts_service(
     svc_ctx: &SvcCtx,
-    user_uuid: Uuid,
-    team_uuid: Option<Uuid>,
     payload: &ListAccountsRequest,
 ) -> Result<(Vec<PlatformAccountDto>, i64), String> {
     let page = payload.pagination.page.max(1);
@@ -60,8 +54,6 @@ pub async fn get_accounts_service(
 
     let accounts = models::fetch_platform_accounts(
         &svc_ctx.db,
-        team_uuid,
-        user_uuid,
         keyword,
         platform_name,
         status,
@@ -73,8 +65,6 @@ pub async fn get_accounts_service(
 
     let total = models::fetch_platform_accounts_count(
         &svc_ctx.db,
-        team_uuid,
-        user_uuid,
         keyword,
         platform_name,
         status,
@@ -173,8 +163,6 @@ pub async fn set_environment_accounts_service(
 /// 接收客户端已解析好的账号列表，直接保存到数据库
 pub async fn batch_import_accounts_service(
     svc_ctx: &SvcCtx,
-    user_uuid: Uuid,
-    team_uuid: Option<Uuid>,
     payload: &BatchImportAccountsRequest,
 ) -> Result<crate::entitys::BatchImportResponse, String> {
     let mut success_count = 0;
@@ -183,8 +171,6 @@ pub async fn batch_import_accounts_service(
     for (index, account) in payload.accounts.iter().enumerate() {
         let result = models::insert_platform_account(
             &svc_ctx.db,
-            user_uuid,
-            team_uuid,
             &account.platform_url,
             account.platform_name.as_deref(),
             &account.account,

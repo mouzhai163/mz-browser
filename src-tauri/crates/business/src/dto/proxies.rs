@@ -8,8 +8,6 @@ use uuid::Uuid;
 pub struct ProxyDto {
     pub id: i32,
     pub uuid: Uuid,
-    pub workspace_uuid: Uuid,
-    pub owner_uuid: Uuid,
     pub name: String,
     pub host: String,
     pub port: i32,

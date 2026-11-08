@@ -38,15 +38,8 @@ impl McpServer {
     }
 
     pub async fn require_session(&self) -> Result<(), super::error::McpToolError> {
-        use tauri::Manager;
         let app = crate::app::handle::get_app_handle()
-            .map_err(|_| super::error::McpToolError::invalid_params("No local session"))?;
-        let user = app.state::<business::svc_ctx::SvcCtx>().current_user_uuid();
-        if user != Some(self.config.owner_uuid) {
-            return Err(super::error::McpToolError::invalid_params(
-                "MCP owner session has changed; restart MCP",
-            ));
-        }
+            .map_err(|_| super::error::McpToolError::invalid_params("Application is not ready"))?;
         let current = super::config::load_config(&app).map_err(|_| {
             super::error::McpToolError::internal("Cannot validate current MCP policy")
         })?;
@@ -182,7 +175,6 @@ mod tests {
             port,
             local_api_api_key: "test-local-key".into(),
             access,
-            owner_uuid: uuid::Uuid::new_v4(),
             read_slots: Arc::new(tokio::sync::Semaphore::new(2)),
         }
     }

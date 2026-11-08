@@ -43,8 +43,27 @@ pub async fn connect(config: &DatabaseConfig) -> anyhow::Result<DbPool> {
 }
 
 /// Bring a newly-created or existing embedded database up to the current schema.
+///
+/// 迁移在一条关闭了外键检查的连接上执行：SQLite 改表结构要"建新表、拷数据、删旧表、改名"，
+/// 外键开着时删除父表会触发 `ON DELETE CASCADE` 把子表数据一起删掉。sqlx 会把每条迁移包进事务，
+/// 而事务里无法切换外键开关，所以必须在事务开始前关掉。迁移完成后重新打开，并检查外键是否一致。
 pub async fn migrate(pool: &DbPool) -> anyhow::Result<()> {
-    MIGRATOR.run(pool).await?;
+    let mut connection = pool.acquire().await?;
+    sqlx::query("PRAGMA foreign_keys = OFF").execute(&mut *connection).await?;
+    let result = MIGRATOR.run(&mut *connection).await;
+    sqlx::query("PRAGMA foreign_keys = ON").execute(&mut *connection).await?;
+    result?;
+
+    let violations: Vec<(String,)> = sqlx::query_as(r#"SELECT "table" FROM pragma_foreign_key_check"#)
+        .fetch_all(&mut *connection)
+        .await?;
+    if !violations.is_empty() {
+        // 只提示、不阻止启动：旧数据里可能本来就有悬空的引用，不能因此让软件打不开。
+        let mut tables: Vec<String> = violations.into_iter().map(|(table,)| table).collect();
+        tables.sort();
+        tables.dedup();
+        tracing::warn!("database foreign keys are inconsistent after migration: {}", tables.join(", "));
+    }
     Ok(())
 }
 
@@ -105,153 +124,147 @@ mod tests {
         assert!(table_count > 20, "business tables should be created");
     }
 
+    fn memory_config() -> DatabaseConfig {
+        DatabaseConfig {
+            url: "sqlite::memory:".to_string(),
+            max_connections: 1,
+            min_connections: 1,
+            max_lifetime: 30,
+            acquire_timeout: 30,
+            idle_timeout: 30,
+        }
+    }
+
+    /// 回归：删除用户 / 团队 / 工作空间的迁移必须保留已有的业务数据。
+    /// 先按旧结构建好数据（带用户、团队、工作空间归属），再执行最后一条迁移。
     #[tokio::test]
-    async fn migration_raises_legacy_environment_quota_of_existing_workspaces() {
-        use crate::entitys::CreateWorkspaceRequest;
-        use crate::models::{workspace_quotas, workspaces};
+    async fn removing_users_teams_and_workspaces_keeps_existing_business_data() {
+        const LAST: i64 = 20261108000001;
+        let pool = connect(&memory_config()).await.expect("SQLite should open");
 
-        let mut config = DatabaseConfig::embedded("sqlite::memory:");
-        config.max_connections = 1;
-        config.min_connections = 1;
-        let context = crate::svc_ctx::SvcCtx::new(&config)
+        let older: Vec<_> = MIGRATOR.iter().filter(|m| m.version < LAST).cloned().collect();
+        let older_only = Migrator {
+            migrations: std::borrow::Cow::Owned(older),
+            ..Migrator::DEFAULT
+        };
+        older_only.run(&pool).await.expect("older migrations should apply");
+
+        let user = uuid::Uuid::new_v4();
+        let workspace = uuid::Uuid::new_v4();
+        let team = uuid::Uuid::new_v4();
+        let group = uuid::Uuid::new_v4();
+        let proxy = uuid::Uuid::new_v4();
+        let environment = uuid::Uuid::new_v4();
+        let statements: Vec<(&str, Vec<uuid::Uuid>)> = vec![
+            ("INSERT INTO users (uuid, id) VALUES ($1, 'LOCAL')", vec![user]),
+            (
+                "INSERT INTO user_infos (user_uuid, email, password) VALUES ($1, 'a@b.invalid', '')",
+                vec![user],
+            ),
+            ("INSERT INTO workspaces (uuid, name, owner_uuid) VALUES ($1, 'W', $2)", vec![workspace, user]),
+            (
+                "INSERT INTO teams (uuid, name, owner_uuid, workspace_uuid) VALUES ($1, 'T', $2, $3)",
+                vec![team, user, workspace],
+            ),
+            (
+                "INSERT INTO groups (uuid, name, team_uuid, workspace_uuid, created_by) VALUES ($1, 'G', $2, $3, $4)",
+                vec![group, team, workspace, user],
+            ),
+            (
+                "INSERT INTO proxies (uuid, name, host, port, workspace_uuid, owner_uuid, user_uuid) VALUES ($1, 'P', '127.0.0.1', 8080, $2, $3, $3)",
+                vec![proxy, workspace, user],
+            ),
+            (
+                "INSERT INTO environments (uuid, name, user_uuid, team_uuid, workspace_uuid, group_uuid, proxy_uuid) VALUES ($1, 'Env', $2, $3, $4, $5, $6)",
+                vec![environment, user, team, workspace, group, proxy],
+            ),
+        ];
+        for (sql, binds) in statements {
+            let mut query = sqlx::query(sql);
+            for value in binds {
+                query = query.bind(value);
+            }
+            query.execute(&pool).await.unwrap_or_else(|error| panic!("{sql}: {error}"));
+        }
+        sqlx::query("INSERT INTO environment_configs (environment_uuid) VALUES ($1)")
+            .bind(environment)
+            .execute(&pool)
             .await
-            .expect("business context should initialize");
-        let pool = &context.db;
-        let user_uuid = uuid::Uuid::new_v4();
+            .expect("config row should be inserted");
 
-        sqlx::query("INSERT INTO users (uuid, id) VALUES ($1, $2)")
-            .bind(user_uuid)
-            .bind("LOCAL_USER")
-            .execute(pool)
-            .await
-            .expect("local user should be inserted");
-        sqlx::query(
-            "INSERT INTO user_infos (user_uuid, nickname, email, password) VALUES ($1, $2, $3, $4)",
-        )
-        .bind(user_uuid)
-        .bind("Local User")
-        .bind("local@simprint.invalid")
-        .bind("")
-        .execute(pool)
-        .await
-        .expect("local user profile should be inserted");
-        let workspace_uuid = workspaces::insert_workspace(
-            pool,
-            user_uuid,
-            &CreateWorkspaceRequest {
-                name: "Legacy Workspace".to_string(),
-                workspace_type: Some("personal".to_string()),
-            },
-        )
-        .await
-        .expect("workspace should be created");
+        migrate(&pool).await.expect("the removal migration should apply");
 
-        // Reproduce a database created before the limit was lifted.
-        workspace_quotas::insert_or_update_workspace_quota(pool, workspace_uuid, 8, 1, 99_999, 99_999)
-            .await
-            .expect("legacy quota should be written");
-        let before: i32 = sqlx::query_scalar(
-            "SELECT max_environments FROM workspace_quotas WHERE workspace_uuid = $1",
-        )
-        .bind(workspace_uuid)
-        .fetch_one(pool)
-        .await
-        .expect("quota row should exist");
-        assert_eq!(before, 8);
+        // 业务数据原样保留，关联仍然有效
+        let (name, group_uuid, proxy_uuid): (String, uuid::Uuid, uuid::Uuid) =
+            sqlx::query_as("SELECT name, group_uuid, proxy_uuid FROM environments WHERE uuid = $1")
+                .bind(environment)
+                .fetch_one(&pool)
+                .await
+                .expect("environment should survive");
+        assert_eq!((name.as_str(), group_uuid, proxy_uuid), ("Env", group, proxy));
+        let configs: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM environment_configs WHERE environment_uuid = $1")
+                .bind(environment)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(configs, 1, "child rows must not be cascaded away by the table rebuild");
 
-        sqlx::query(include_str!(
-            "../migrations/20261106000001_raise_workspace_environment_quota.sql"
-        ))
-        .execute(pool)
-        .await
-        .expect("quota migration should run");
-
-        let max_environments: i32 = sqlx::query_scalar(
-            "SELECT max_environments FROM workspace_quotas WHERE workspace_uuid = $1",
-        )
-        .bind(workspace_uuid)
-        .fetch_one(pool)
-        .await
-        .expect("quota row should exist");
-        assert_eq!(max_environments, 99_999);
-        assert!(workspace_quotas::check_quota(pool, workspace_uuid, "environments").await.unwrap());
+        // 归属列和相关表都不在了
+        for table in [
+            "users",
+            "user_infos",
+            "workspaces",
+            "teams",
+            "team_members",
+            "workspace_quotas",
+            "messages",
+            "audit_logs",
+        ] {
+            let exists: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $1")
+                    .bind(table)
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            assert_eq!(exists, 0, "{table} should be gone");
+        }
+        for table in ["environments", "groups", "tags", "proxies", "platform_accounts", "rpa_tasks", "templates"] {
+            let columns: Vec<String> =
+                sqlx::query_scalar(&format!("SELECT name FROM pragma_table_info('{table}')"))
+                    .fetch_all(&pool)
+                    .await
+                    .unwrap();
+            for owner in ["user_uuid", "team_uuid", "workspace_uuid", "owner_uuid", "created_by"] {
+                assert!(!columns.iter().any(|c| c == owner), "{table}.{owner} should be gone");
+            }
+        }
+        let violations: Vec<(String,)> =
+            sqlx::query_as(r#"SELECT "table" FROM pragma_foreign_key_check"#).fetch_all(&pool).await.unwrap();
+        assert!(violations.is_empty(), "foreign keys must stay consistent: {violations:?}");
+        let foreign_keys: i64 = sqlx::query_scalar("PRAGMA foreign_keys").fetch_one(&pool).await.unwrap();
+        assert_eq!(foreign_keys, 1, "foreign keys must be switched back on");
     }
 
     #[tokio::test]
     async fn core_models_round_trip_on_sqlite() {
-        use crate::entitys::{CreateTeamRequest, CreateWorkspaceRequest};
-        use crate::models::{environments, proxies, teams, workspaces};
+        use crate::models::{environments, proxies};
 
-        let mut config = DatabaseConfig::embedded("sqlite::memory:");
-        config.max_connections = 1;
-        config.min_connections = 1;
-        let context = crate::svc_ctx::SvcCtx::new(&config)
+        let context = crate::svc_ctx::SvcCtx::new(&memory_config())
             .await
             .expect("business context should initialize");
         let pool = &context.db;
-        let user_uuid = uuid::Uuid::new_v4();
-
-        sqlx::query("INSERT INTO users (uuid, id) VALUES ($1, $2)")
-            .bind(user_uuid)
-            .bind("LOCAL_USER")
-            .execute(pool)
-            .await
-            .expect("local user should be inserted");
-        sqlx::query(
-            "INSERT INTO user_infos (user_uuid, nickname, email, password) VALUES ($1, $2, $3, $4)",
-        )
-        .bind(user_uuid)
-        .bind("Local User")
-        .bind("local@simprint.invalid")
-        .bind("")
-        .execute(pool)
-        .await
-        .expect("local user profile should be inserted");
-
-        let workspace_uuid = workspaces::insert_workspace(
-            pool,
-            user_uuid,
-            &CreateWorkspaceRequest {
-                name: "Local Workspace".to_string(),
-                workspace_type: Some("personal".to_string()),
-            },
-        )
-        .await
-        .expect("workspace should be created");
-        let workspace = workspaces::fetch_workspace_by_uuid(pool, workspace_uuid)
-            .await
-            .expect("workspace query should succeed")
-            .expect("workspace should exist");
-        assert_eq!(workspace.name, "Local Workspace");
-
-        let team_uuid = teams::insert_team(
-            pool,
-            user_uuid,
-            &CreateTeamRequest {
-                workspace_uuid,
-                name: "Local Team".to_string(),
-                description: None,
-            },
-        )
-        .await
-        .expect("team should be created");
-        assert!(teams::fetch_team_by_uuid(pool, team_uuid).await.unwrap().is_some());
 
         let group_uuid =
-            environments::insert_group(pool, workspace_uuid, team_uuid, "Default", None, user_uuid)
-                .await
-                .expect("group should be created");
-        let tag_uuid =
-            environments::insert_tag(pool, user_uuid, Some(team_uuid), "QA", Some("blue"))
-                .await
-                .expect("tag should be created");
+            environments::insert_group(pool, "Default", None).await.expect("group should be created");
+        let tag_uuid = environments::insert_tag(pool, "QA", Some("blue"))
+            .await
+            .expect("tag should be created");
         assert!(environments::fetch_group_by_uuid(pool, group_uuid).await.unwrap().is_some());
         assert!(environments::fetch_tag_by_uuid(pool, tag_uuid).await.unwrap().is_some());
 
         let proxy_uuid = proxies::insert_proxy(
             pool,
-            workspace_uuid,
-            user_uuid,
             "Local Proxy",
             "127.0.0.1",
             8080,
@@ -271,9 +284,6 @@ mod tests {
 
         let environment_uuid = environments::insert_environment(
             pool,
-            workspace_uuid,
-            user_uuid,
-            team_uuid,
             "Browser A",
             None,
             Some(group_uuid),
@@ -283,24 +293,12 @@ mod tests {
         )
         .await
         .expect("environment should be created");
-        let environment =
-            environments::fetch_environment_by_uuid(pool, workspace_uuid, environment_uuid)
-                .await
-                .expect("environment query should succeed")
-                .expect("environment should exist");
+        let environment = environments::fetch_environment_by_uuid(pool, environment_uuid)
+            .await
+            .expect("environment query should succeed")
+            .expect("environment should exist");
         assert_eq!(environment.name, "Browser A");
         assert_eq!(environment.proxy_uuid, Some(proxy_uuid));
-
-        workspaces::update_workspace(pool, workspace_uuid, Some("Renamed Workspace"))
-            .await
-            .expect("workspace should update");
-        assert_eq!(
-            workspaces::fetch_workspace_by_uuid(pool, workspace_uuid)
-                .await
-                .unwrap()
-                .unwrap()
-                .name,
-            "Renamed Workspace"
-        );
+        assert_eq!(proxies::fetch_proxies_count(pool, None, None, None, None).await.unwrap(), 1);
     }
 }

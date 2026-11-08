@@ -14,7 +14,7 @@ pub async fn dispatch_request(
     let app =
         get_app_handle().map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?;
     let business_context = app.state::<business::svc_ctx::SvcCtx>();
-    let validation = business::services::local_api::validate_local_api_key_service(
+    business::services::local_api::validate_local_api_key_service(
         &business_context,
         &business::entitys::ValidateLocalApiKeyRequest {
             api_key: api_key.to_string(),
@@ -23,10 +23,9 @@ pub async fn dispatch_request(
     )
     .await
     .map_err(|message| (StatusCode::UNAUTHORIZED, message))?;
-    let request_context = business_context.for_user(validation.user_uuid);
 
     if let Some(result) =
-        business::dispatcher::dispatch_post(&request_context, route, &payload).await
+        business::dispatcher::dispatch_post(&business_context, route, &payload).await
     {
         return match result {
             Ok(data) => Ok(json!({ "code": 1, "message": "OK", "data": data })),

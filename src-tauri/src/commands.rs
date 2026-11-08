@@ -1,7 +1,6 @@
 use tauri::ipc::Invoke;
 
 pub mod app;
-pub mod auth;
 pub mod default_browser;
 pub mod environment;
 pub mod file_system;
@@ -73,8 +72,6 @@ pub fn register_handles() -> impl Fn(Invoke<tauri::Wry>) -> bool + Send + Sync +
         network::download_files,
         rpa::execute_local_rpa_script,
         // Auth commands
-        auth::list_local_users,
-        auth::get_current_local_user,
         // Core utilities
         crate::core::utils::process::kill_process,
         crate::core::utils::process::find_process,

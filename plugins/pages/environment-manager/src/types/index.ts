@@ -56,7 +56,7 @@ export interface ExtensionSummary {
   icon_url?: string;
   download_url?: string;
   hash?: string;
-  scope: 'user' | 'team' | 'group-personal' | 'group-team';
+  scope: 'user' | 'group-personal';
 }
 
 // 环境（包含完整关联数据）

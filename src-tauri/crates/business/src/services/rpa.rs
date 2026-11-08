@@ -10,8 +10,6 @@ use crate::svc_ctx::SvcCtx;
 /// List RPA tasks.
 pub async fn get_rpa_tasks_service(
     svc_ctx: &SvcCtx,
-    user_uuid: Uuid,
-    team_uuid: Option<Uuid>,
     payload: &ListRpaTasksRequest,
 ) -> Result<(Vec<RpaTaskDto>, i64), String> {
     let offset = (payload.pagination.page - 1) * payload.pagination.page_size;
@@ -22,8 +20,6 @@ pub async fn get_rpa_tasks_service(
 
     let tasks = models::rpa::fetch_rpa_tasks(
         &svc_ctx.db,
-        team_uuid,
-        user_uuid,
         keyword,
         status,
         trigger_type,
@@ -35,8 +31,6 @@ pub async fn get_rpa_tasks_service(
 
     let total = models::rpa::fetch_rpa_tasks_count(
         &svc_ctx.db,
-        team_uuid,
-        user_uuid,
         keyword,
         status,
         trigger_type,
@@ -74,16 +68,12 @@ pub async fn get_rpa_task_service(
 /// Create an RPA task.
 pub async fn create_rpa_task_service(
     svc_ctx: &SvcCtx,
-    user_uuid: Uuid,
-    team_uuid: Option<Uuid>,
     payload: &CreateRpaTaskRequest,
 ) -> Result<Uuid, String> {
     let tags_json = payload.tags.as_ref().map(|t| serde_json::json!(t));
 
     let task_uuid = models::rpa::insert_rpa_task(
         &svc_ctx.db,
-        user_uuid,
-        team_uuid,
         &payload.name,
         payload.description.as_deref(),
         tags_json.as_ref(),
@@ -238,8 +228,6 @@ pub async fn batch_delete_rpa_tasks_service(
 /// Duplicate an RPA task.
 pub async fn duplicate_rpa_task_service(
     svc_ctx: &SvcCtx,
-    user_uuid: Uuid,
-    team_uuid: Option<Uuid>,
     payload: &DuplicateRpaTaskRequest,
 ) -> Result<Uuid, String> {
     // Load source task data.
@@ -250,8 +238,6 @@ pub async fn duplicate_rpa_task_service(
     // Create duplicated task row.
     let new_task_uuid = models::rpa::insert_rpa_task(
         &svc_ctx.db,
-        user_uuid,
-        team_uuid,
         &new_name,
         task.description.as_deref(),
         task.tags.as_ref(),

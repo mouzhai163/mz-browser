@@ -8,14 +8,9 @@ use uuid::Uuid;
 pub struct GroupDto {
     pub id: i32,
     pub uuid: Uuid,
-    pub workspace_uuid: Uuid,
-    pub team_uuid: Uuid,
-    pub team_name: Option<String>,
     pub name: String,
     pub description: Option<String>,
     pub sort_order: Option<i32>,
-    pub created_by: Option<Uuid>,
-    pub created_by_name: Option<String>,
     pub environments_count: Option<i64>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -27,8 +22,6 @@ pub struct GroupDto {
 pub struct TagDto {
     pub id: i32,
     pub uuid: Uuid,
-    pub user_uuid: Uuid,
-    pub team_uuid: Option<Uuid>,
     pub name: String,
     pub color: Option<String>,
     pub sort_order: Option<i32>,
@@ -43,9 +36,6 @@ pub struct TagDto {
 pub struct EnvironmentDto {
     pub id: i32,
     pub uuid: Uuid,
-    pub workspace_uuid: Uuid,
-    pub user_uuid: Uuid,
-    pub team_uuid: Uuid,
     pub name: String,
     pub description: Option<String>,
     pub status: String,
@@ -65,9 +55,6 @@ pub struct EnvironmentDto {
 pub struct EnvironmentRowDto {
     pub id: i32,
     pub uuid: Uuid,
-    pub workspace_uuid: Uuid,
-    pub user_uuid: Uuid,
-    pub team_uuid: Uuid,
     pub name: String,
     pub description: Option<String>,
     pub status: String,
@@ -90,8 +77,6 @@ pub struct EnvironmentTagRowDto {
     pub tag_name: String,
     pub tag_color: Option<String>,
     pub tag_sort_order: Option<i32>,
-    pub tag_user_uuid: Uuid,
-    pub tag_team_uuid: Option<Uuid>,
     pub tag_environments_count: Option<i32>,
     pub tag_created_at: chrono::DateTime<chrono::Utc>,
     pub tag_updated_at: chrono::DateTime<chrono::Utc>,
@@ -225,7 +210,7 @@ pub struct ExtensionSummaryDto {
     pub icon_url: Option<String>,
     pub download_url: Option<String>,
     pub hash: Option<String>,
-    pub scope: String, // user, team, group-personal, group-team
+    pub scope: String, // user, group-personal
 }
 
 /// 环境配置 DTO
@@ -292,8 +277,6 @@ pub struct EnvironmentCookieGroupDto {
 pub struct TemplateDto {
     pub id: i32,
     pub uuid: Uuid,
-    pub user_uuid: Uuid,
-    pub team_uuid: Option<Uuid>,
     pub name: String,
     pub description: Option<String>,
     pub is_public: Option<bool>,

@@ -8,8 +8,6 @@ use uuid::Uuid;
 pub struct PlatformAccountDto {
     pub id: i32,
     pub uuid: Uuid,
-    pub user_uuid: Uuid,
-    pub team_uuid: Option<Uuid>,
     pub platform_url: String,
     pub platform_name: Option<String>,
     pub account: String,

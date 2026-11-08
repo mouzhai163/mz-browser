@@ -22,7 +22,6 @@ export const extensionsResources = {
     },
     tabs: {
       all: '全部',
-      team: '团队',
       personal: '个人',
     },
     status: {
@@ -140,13 +139,9 @@ export const extensionsResources = {
         noGroups: '暂无分组',
         noGroupsDescription: '请先创建环境分组',
         noMatch: '没有找到匹配的分组',
-        teamInstall: '为团队安装',
-        teamInstallDescription: '团队所有成员的所有环境都会安装该插件',
-        teamInstallDescriptionForGroup: '团队所有成员在该分组的环境都会安装该插件',
         cancel: '取消',
         confirm: '安装',
         confirmUser: '安装到个人',
-        confirmTeam: '安装到团队',
         confirmWithCount: '安装到 {{count}} 个分组',
         installing: '安装中...',
       },
@@ -255,7 +250,6 @@ export const extensionsResources = {
     },
     tabs: {
       all: 'All',
-      team: 'Team',
       personal: 'Personal',
     },
     status: {
@@ -374,10 +368,6 @@ export const extensionsResources = {
         noGroups: 'No Groups',
         noGroupsDescription: 'Please create an environment group first',
         noMatch: 'No matching groups found',
-        teamInstall: 'Install for Team',
-        teamInstallDescription: 'All team members will install this extension in all environments',
-        teamInstallDescriptionForGroup:
-          'All team members will install this extension in this group',
         cancel: 'Cancel',
         confirm: 'Install',
         confirmWithCount: 'Install to {{count}} groups',

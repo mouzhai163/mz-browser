@@ -8,8 +8,6 @@ use crate::dto::PlatformAccountDto;
 /// 创建平台账号
 pub async fn insert_platform_account(
     pool: &Pool<Db>,
-    user_uuid: Uuid,
-    team_uuid: Option<Uuid>,
     platform_url: &str,
     platform_name: Option<&str>,
     account: &str,
@@ -18,14 +16,12 @@ pub async fn insert_platform_account(
 ) -> Result<Uuid, Error> {
     let uuid: Uuid = sqlx::query_scalar(
         r#"
-        INSERT INTO platform_accounts (user_uuid, team_uuid, platform_url, platform_name,
+        INSERT INTO platform_accounts (platform_url, platform_name,
                                         account, password, remark)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING uuid;
         "#,
     )
-    .bind(user_uuid)
-    .bind(team_uuid)
     .bind(platform_url)
     .bind(platform_name)
     .bind(account)
@@ -40,8 +36,6 @@ pub async fn insert_platform_account(
 /// 查询平台账号列表
 pub async fn fetch_platform_accounts(
     pool: &Pool<Db>,
-    team_uuid: Option<Uuid>,
-    user_uuid: Uuid,
     keyword: Option<&str>,
     platform_name: Option<&str>,
     status: Option<&str>,
@@ -52,28 +46,25 @@ pub async fn fetch_platform_accounts(
 
     let recs = sqlx::query_as::<_, PlatformAccountDto>(
         r#"
-        SELECT pa.id, pa.uuid, pa.user_uuid, pa.team_uuid, pa.platform_url, pa.platform_name,
+        SELECT pa.id, pa.uuid, pa.platform_url, pa.platform_name,
                pa.account, pa.password, pa.status, pa.remark, pa.usage_count,
                (SELECT COUNT(*) FROM environment_accounts ea WHERE ea.account_uuid = pa.uuid) AS environments_count,
                pa.last_used_at, pa.created_at, pa.updated_at, pa.deleted_at
         FROM platform_accounts pa
-        WHERE (pa.team_uuid = $1 OR (pa.team_uuid IS NULL AND pa.user_uuid = $2))
-          AND (
-            $3 IS NULL
-            OR pa.platform_url LIKE $3
-            OR COALESCE(pa.platform_name, '') LIKE $3
-            OR pa.account LIKE $3
-            OR COALESCE(pa.remark, '') LIKE $3
+        WHERE (
+            $1 IS NULL
+            OR pa.platform_url LIKE $1
+            OR COALESCE(pa.platform_name, '') LIKE $1
+            OR pa.account LIKE $1
+            OR COALESCE(pa.remark, '') LIKE $1
           )
-          AND ($4 IS NULL OR pa.platform_name = $4)
-          AND ($5 IS NULL OR pa.status = $5)
+          AND ($2 IS NULL OR pa.platform_name = $2)
+          AND ($3 IS NULL OR pa.status = $3)
           AND pa.deleted_at IS NULL
         ORDER BY pa.created_at DESC
-        LIMIT $6 OFFSET $7
+        LIMIT $4 OFFSET $5
         "#,
     )
-    .bind(team_uuid)
-    .bind(user_uuid)
     .bind(keyword)
     .bind(platform_name)
     .bind(status)
@@ -88,8 +79,6 @@ pub async fn fetch_platform_accounts(
 /// 查询平台账号总数
 pub async fn fetch_platform_accounts_count(
     pool: &Pool<Db>,
-    team_uuid: Option<Uuid>,
-    user_uuid: Uuid,
     keyword: Option<&str>,
     platform_name: Option<&str>,
     status: Option<&str>,
@@ -99,21 +88,18 @@ pub async fn fetch_platform_accounts_count(
     let count: i64 = sqlx::query_scalar(
         r#"
         SELECT COUNT(*) FROM platform_accounts
-        WHERE (team_uuid = $1 OR (team_uuid IS NULL AND user_uuid = $2))
-          AND (
-            $3 IS NULL
-            OR platform_url LIKE $3
-            OR COALESCE(platform_name, '') LIKE $3
-            OR account LIKE $3
-            OR COALESCE(remark, '') LIKE $3
+        WHERE (
+            $1 IS NULL
+            OR platform_url LIKE $1
+            OR COALESCE(platform_name, '') LIKE $1
+            OR account LIKE $1
+            OR COALESCE(remark, '') LIKE $1
           )
-          AND ($4 IS NULL OR platform_name = $4)
-          AND ($5 IS NULL OR status = $5)
+          AND ($2 IS NULL OR platform_name = $2)
+          AND ($3 IS NULL OR status = $3)
           AND deleted_at IS NULL
         "#,
     )
-    .bind(team_uuid)
-    .bind(user_uuid)
     .bind(keyword)
     .bind(platform_name)
     .bind(status)
@@ -130,7 +116,7 @@ pub async fn fetch_platform_account_by_uuid(
 ) -> Result<Option<PlatformAccountDto>, Error> {
     let rec = sqlx::query_as::<_, PlatformAccountDto>(
         r#"
-        SELECT pa.id, pa.uuid, pa.user_uuid, pa.team_uuid, pa.platform_url, pa.platform_name,
+        SELECT pa.id, pa.uuid, pa.platform_url, pa.platform_name,
                pa.account, pa.password, pa.status, pa.remark, pa.usage_count,
                (SELECT COUNT(*) FROM environment_accounts ea WHERE ea.account_uuid = pa.uuid) AS environments_count,
                pa.last_used_at, pa.created_at, pa.updated_at, pa.deleted_at
@@ -303,7 +289,7 @@ pub async fn fetch_environment_accounts(
 ) -> Result<Vec<PlatformAccountDto>, Error> {
     let recs = sqlx::query_as::<_, PlatformAccountDto>(
         r#"
-        SELECT pa.id, pa.uuid, pa.user_uuid, pa.team_uuid, pa.platform_url, pa.platform_name,
+        SELECT pa.id, pa.uuid, pa.platform_url, pa.platform_name,
                pa.account, pa.password, pa.status, pa.remark, pa.usage_count,
                (SELECT COUNT(*) FROM environment_accounts ea2 WHERE ea2.account_uuid = pa.uuid) AS environments_count,
                pa.last_used_at, pa.created_at, pa.updated_at, pa.deleted_at

@@ -110,7 +110,6 @@ pub struct McpServerRuntimeConfig {
     pub port: u16,
     pub local_api_api_key: String,
     pub access: McpConfig,
-    pub owner_uuid: uuid::Uuid,
     pub read_slots: std::sync::Arc<tokio::sync::Semaphore>,
 }
 

@@ -24,7 +24,6 @@ import {
   removeEnvironmentLocalProxyBinding,
   setEnvironmentLocalProxyBinding,
   useSettingsDialogStore,
-  useRefreshStore,
 } from '../../../../services/store/src';
 
 export interface CreateWindowOptions {
@@ -71,7 +70,6 @@ export function useCreateWindow(
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedGroupUuid, setSelectedGroupUuid] = useState<string | undefined>(initialGroupUuid);
   const [selectedTagUuids, setSelectedTagUuids] = useState<string[]>(initialTagUuids || []);
-  const { refreshWorkspaces } = useRefreshStore();
 
   const isLocalProxyMode = windowConfig.windowInfo.proxySourceMode === 'local';
   const selectedRemoteProxyUuids = isLocalProxyMode ? [] : windowConfig.windowInfo.proxyUuids;
@@ -419,8 +417,6 @@ export function useCreateWindow(
           await setEnvironmentProxy({ uuid: editUuid, proxy_uuid: proxyUuid });
         }
         toast.success(t('actions.updateSuccess') || '窗口更新成功');
-        // 更新环境后刷新工作空间相关数据（包括配额）
-        refreshWorkspaces();
         navigate('/');
         return;
       }
@@ -465,9 +461,6 @@ export function useCreateWindow(
         )
       );
 
-      // 创建环境后刷新工作空间相关数据（包括配额）
-      refreshWorkspaces();
-
       navigate('/');
     } catch (error) {
       const errorMessage = editUuid
@@ -486,7 +479,6 @@ export function useCreateWindow(
     editUuid,
     t,
     navigate,
-    refreshWorkspaces,
     isLocalProxyMode,
     selectedRemoteProxyUuids,
     selectedLocalProxyNodeNames,

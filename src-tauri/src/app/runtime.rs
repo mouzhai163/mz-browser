@@ -290,28 +290,21 @@ fn runtime_err_to_string(
     error.to_string().into()
 }
 
+/// 内核通过事件总线询问认证信息：没有用户，固定回答一个本地身份。
 fn current_auth_info() -> AuthInfo {
-    let Some(user_uuid) = crate::commands::auth::authenticated_user_uuid() else {
-        return AuthInfo {
-            is_authenticated: false,
-            access_token: None,
-            user_info: None,
-        };
-    };
-
     AuthInfo {
         is_authenticated: true,
         access_token: None,
         user_info: Some(crate::infrastructure::runtime::UserInfo {
-            user_id: user_uuid.to_string(),
-            username: user_uuid.to_string(),
+            user_id: "local".to_string(),
+            username: "local".to_string(),
             email: None,
         }),
     }
 }
 
 fn is_runtime_authenticated() -> bool {
-    crate::commands::auth::has_local_session()
+    crate::app::local_session::is_ready()
 }
 
 impl Default for SimprintRuntimeManager {

@@ -19,8 +19,6 @@ export const API_ENDPOINTS = {
 export interface AccountDto {
   id: number;
   uuid: string;
-  user_uuid: string;
-  team_uuid?: string;
   platform_url: string;
   platform_name?: string;
   account: string;

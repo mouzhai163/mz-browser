@@ -23,7 +23,7 @@ export interface ExtensionItem {
   fileSize?: number;
   permissions?: string[];
   hash?: string;
-  scope?: 'user' | 'team' | 'group-personal' | 'group-team' | 'local'; // 安装范围
+  scope?: 'user' | 'group-personal' | 'local'; // 安装范围
   groups?: Array<{
     uuid: string;
     name: string;

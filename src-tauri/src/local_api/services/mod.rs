@@ -3,7 +3,6 @@ pub mod environments;
 pub mod groups;
 pub mod proxies;
 pub mod tags;
-pub mod workspaces;
 
 use axum::http::StatusCode;
 use serde_json::Value;

@@ -11,7 +11,7 @@ use crate::{
             LocalApiBrowserKernelListResponse, LocalApiEnvironmentActionResponse,
             LocalApiEnvironmentDetailResponse, LocalApiEnvironmentListResponse,
             LocalApiGroupListResponse, LocalApiProxyDetail, LocalApiProxyListResponse,
-            LocalApiTagItem, LocalApiWorkspaceDetail, LocalApiWorkspaceListResponse,
+            LocalApiTagItem,
         },
     },
     mcp::error::McpToolError,
@@ -232,33 +232,6 @@ impl LocalApiBridge {
     pub async fn delete_tag(&self, tag_uuid: &str) -> Result<(), McpToolError> {
         let _: serde_json::Value = self
             .dispatch_business("tags/delete", "tags.delete", &json!({ "uuid": tag_uuid }))
-            .await?;
-        Ok(())
-    }
-
-    pub async fn list_workspaces(&self) -> Result<LocalApiWorkspaceListResponse, McpToolError> {
-        self.dispatch_business("workspaces/list", "workspaces.list", &json!({})).await
-    }
-
-    pub async fn get_workspace(
-        &self,
-        workspace_uuid: &str,
-    ) -> Result<LocalApiWorkspaceDetail, McpToolError> {
-        self.dispatch_business(
-            "workspaces/get",
-            "workspaces.get",
-            &json!({ "uuid": workspace_uuid }),
-        )
-        .await
-    }
-
-    pub async fn switch_workspace(&self, workspace_uuid: &str) -> Result<(), McpToolError> {
-        let _: serde_json::Value = self
-            .dispatch_business(
-                "workspaces/switch",
-                "workspaces.switch",
-                &json!({ "workspace_uuid": workspace_uuid }),
-            )
             .await?;
         Ok(())
     }
