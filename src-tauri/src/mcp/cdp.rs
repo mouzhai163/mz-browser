@@ -24,6 +24,7 @@ const CDP_PORT_START: u16 = 29200;
 const CDP_PORT_END: u16 = 29499;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(5);
+const INPUT_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_MESSAGE_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_SNAPSHOT_NODES: usize = 400;
 const MAX_TABS: usize = 100;
@@ -148,12 +149,12 @@ fn is_editable(node: &Value) -> bool {
 
 /// Ids of nodes that must never be exposed or acted on: password ("protected") nodes and
 /// everything below them, and the children of editable fields (which carry the typed value).
-pub(super) fn blocked_ids(nodes: &[Value]) -> HashSet<String> {
+pub(super) fn blocked_ids(nodes: &[Value], secrets: &HashSet<u64>) -> HashSet<String> {
     let by_id: HashMap<String, &Value> =
         nodes.iter().filter_map(|n| node_id(n).map(|id| (id, n))).collect();
     let mut queue: Vec<String> = nodes
         .iter()
-        .filter(|n| has_property(n, "protected"))
+        .filter(|n| is_secret_node(n, secrets))
         .filter_map(node_id)
         .collect();
     for node in nodes.iter().filter(|n| is_editable(n)) {
@@ -171,6 +172,78 @@ pub(super) fn blocked_ids(nodes: &[Value]) -> HashSet<String> {
     blocked
 }
 
+/// The accessibility tree of the DevTools protocol does not report a `protected` property for
+/// password fields, so secrets are found in the DOM (see [`secret_backend_ids`]) and matched here
+/// by `backendDOMNodeId`; the property check stays as a second signal.
+pub(super) fn is_secret_node(node: &Value, secrets: &HashSet<u64>) -> bool {
+    has_property(node, "protected")
+        || node
+            .get("backendDOMNodeId")
+            .and_then(Value::as_u64)
+            .is_some_and(|id| secrets.contains(&id))
+}
+
+const SECRET_AUTOCOMPLETE: [&str; 6] =
+    ["current-password", "new-password", "one-time-code", "cc-number", "cc-csc", "cc-exp"];
+const MAX_DOM_NODES: usize = 400_000;
+
+fn collect_secret_inputs(root: &Value, out: &mut HashSet<u64>) {
+    let mut stack = vec![root];
+    let mut seen = 0usize;
+    while let Some(node) = stack.pop() {
+        seen += 1;
+        if seen > MAX_DOM_NODES {
+            break;
+        }
+        if node.get("nodeName").and_then(Value::as_str).is_some_and(|n| n.eq_ignore_ascii_case("input")) {
+            let attrs = node.get("attributes").and_then(Value::as_array);
+            let attr = |wanted: &str| -> Option<String> {
+                let attrs = attrs?;
+                attrs
+                    .chunks(2)
+                    .find(|pair| pair.first().and_then(Value::as_str).is_some_and(|n| n.eq_ignore_ascii_case(wanted)))
+                    .and_then(|pair| pair.get(1))
+                    .and_then(Value::as_str)
+                    .map(|v| v.to_ascii_lowercase())
+            };
+            let secret_type = attr("type").is_some_and(|t| t.trim() == "password");
+            let secret_hint = attr("autocomplete")
+                .is_some_and(|a| a.split_whitespace().any(|token| SECRET_AUTOCOMPLETE.contains(&token)));
+            if secret_type || secret_hint {
+                if let Some(id) = node.get("backendNodeId").and_then(Value::as_u64) {
+                    out.insert(id);
+                }
+            }
+        }
+        for key in ["children", "shadowRoots"] {
+            if let Some(items) = node.get(key).and_then(Value::as_array) {
+                stack.extend(items.iter());
+            }
+        }
+        for key in ["contentDocument", "templateContent"] {
+            if let Some(child) = node.get(key) {
+                stack.push(child);
+            }
+        }
+    }
+}
+
+/// `backendNodeId`s of password inputs and inputs that hint at a secret (one-time codes, card
+/// data), including those inside iframes and shadow roots. Fails closed: if the DOM cannot be
+/// read, the caller must not continue.
+pub(super) async fn secret_backend_ids(
+    conn: &mut CdpConnection,
+    session: &str,
+) -> Result<HashSet<u64>, McpToolError> {
+    let document = conn
+        .send("DOM.getDocument", json!({ "depth": -1, "pierce": true }), Some(session))
+        .await?;
+    let root = document.get("root").ok_or_else(|| err(code::COMMAND_FAILED))?;
+    let mut out = HashSet::new();
+    collect_secret_inputs(root, &mut out);
+    Ok(out)
+}
+
 pub(super) fn node_is_editable(node: &Value) -> bool {
     is_editable(node)
 }
@@ -182,7 +255,14 @@ pub(super) fn node_ident(node: &Value) -> Option<String> {
 /// Reduces a full accessibility tree to a bounded, privacy-reduced outline: editable-field
 /// values are replaced and password ("protected") nodes with all their descendants are dropped.
 pub fn summarize_nodes(nodes: &[Value]) -> Vec<Value> {
-    let blocked = blocked_ids(nodes);
+    summarize_nodes_with(nodes, false, &HashSet::new())
+}
+
+/// With `full` the outline keeps field names, shows the AX `value` of fields (for a password
+/// field that is what the browser exposes, usually bullets; use the field-read tool for the
+/// real text) and marks password fields with `"protected": true` instead of dropping them.
+pub fn summarize_nodes_with(nodes: &[Value], full: bool, secrets: &HashSet<u64>) -> Vec<Value> {
+    let blocked = if full { HashSet::new() } else { blocked_ids(nodes, secrets) };
     nodes
         .iter()
         .filter(|n| !truthy(n.get("ignored")) && node_id(n).is_some_and(|id| !blocked.contains(&id)))
@@ -194,7 +274,7 @@ pub fn summarize_nodes(nodes: &[Value]) -> Vec<Value> {
                 .and_then(|r| r.get("value"))
                 .and_then(Value::as_str)
                 .unwrap_or("");
-            let name = if is_editable(node) {
+            let name = if is_editable(node) && !full {
                 "[editable field]".to_string()
             } else {
                 truncate(
@@ -208,7 +288,16 @@ pub fn summarize_nodes(nodes: &[Value]) -> Vec<Value> {
                 .take(20)
                 .map(|c| truncate(&c, 100))
                 .collect();
-            json!({ "id": truncate(&id, 100), "role": truncate(role, 100), "name": name, "children": children })
+            let mut entry = json!({ "id": truncate(&id, 100), "role": truncate(role, 100), "name": name, "children": children });
+            if full {
+                if let Some(value) = node.get("value").and_then(|v| v.get("value")).and_then(Value::as_str) {
+                    entry["value"] = json!(truncate(value, 1000));
+                }
+                if is_secret_node(node, secrets) {
+                    entry["protected"] = json!(true);
+                }
+            }
+            entry
         })
         .collect()
 }
@@ -221,6 +310,8 @@ pub struct CdpConnection {
     next_id: u64,
     /// Sessions that saw a navigation/detach event while we were reading.
     changed_sessions: HashSet<String>,
+    /// Highest tier: do not hide input/password content.
+    full_access: bool,
 }
 
 impl CdpConnection {
@@ -241,7 +332,16 @@ impl CdpConnection {
         .await
         .map_err(|_| err(code::CONNECTION_TIMEOUT))?
         .map_err(|_| err(code::CONNECTION_FAILED))?;
-        Ok(Self { socket, next_id: 1, changed_sessions: HashSet::new() })
+        Ok(Self { socket, next_id: 1, changed_sessions: HashSet::new(), full_access: false })
+    }
+
+    pub fn with_full_access(mut self, on: bool) -> Self {
+        self.full_access = on;
+        self
+    }
+
+    pub fn full_access(&self) -> bool {
+        self.full_access
     }
 
     pub fn session_changed(&self, session_id: &str) -> bool {
@@ -297,9 +397,12 @@ impl CdpConnection {
             }
             Err(err(code::CONNECTION_CLOSED))
         };
-        tokio::time::timeout(COMMAND_TIMEOUT, wait)
+        let method_name = method.to_string();
+        // input events are acknowledged by the page itself, so a busy page needs more time
+        let limit = if method.starts_with("Input.") { INPUT_TIMEOUT } else { COMMAND_TIMEOUT };
+        tokio::time::timeout(limit, wait)
             .await
-            .map_err(|_| err(code::COMMAND_TIMEOUT))?
+            .map_err(|_| McpToolError::upstream(format!("{}: {method_name}", code::COMMAND_TIMEOUT)))?
     }
 
     /// Detach only; never closes the browser or a target.
@@ -385,6 +488,7 @@ pub async fn snapshot(
     conn.send("Page.enable", json!({}), Some(&session)).await?;
     let tree = conn.send("Page.getFrameTree", json!({}), Some(&session)).await?;
     assert_frames(tree.get("frameTree").unwrap_or(&Value::Null), origins)?;
+    let secrets = secret_backend_ids(conn, &session).await?;
     let ax = conn
         .send("Accessibility.getFullAXTree", json!({ "depth": 8 }), Some(&session))
         .await?;
@@ -405,7 +509,7 @@ pub async fn snapshot(
     Ok(json!({
         "pageId": page.target_id,
         "url": public_url(final_url),
-        "nodes": summarize_nodes(&nodes),
+        "nodes": summarize_nodes_with(&nodes, conn.full_access, &secrets),
         "truncated": nodes.len() > MAX_SNAPSHOT_NODES,
     }))
 }
@@ -415,8 +519,9 @@ pub async fn read(
     endpoint: &str,
     origins: &[String],
     page_id: Option<&str>,
+    full_access: bool,
 ) -> Result<Value, McpToolError> {
-    let mut conn = CdpConnection::connect(endpoint).await?;
+    let mut conn = CdpConnection::connect(endpoint).await?.with_full_access(full_access);
     let result = match page_id {
         None => list_tabs(&mut conn, origins).await,
         Some(page_id) => snapshot(&mut conn, origins, page_id).await,
@@ -508,6 +613,65 @@ mod tests {
     }
 
     #[test]
+    fn full_access_snapshot_shows_fields_and_marks_passwords() {
+        let nodes = vec![
+            json!({"nodeId":"1","role":{"value":"WebArea"},"name":{"value":"Login"},"childIds":["2","3"]}),
+            json!({"nodeId":"2","role":{"value":"textbox"},"name":{"value":"Email"},"backendDOMNodeId":22,
+                   "value":{"value":"alice@example.com"},"childIds":[]}),
+            json!({"nodeId":"3","role":{"value":"textbox"},"name":{"value":"Password"},"backendDOMNodeId":23,
+                   "childIds":[]}),
+        ];
+        let secrets: HashSet<u64> = [23].into_iter().collect();
+        let out = summarize_nodes_with(&nodes, true, &secrets);
+        assert_eq!(out.len(), 3);
+        assert_eq!(out[1]["name"], "Email");
+        assert_eq!(out[1]["value"], "alice@example.com");
+        assert!(out[1].get("protected").is_none());
+        assert_eq!(out[2]["protected"], true);
+        assert_eq!(out[0]["children"], json!(["2", "3"]));
+        // the default view of the same tree hides the fields, and the password node entirely
+        let hidden = summarize_nodes_with(&nodes, false, &secrets);
+        let text = serde_json::to_string(&hidden).unwrap();
+        assert!(!text.contains("alice@example.com") && !text.contains("Password") && !text.contains("Email"));
+        assert!(hidden.iter().all(|n| n["id"] != "3"));
+    }
+
+    #[test]
+    fn secrets_are_found_in_the_dom_including_frames_and_shadow_roots() {
+        let root = json!({"nodeName":"#document","backendNodeId":1,"children":[
+            {"nodeName":"HTML","backendNodeId":2,"children":[
+                {"nodeName":"INPUT","backendNodeId":10,"attributes":["type","text","name","q"]},
+                {"nodeName":"input","backendNodeId":11,"attributes":["TYPE"," Password "]},
+                {"nodeName":"INPUT","backendNodeId":12,"attributes":["type","text","autocomplete","section-x new-password"]},
+                {"nodeName":"INPUT","backendNodeId":13,"attributes":["autocomplete","one-time-code"]},
+                {"nodeName":"INPUT","backendNodeId":14,"attributes":["autocomplete","email"]},
+                {"nodeName":"IFRAME","backendNodeId":15,"contentDocument":{"nodeName":"#document","backendNodeId":16,
+                    "children":[{"nodeName":"INPUT","backendNodeId":17,"attributes":["type","password"]}]}},
+                {"nodeName":"DIV","backendNodeId":18,"shadowRoots":[{"nodeName":"#document-fragment","backendNodeId":19,
+                    "children":[{"nodeName":"INPUT","backendNodeId":20,"attributes":["type","password"]}]}]},
+                {"nodeName":"TEXTAREA","backendNodeId":21,"attributes":["type","password"]}
+            ]}]});
+        let mut found = HashSet::new();
+        collect_secret_inputs(&root, &mut found);
+        let mut ids: Vec<u64> = found.into_iter().collect();
+        ids.sort();
+        assert_eq!(ids, vec![11, 12, 13, 17, 20]);
+    }
+
+    #[test]
+    fn secret_nodes_and_their_subtree_are_blocked_without_any_protected_property() {
+        // real accessibility trees never carry a `protected` property; the DOM tells us instead
+        let nodes = vec![
+            json!({"nodeId":"1","role":{"value":"WebArea"},"childIds":["2"]}),
+            json!({"nodeId":"2","role":{"value":"textbox"},"backendDOMNodeId":42,"childIds":["3"]}),
+            json!({"nodeId":"3","role":{"value":"generic"},"name":{"value":"bullets"},"childIds":[]}),
+        ];
+        let secrets: HashSet<u64> = [42].into_iter().collect();
+        let blocked = blocked_ids(&nodes, &secrets);
+        assert!(blocked.contains("2") && blocked.contains("3") && !blocked.contains("1"));
+    }
+
+    #[test]
     fn snapshot_is_bounded() {
         let nodes: Vec<Value> = (0..500)
             .map(|i| json!({"nodeId": i.to_string(), "role": {"value": "x"}, "name": {"value": "n".repeat(900)}}))
@@ -574,6 +738,7 @@ mod tests {
         let url = fake_kernel(vec![
             ("Target.getTargets", targets),
             ("Target.attachToTarget", json!({"sessionId":"S"})),
+            ("DOM.getDocument", json!({"root":{"nodeName":"#document","backendNodeId":1,"children":[]}})),
             (
                 "Page.getFrameTree",
                 json!({"frameTree":{"frame":{"url":"https://example.com/"},
@@ -594,6 +759,7 @@ mod tests {
                 json!({"targetInfos":[{"targetId":"A","type":"page","title":"t","url":"https://example.com/x"}]}),
             ),
             ("Target.attachToTarget", json!({"sessionId":"S"})),
+            ("DOM.getDocument", json!({"root":{"nodeName":"#document","backendNodeId":1,"children":[]}})),
             (
                 "Page.getFrameTree",
                 json!({"frameTree":{"frame":{"url":"https://example.com/x"}}}),
@@ -623,6 +789,7 @@ mod tests {
                 json!({"targetInfos":[{"targetId":"A","type":"page","title":"t","url":"https://example.com/x"}]}),
             ),
             ("Target.attachToTarget", json!({"sessionId":"S"})),
+            ("DOM.getDocument", json!({"root":{"nodeName":"#document","backendNodeId":1,"children":[]}})),
             ("Page.getFrameTree", json!({"frameTree":{"frame":{"url":"https://example.com/y"}}})),
             ("Accessibility.getFullAXTree", json!({"nodes":[]})),
             ("Target.getTargetInfo", json!({"targetInfo":{"url":"https://example.com/y"}})),

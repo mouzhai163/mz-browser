@@ -5,10 +5,12 @@
 //! snapshot tool shows (so password fields and typed values are never reachable), and never
 //! evaluates scripts.
 
+use std::collections::HashSet;
+
 use serde_json::{Value, json};
 
 use super::cdp::{
-    CdpConnection, PageInfo, assert_frames, authorized_pages, authorized_url, blocked_ids, code,
+    CdpConnection, PageInfo, assert_frames, authorized_pages, authorized_url, blocked_ids, code, is_secret_node, secret_backend_ids,
     node_ident, node_is_editable, public_url, truncate,
 };
 use super::error::McpToolError;
@@ -61,6 +63,13 @@ async fn attach_authorized(
     let tree = conn.send("Page.getFrameTree", json!({}), Some(&session)).await?;
     assert_frames(tree.get("frameTree").unwrap_or(&Value::Null), origins)?;
     Ok((page, session))
+}
+
+/// Input events are only acknowledged by a visible tab, so make the page the active one first.
+async fn bring_to_front(conn: &mut CdpConnection, session: &str) {
+    let _ = conn.send("Page.bringToFront", json!({}), Some(session)).await;
+    // let the tab switch settle before the first input event
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
 }
 
 /// Where the page is now, reported only while it is still a plain http(s) page.
@@ -125,16 +134,21 @@ pub async fn open_tab(
 }
 
 /// Looks the node up in the same reduced view the snapshot exposes.
+/// Returns the node, its backend id and whether it holds a secret (password, one-time code, card).
 async fn find_node(
     conn: &mut CdpConnection,
     session: &str,
     node_id: &str,
-) -> Result<(Value, u64), McpToolError> {
+) -> Result<(Value, u64, bool), McpToolError> {
+    // fail closed: without the DOM view the secret fields cannot be recognised
+    let secrets = secret_backend_ids(conn, session).await?;
     let ax = conn
         .send("Accessibility.getFullAXTree", json!({ "depth": 8 }), Some(session))
         .await?;
     let nodes = ax.get("nodes").and_then(Value::as_array).cloned().unwrap_or_default();
-    let blocked = blocked_ids(&nodes);
+    // the highest tier may act on secret fields and fields with content
+    let blocked: HashSet<String> =
+        if conn.full_access() { HashSet::new() } else { blocked_ids(&nodes, &secrets) };
     let node = nodes
         .into_iter()
         .find(|n| node_ident(n).as_deref() == Some(node_id))
@@ -146,7 +160,8 @@ async fn find_node(
         .get("backendDOMNodeId")
         .and_then(Value::as_u64)
         .ok_or_else(|| invalid("Element cannot be targeted"))?;
-    Ok((node, backend))
+    let secret = is_secret_node(&node, &secrets);
+    Ok((node, backend, secret))
 }
 
 fn quad_center(model: &Value) -> Option<(f64, f64)> {
@@ -168,7 +183,8 @@ pub async fn click(
     node_id: &str,
 ) -> Result<Value, McpToolError> {
     let (page, session) = attach_authorized(conn, origins, page_id).await?;
-    let (_, backend) = find_node(conn, &session, node_id).await?;
+    let (_, backend, _) = find_node(conn, &session, node_id).await?;
+    bring_to_front(conn, &session).await;
     conn.send("DOM.enable", json!({}), Some(&session)).await?;
     let _ = conn
         .send("DOM.scrollIntoViewIfNeeded", json!({ "backendNodeId": backend }), Some(&session))
@@ -220,6 +236,7 @@ pub async fn press_key(
         .copied()
         .ok_or_else(|| invalid("Key is not allowed"))?;
     let (page, session) = attach_authorized(conn, origins, page_id).await?;
+    bring_to_front(conn, &session).await;
     key_press(conn, &session, key, code, vk).await?;
     current_state(conn, origins, &page.target_id).await
 }
@@ -237,10 +254,11 @@ pub async fn type_text(
         return Err(invalid("Text must be 1 to 2000 characters"));
     }
     let (page, session) = attach_authorized(conn, origins, page_id).await?;
-    let (node, backend) = find_node(conn, &session, node_id).await?;
+    let (node, backend, secret) = find_node(conn, &session, node_id).await?;
     if !node_is_editable(&node) {
         return Err(invalid("Element is not an editable field"));
     }
+    bring_to_front(conn, &session).await;
     conn.send("DOM.enable", json!({}), Some(&session)).await?;
     conn.send("DOM.focus", json!({ "backendNodeId": backend }), Some(&session)).await?;
     if clear {
@@ -260,6 +278,55 @@ pub async fn type_text(
     }
     let mut state = current_state(conn, origins, &page.target_id).await?;
     state["typedChars"] = json!(text.chars().count());
+    Ok(state)
+}
+
+/// Reads the real current value of an input or password field. Only for the highest tier.
+pub async fn read_field(
+    conn: &mut CdpConnection,
+    origins: &[String],
+    page_id: &str,
+    node_id: &str,
+) -> Result<Value, McpToolError> {
+    if !conn.full_access() {
+        return Err(invalid("Full page access is disabled"));
+    }
+    let (page, session) = attach_authorized(conn, origins, page_id).await?;
+    let (node, backend, secret) = find_node(conn, &session, node_id).await?;
+    if !node_is_editable(&node) {
+        return Err(invalid("Element is not an editable field"));
+    }
+    let object = conn
+        .send("DOM.resolveNode", json!({ "backendNodeId": backend }), Some(&session))
+        .await?;
+    let object_id = object
+        .get("object")
+        .and_then(|o| o.get("objectId"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| upstream(code::COMMAND_FAILED))?
+        .to_string();
+    // a fixed property read, never caller-supplied script
+    let result = conn
+        .send(
+            "Runtime.callFunctionOn",
+            json!({
+                "objectId": object_id,
+                "functionDeclaration": "function() { return typeof this.value === 'string' ? this.value : ''; }",
+                "returnByValue": true
+            }),
+            Some(&session),
+        )
+        .await;
+    let _ = conn.send("Runtime.releaseObject", json!({ "objectId": object_id }), Some(&session)).await;
+    let value = result?
+        .get("result")
+        .and_then(|r| r.get("value"))
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let mut state = current_state(conn, origins, &page.target_id).await?;
+    state["value"] = json!(truncate(&value, 4000));
+    state["isPassword"] = json!(secret);
     Ok(state)
 }
 
@@ -323,12 +390,22 @@ mod tests {
                 json!({"nodes":[
                     {"nodeId":"1","role":{"value":"button"},"name":{"value":"Go"},"backendDOMNodeId":11},
                     {"nodeId":"2","role":{"value":"textbox"},"name":{"value":"q"},"backendDOMNodeId":12},
-                    {"nodeId":"3","role":{"value":"textbox"},"name":{"value":"pw"},"backendDOMNodeId":13,
-                     "properties":[{"name":"protected","value":{"value":true}}]},
+                    {"nodeId":"3","role":{"value":"textbox"},"name":{"value":"pw"},"backendDOMNodeId":13},
                     {"nodeId":"4","role":{"value":"StaticText"},"name":{"value":"typed"},"backendDOMNodeId":14}
                 ]}),
             ),
             ("DOM.getBoxModel", json!({"model":{"content":[10.0,10.0,30.0,10.0,30.0,30.0,10.0,30.0]}})),
+            (
+                "DOM.getDocument",
+                json!({"root":{"nodeName":"#document","backendNodeId":1,"children":[
+                    {"nodeName":"HTML","backendNodeId":2,"children":[
+                        {"nodeName":"INPUT","backendNodeId":12,"attributes":["type","text"]},
+                        {"nodeName":"INPUT","backendNodeId":13,"attributes":["type","PASSWORD","id","pw"]},
+                        {"nodeName":"IFRAME","backendNodeId":15,"children":[],"contentDocument":
+                            {"nodeName":"#document","backendNodeId":16,"children":[
+                                {"nodeName":"INPUT","backendNodeId":17,"attributes":["autocomplete","one-time-code"]}]}}
+                    ]}]}}),
+            ),
         ]
     }
 
@@ -374,6 +451,36 @@ mod tests {
             assert!(matches!(result, Err(McpToolError::InvalidParams(_))), "node {node}");
         }
         assert!(!methods(&log).contains(&"Input.insertText".to_string()));
+    }
+
+    #[tokio::test]
+    async fn full_access_can_fill_and_read_password_fields_but_only_when_enabled() {
+        let mut replies = page_replies();
+        replies.push((
+            "DOM.resolveNode",
+            json!({"object":{"objectId":"obj-1"}}),
+        ));
+        replies.push((
+            "Runtime.callFunctionOn",
+            json!({"result":{"type":"string","value":"hunter2"}}),
+        ));
+        // off: a password node is refused for typing and for reading
+        let (url, log) = fake_kernel(replies.clone()).await;
+        let mut conn = CdpConnection::connect_validated(&url).await.unwrap();
+        assert!(type_text(&mut conn, &origins(), "A", "3", "pw", false, false).await.is_err());
+        assert!(read_field(&mut conn, &origins(), "A", "3").await.is_err());
+        assert!(!methods(&log).contains(&"Runtime.callFunctionOn".to_string()));
+        // on: both work and the value comes back
+        let (url, log) = fake_kernel(replies).await;
+        let mut conn = CdpConnection::connect_validated(&url).await.unwrap().with_full_access(true);
+        let typed = type_text(&mut conn, &origins(), "A", "3", "pw", true, false).await.unwrap();
+        assert_eq!(typed["typedChars"], 2);
+        let read = read_field(&mut conn, &origins(), "A", "3").await.unwrap();
+        assert_eq!(read["value"], "hunter2");
+        assert_eq!(read["isPassword"], true);
+        assert!(methods(&log).contains(&"Runtime.releaseObject".to_string()));
+        // buttons are not fields
+        assert!(read_field(&mut conn, &origins(), "A", "1").await.is_err());
     }
 
     #[tokio::test]
@@ -467,10 +574,11 @@ Connection: close
             let session = ax["sessionId"].as_str().unwrap().to_string();
             let tree = conn.send("Accessibility.getFullAXTree", json!({}), Some(&session)).await.unwrap();
             tree["nodes"].as_array().unwrap().iter()
-                .filter(|n| n["properties"].as_array().is_some_and(|p| p.iter().any(|x| x["name"] == "protected")))
+                .filter(|n| n["name"]["value"] == "secret")
                 .map(|n| n["nodeId"].as_str().unwrap().to_string())
                 .collect()
         };
+        assert!(!pw_ids.is_empty(), "the test page has a password field");
         for id in &pw_ids {
             let r = type_text(&mut conn, &origins, &page_id, id, "nope", false, false).await;
             assert!(r.is_err(), "password field {id} must be refused");

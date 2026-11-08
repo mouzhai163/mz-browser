@@ -74,6 +74,17 @@ impl McpServer {
         Ok(())
     }
 
+    /// Guard for the highest tier (real input/password content).
+    pub async fn require_full_access(&self) -> Result<(), super::error::McpToolError> {
+        self.require_act().await?;
+        if !self.config.access.full_page_access_enabled {
+            return Err(super::error::McpToolError::invalid_params(
+                "Full page access is disabled",
+            ));
+        }
+        Ok(())
+    }
+
     pub async fn require_environment(
         &self,
         env_uuid: &str,
@@ -100,6 +111,9 @@ impl ServerHandler for McpServer {
         }
         if access.act_tools_enabled {
             text.push_str(" Page actions are enabled: you can navigate, click, type and press keys on http(s) pages of authorized environments.");
+        }
+        if access.full_page_access_enabled {
+            text.push_str(" Full page access is enabled: snapshots include the real content of input and password fields and you may read and fill them. Treat that data as secret.");
         }
         if access.manage_tools_enabled {
             text.push_str(" Management is enabled: you can create, change, start, stop and delete environments, groups, proxies and tags. Confirm destructive actions with the user.");

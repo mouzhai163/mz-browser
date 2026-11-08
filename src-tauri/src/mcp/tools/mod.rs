@@ -17,6 +17,9 @@ pub fn routes(access: &McpConfig) -> Vec<ToolRoute<McpServer>> {
     let mut routes = agent::routes(access.page_tools_enabled);
     if access.act_tools_enabled && access.page_tools_enabled {
         routes.extend(act::routes());
+        if access.full_page_access_enabled {
+            routes.extend(act::full_access_routes());
+        }
     }
     if access.manage_tools_enabled {
         routes.extend(manage_routes());
@@ -58,6 +61,16 @@ mod tests {
         assert!(act.contains(&"mz_browser_click".to_string()));
         assert!(!act.iter().any(|n| n.starts_with("mz_create") || n.starts_with("mz_delete")));
 
+        // the highest tier adds exactly the field-read tool, and only on top of page actions
+        access.full_page_access_enabled = true;
+        let full = names(&access);
+        assert_eq!(full.len(), 10);
+        assert!(full.contains(&"mz_browser_read_field".to_string()));
+        access.full_page_access_enabled = false;
+        assert!(!names(&access).contains(&"mz_browser_read_field".to_string()));
+        let full_without_act = McpConfig { page_tools_enabled: true, full_page_access_enabled: true, ..McpConfig::default() };
+        assert!(!names(&full_without_act).contains(&"mz_browser_read_field".to_string()));
+
         // an act flag without page reading never exposes act tools
         let orphan = McpConfig { act_tools_enabled: true, ..McpConfig::default() };
         assert_eq!(names(&orphan).len(), 2);
@@ -75,6 +88,7 @@ mod tests {
             page_tools_enabled: true,
             act_tools_enabled: true,
             manage_tools_enabled: true,
+            full_page_access_enabled: true,
             ..McpConfig::default()
         };
         let mut seen = names(&all);

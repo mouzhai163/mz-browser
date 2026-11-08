@@ -29,6 +29,7 @@ export interface McpConfigSnapshot {
   pageToolsEnabled: boolean;
   manageToolsEnabled: boolean;
   actToolsEnabled: boolean;
+  fullPageAccessEnabled: boolean;
   autoStart: boolean;
 }
 
@@ -38,5 +39,6 @@ export interface UpdateMcpConfigRequest {
   pageToolsEnabled?: boolean;
   manageToolsEnabled?: boolean;
   actToolsEnabled?: boolean;
+  fullPageAccessEnabled?: boolean;
   autoStart?: boolean;
 }

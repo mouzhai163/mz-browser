@@ -23,6 +23,10 @@ pub struct McpConfig {
     /// Click, type, navigate and press keys in authorized pages. Needs `page_tools_enabled`.
     #[serde(default)]
     pub act_tools_enabled: bool,
+    /// Highest tier, for personal agent development: page reads include the real content of
+    /// input and password fields and actions may target them. Needs `act_tools_enabled`.
+    #[serde(default)]
+    pub full_page_access_enabled: bool,
     /// Start the MCP service automatically when the app starts. Off by default.
     #[serde(default)]
     pub auto_start: bool,
@@ -37,6 +41,7 @@ impl Default for McpConfig {
             page_tools_enabled: false,
             manage_tools_enabled: false,
             act_tools_enabled: false,
+            full_page_access_enabled: false,
             auto_start: false,
         }
     }
@@ -55,6 +60,9 @@ impl McpConfig {
         }
         if self.act_tools_enabled && !self.page_tools_enabled {
             return Err("开启页面操作前需要先开启页面读取".into());
+        }
+        if self.full_page_access_enabled && !self.act_tools_enabled {
+            return Err("开启完全页面访问前需要先开启页面操作".into());
         }
         if self.allowed_environment_uuids.len() > 50 {
             return Err("MCP 授权环境最多 50 个".into());
@@ -92,6 +100,7 @@ pub struct UpdateMcpConfigRequest {
     pub page_tools_enabled: Option<bool>,
     pub manage_tools_enabled: Option<bool>,
     pub act_tools_enabled: Option<bool>,
+    pub full_page_access_enabled: Option<bool>,
     pub auto_start: Option<bool>,
 }
 
@@ -107,6 +116,7 @@ pub struct McpRuntimeSnapshot {
     pub page_tools_enabled: bool,
     pub manage_tools_enabled: bool,
     pub act_tools_enabled: bool,
+    pub full_page_access_enabled: bool,
     pub auto_start: bool,
 }
 
@@ -180,6 +190,7 @@ pub fn update_config(
         if !enabled {
             // page actions cannot outlive page reading
             config.act_tools_enabled = false;
+            config.full_page_access_enabled = false;
         }
     }
     if let Some(enabled) = request.manage_tools_enabled {
@@ -187,6 +198,12 @@ pub fn update_config(
     }
     if let Some(enabled) = request.act_tools_enabled {
         config.act_tools_enabled = enabled;
+        if !enabled {
+            config.full_page_access_enabled = false;
+        }
+    }
+    if let Some(enabled) = request.full_page_access_enabled {
+        config.full_page_access_enabled = enabled;
     }
     if let Some(auto_start) = request.auto_start {
         config.auto_start = auto_start;
@@ -210,6 +227,7 @@ pub fn snapshot_from_config(config: McpConfig, status: McpManagerStatus) -> McpR
         page_tools_enabled: config.page_tools_enabled,
         manage_tools_enabled: config.manage_tools_enabled,
         act_tools_enabled: config.act_tools_enabled,
+        full_page_access_enabled: config.full_page_access_enabled,
         auto_start: config.auto_start,
     }
 }
@@ -232,6 +250,7 @@ mod tests {
         config.validate().unwrap();
         assert!(!config.enabled && !config.page_tools_enabled);
         assert!(!config.manage_tools_enabled && !config.act_tools_enabled && !config.auto_start);
+        assert!(!config.full_page_access_enabled);
         assert!(config.allowed_environment_uuids.is_empty());
         assert_ne!(config.access_token, McpConfig::default().access_token);
         let snapshot = snapshot_from_config(config.clone(), McpManagerStatus { running: false });
@@ -250,6 +269,16 @@ mod tests {
         let config: McpConfig = serde_json::from_value(old).unwrap();
         config.validate().unwrap();
         assert!(config.page_tools_enabled && !config.manage_tools_enabled && !config.act_tools_enabled);
+    }
+
+    #[test]
+    fn full_page_access_requires_page_actions_and_turns_off_with_them() {
+        let mut config = McpConfig::default();
+        config.full_page_access_enabled = true;
+        assert!(config.validate().is_err());
+        config.page_tools_enabled = true;
+        config.act_tools_enabled = true;
+        assert!(config.validate().is_ok());
     }
 
     #[test]

@@ -21,6 +21,7 @@ export function McpAccessSettings({ config, onUpdate, onRefresh }: Props) {
   const [pagesOn, setPagesOn] = useState(config.pageToolsEnabled);
   const [actOn, setActOn] = useState(config.actToolsEnabled);
   const [manageOn, setManageOn] = useState(config.manageToolsEnabled);
+  const [fullOn, setFullOn] = useState(config.fullPageAccessEnabled);
   const [choices, setChoices] = useState<EnvironmentChoice[] | null>(null);
   const [choicesError, setChoicesError] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set(config.allowedEnvironmentUuids));
@@ -81,6 +82,7 @@ export function McpAccessSettings({ config, onUpdate, onRefresh }: Props) {
         allowedEnvironmentUuids: [...selected],
         pageToolsEnabled: pagesOn,
         actToolsEnabled: pagesOn && actOn,
+        fullPageAccessEnabled: pagesOn && actOn && fullOn,
         manageToolsEnabled: manageOn,
         autoStart: data.get('autoStart') === 'on',
       });
@@ -185,7 +187,10 @@ export function McpAccessSettings({ config, onUpdate, onRefresh }: Props) {
             checked={pagesOn}
             onChange={(event) => {
               setPagesOn(event.target.checked);
-              if (!event.target.checked) setActOn(false);
+              if (!event.target.checked) {
+                setActOn(false);
+                setFullOn(false);
+              }
             }}
           />
           {t('mcp.readOnlyPages')}
@@ -196,11 +201,29 @@ export function McpAccessSettings({ config, onUpdate, onRefresh }: Props) {
             data-testid="mcp-scope-act"
             checked={pagesOn && actOn}
             disabled={!pagesOn}
-            onChange={(event) => setActOn(event.target.checked)}
+            onChange={(event) => {
+              setActOn(event.target.checked);
+              if (!event.target.checked) setFullOn(false);
+            }}
           />
           {t('mcp.actPages')}
         </label>
         {pagesOn && actOn && <p className="text-destructive">{t('mcp.actWarning')}</p>}
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            data-testid="mcp-scope-full"
+            checked={pagesOn && actOn && fullOn}
+            disabled={!pagesOn || !actOn}
+            onChange={(event) => setFullOn(event.target.checked)}
+          />
+          {t('mcp.fullPageAccess')}
+        </label>
+        {pagesOn && actOn && fullOn && (
+          <p className="text-destructive" data-testid="mcp-full-warning">
+            {t('mcp.fullPageAccessWarning')}
+          </p>
+        )}
         <label className="flex items-center gap-2">
           <input
             type="checkbox"

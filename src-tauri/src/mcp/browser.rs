@@ -32,7 +32,7 @@ pub(crate) async fn read_page(
     let action = if page_id.is_some() { "snapshot" } else { "tabs" };
     let result = tokio::time::timeout(
         Duration::from_secs(20),
-        cdp::read(&endpoint, origins, page_id),
+        cdp::read(&endpoint, origins, page_id, service.config().access.full_page_access_enabled),
     )
     .await
     .map_err(|_| McpToolError::upstream("Browser read timed out"))
@@ -56,6 +56,7 @@ pub(crate) enum ActOp<'a> {
     Click { page_id: &'a str, node_id: &'a str },
     Type { page_id: &'a str, node_id: &'a str, text: &'a str, clear: bool, submit: bool },
     PressKey { page_id: &'a str, key: &'a str },
+    ReadField { page_id: &'a str, node_id: &'a str },
 }
 
 impl ActOp<'_> {
@@ -66,6 +67,7 @@ impl ActOp<'_> {
             Self::Click { .. } => "click",
             Self::Type { .. } => "type",
             Self::PressKey { .. } => "press_key",
+            Self::ReadField { .. } => "read_field",
         }
     }
 }
@@ -76,7 +78,11 @@ pub(crate) async fn act(
     env_uuid: &str,
     op: ActOp<'_>,
 ) -> Result<Value, McpToolError> {
-    service.require_act().await?;
+    if matches!(op, ActOp::ReadField { .. }) {
+        service.require_full_access().await?;
+    } else {
+        service.require_act().await?;
+    }
     service.require_environment(env_uuid).await?;
     let _slot = service
         .config()
@@ -93,7 +99,9 @@ pub(crate) async fn act(
         .ok_or_else(|| McpToolError::invalid_params("Environment is not running"))?;
     let name = op.name();
     let run = async {
-        let mut conn = cdp::CdpConnection::connect(&endpoint).await?;
+        let mut conn = cdp::CdpConnection::connect(&endpoint)
+            .await?
+            .with_full_access(service.config().access.full_page_access_enabled);
         let result = match op {
             ActOp::Navigate { page_id, url } => {
                 cdp_act::navigate(&mut conn, origins, page_id, url).await
@@ -107,6 +115,9 @@ pub(crate) async fn act(
             }
             ActOp::PressKey { page_id, key } => {
                 cdp_act::press_key(&mut conn, origins, page_id, key).await
+            }
+            ActOp::ReadField { page_id, node_id } => {
+                cdp_act::read_field(&mut conn, origins, page_id, node_id).await
             }
         };
         conn.close().await;

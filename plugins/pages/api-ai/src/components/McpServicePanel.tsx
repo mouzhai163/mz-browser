@@ -38,6 +38,7 @@ export function McpServicePanel({
           key={JSON.stringify([
             config.allowedEnvironmentUuids,
             config.pageToolsEnabled,
+            config.fullPageAccessEnabled,
           ])}
           config={config}
           onUpdate={onUpdate}

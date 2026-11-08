@@ -20,6 +20,7 @@ struct OpenTab;
 struct Click;
 struct Type;
 struct PressKey;
+struct ReadField;
 
 pub fn routes() -> Vec<ToolRoute<McpServer>> {
     ToolRouter::new()
@@ -30,6 +31,11 @@ pub fn routes() -> Vec<ToolRoute<McpServer>> {
         .with_async_tool::<PressKey>()
         .into_iter()
         .collect()
+}
+
+/// Extra tools of the highest tier (real input and password content).
+pub fn full_access_routes() -> Vec<ToolRoute<McpServer>> {
+    ToolRouter::new().with_async_tool::<ReadField>().into_iter().collect()
 }
 
 #[derive(Default, Deserialize, JsonSchema)]
@@ -66,7 +72,7 @@ pub struct TypeInput {
     pub env_uuid: String,
     /// Page id from mz_browser_tabs.
     pub page_id: String,
-    /// Element id of an editable field from a fresh mz_browser_snapshot. Password fields are refused.
+    /// Element id of an editable field from a fresh mz_browser_snapshot. Password fields are refused unless full page access is on.
     pub node_id: String,
     /// Text to type, 1 to 2000 characters.
     pub text: String,
@@ -87,6 +93,16 @@ pub struct PressKeyInput {
     /// One of Enter, Tab, Escape, Backspace, Delete, ArrowUp, ArrowDown, ArrowLeft, ArrowRight,
     /// PageUp, PageDown, Home, End.
     pub key: String,
+}
+
+#[derive(Default, Deserialize, JsonSchema)]
+pub struct ReadFieldInput {
+    /// Environment UUID (must be authorized).
+    pub env_uuid: String,
+    /// Page id from mz_browser_tabs.
+    pub page_id: String,
+    /// Element id of an input or password field from a fresh mz_browser_snapshot.
+    pub node_id: String,
 }
 
 macro_rules! act_tool {
@@ -127,7 +143,7 @@ act_tool!(
     Type,
     TypeInput,
     "mz_browser_type",
-    "Type text into an editable field of an authorized page by its snapshot id. Password fields are refused. Treat anything you type as visible to the site."
+    "Type text into an editable field of an authorized page by its snapshot id. Password fields are refused unless full page access is on. Treat anything you type as visible to the site."
 );
 act_tool!(
     PressKey,
@@ -135,6 +151,26 @@ act_tool!(
     "mz_browser_press_key",
     "Press one allowed key (Enter, Tab, Escape, arrows, paging keys, Backspace, Delete) in an authorized page."
 );
+
+act_tool!(
+    ReadField,
+    ReadFieldInput,
+    "mz_browser_read_field",
+    "Read the real current value of an input or password field by its snapshot id. Only available with full page access; the result is secret data."
+);
+
+impl AsyncTool<McpServer> for ReadField {
+    async fn invoke(service: &McpServer, i: Self::Parameter) -> Result<ReadOutput, McpToolError> {
+        check_ids(&i.page_id, &i.node_id)?;
+        let data = browser::act(
+            service,
+            &i.env_uuid,
+            ActOp::ReadField { page_id: &i.page_id, node_id: &i.node_id },
+        )
+        .await?;
+        Ok(ReadOutput { data })
+    }
+}
 
 impl AsyncTool<McpServer> for Navigate {
     async fn invoke(service: &McpServer, i: Self::Parameter) -> Result<ReadOutput, McpToolError> {
