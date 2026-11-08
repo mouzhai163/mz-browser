@@ -1,6 +1,6 @@
 //! Page actions for the MCP "act" tier: navigate, open a tab, click, type, press a key.
 //!
-//! Every action first re-checks that the page and all of its frames are on an allowed origin,
+//! Every action first re-checks that the page and all of its frames are plain http(s) pages,
 //! only acts on elements that came from the same privacy-reduced accessibility outline the
 //! snapshot tool shows (so password fields and typed values are never reachable), and never
 //! evaluates scripts.
@@ -63,7 +63,7 @@ async fn attach_authorized(
     Ok((page, session))
 }
 
-/// Where the page is now, reported only while it is still on an allowed site.
+/// Where the page is now, reported only while it is still a plain http(s) page.
 async fn current_state(
     conn: &mut CdpConnection,
     origins: &[String],
@@ -82,14 +82,14 @@ async fn current_state(
             "ok": true,
             "pageId": target_id,
             "url": null,
-            "note": "The page is no longer on an allowed site; further tools will refuse it."
+            "note": "The page is no longer a plain web page; further tools will refuse it."
         }))
     }
 }
 
 fn require_authorized_url(url: &str, origins: &[String]) -> Result<(), McpToolError> {
     if url.len() > 2048 || !authorized_url(url, origins) {
-        return Err(invalid("URL is not on an allowed site origin"));
+        return Err(invalid("URL must be a plain http(s) address"));
     }
     Ok(())
 }

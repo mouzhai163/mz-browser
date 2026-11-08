@@ -16,8 +16,6 @@ pub struct McpConfig {
     /// Read tabs and page outlines of authorized environments (read-only).
     #[serde(default)]
     pub page_tools_enabled: bool,
-    #[serde(default)]
-    pub allowed_origins: Vec<String>,
     /// Manage environments, groups, proxies, tags and kernels (full management, like the local
     /// API). Not limited to the authorized environments.
     #[serde(default)]
@@ -37,7 +35,6 @@ impl Default for McpConfig {
             access_token: new_access_token(),
             allowed_environment_uuids: vec![],
             page_tools_enabled: false,
-            allowed_origins: vec![],
             manage_tools_enabled: false,
             act_tools_enabled: false,
             auto_start: false,
@@ -59,16 +56,13 @@ impl McpConfig {
         if self.act_tools_enabled && !self.page_tools_enabled {
             return Err("开启页面操作前需要先开启页面读取".into());
         }
-        if self.allowed_environment_uuids.len() > 50 || self.allowed_origins.len() > 50 {
-            return Err("MCP 环境或站点授权最多各 50 项".into());
+        if self.allowed_environment_uuids.len() > 50 {
+            return Err("MCP 授权环境最多 50 个".into());
         }
         for id in &self.allowed_environment_uuids {
             if uuid::Uuid::parse_str(id).is_err() {
                 return Err("MCP 环境 UUID 无效".into());
             }
-        }
-        for origin in &self.allowed_origins {
-            validate_origin(origin)?;
         }
         Ok(())
     }
@@ -96,7 +90,6 @@ pub struct UpdateMcpConfigRequest {
     pub enabled: Option<bool>,
     pub allowed_environment_uuids: Option<Vec<String>>,
     pub page_tools_enabled: Option<bool>,
-    pub allowed_origins: Option<Vec<String>>,
     pub manage_tools_enabled: Option<bool>,
     pub act_tools_enabled: Option<bool>,
     pub auto_start: Option<bool>,
@@ -112,7 +105,6 @@ pub struct McpRuntimeSnapshot {
     pub authentication_required: bool,
     pub allowed_environment_uuids: Vec<String>,
     pub page_tools_enabled: bool,
-    pub allowed_origins: Vec<String>,
     pub manage_tools_enabled: bool,
     pub act_tools_enabled: bool,
     pub auto_start: bool,
@@ -199,14 +191,6 @@ pub fn update_config(
     if let Some(auto_start) = request.auto_start {
         config.auto_start = auto_start;
     }
-    if let Some(origins) = request.allowed_origins {
-        config.allowed_origins = origins
-            .into_iter()
-            .map(|origin| origin.trim().trim_end_matches('/').to_string())
-            .collect();
-        config.allowed_origins.sort();
-        config.allowed_origins.dedup();
-    }
 
     save_config(app, &config)?;
     Ok(config)
@@ -224,7 +208,6 @@ pub fn snapshot_from_config(config: McpConfig, status: McpManagerStatus) -> McpR
         authentication_required: true,
         allowed_environment_uuids: config.allowed_environment_uuids,
         page_tools_enabled: config.page_tools_enabled,
-        allowed_origins: config.allowed_origins,
         manage_tools_enabled: config.manage_tools_enabled,
         act_tools_enabled: config.act_tools_enabled,
         auto_start: config.auto_start,
@@ -239,24 +222,6 @@ pub fn new_access_token() -> String {
     )
 }
 
-fn validate_origin(value: &str) -> Result<(), String> {
-    let url =
-        reqwest::Url::parse(value).map_err(|_| "MCP 站点必须是完整 HTTP(S) origin".to_string())?;
-    if value.contains('*')
-        || !matches!(url.scheme(), "http" | "https")
-        || !url.username().is_empty()
-        || url.password().is_some()
-        || url.query().is_some()
-        || url.fragment().is_some()
-        || url.origin().ascii_serialization() != value
-    {
-        return Err(
-            "MCP 站点仅允许精确 origin（协议、主机、端口），不允许路径、通配符或凭证".into(),
-        );
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -268,7 +233,6 @@ mod tests {
         assert!(!config.enabled && !config.page_tools_enabled);
         assert!(!config.manage_tools_enabled && !config.act_tools_enabled && !config.auto_start);
         assert!(config.allowed_environment_uuids.is_empty());
-        assert!(config.allowed_origins.is_empty());
         assert_ne!(config.access_token, McpConfig::default().access_token);
         let snapshot = snapshot_from_config(config.clone(), McpManagerStatus { running: false });
         assert!(!serde_json::to_string(&snapshot).unwrap().contains(&config.access_token));
@@ -281,7 +245,7 @@ mod tests {
             "accessToken": "a".repeat(64),
             "allowedEnvironmentUuids": [],
             "pageToolsEnabled": true,
-            "allowedOrigins": []
+            "allowedOrigins": ["https://old.example"]
         });
         let config: McpConfig = serde_json::from_value(old).unwrap();
         config.validate().unwrap();
@@ -295,23 +259,6 @@ mod tests {
         assert!(config.validate().is_err());
         config.page_tools_enabled = true;
         assert!(config.validate().is_ok());
-    }
-
-    #[test]
-    fn origins_must_be_exact_and_do_not_allow_credentials_or_paths() {
-        for origin in ["https://example.com", "http://127.0.0.1:8080"] {
-            validate_origin(origin).unwrap();
-        }
-        for origin in [
-            "*",
-            "https://*.example.com",
-            "file:///test",
-            "https://example.com/path",
-            "https://user:pass@example.com",
-            "https://example.com?key=secret",
-        ] {
-            assert!(validate_origin(origin).is_err(), "{origin}");
-        }
     }
 
     #[test]

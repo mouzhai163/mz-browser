@@ -69,7 +69,7 @@ read_tool!(
     Tabs,
     EnvironmentInput,
     "mz_browser_tabs",
-    "List pages from exact authorized origins in an already-running authorized environment."
+    "List the http(s) pages of an already-running authorized environment."
 );
 read_tool!(
     Snapshot,

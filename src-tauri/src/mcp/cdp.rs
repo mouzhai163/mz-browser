@@ -68,7 +68,9 @@ pub fn validate_endpoint(value: &str) -> Result<reqwest::Url, McpToolError> {
     Ok(url)
 }
 
-/// `true` when `value` is an http(s) URL without credentials whose origin is in `origins`.
+/// `true` when `value` is a plain http(s) URL without credentials (so never `file:`, `chrome:`,
+/// `devtools:`, extension or `about:` pages). A non-empty `origins` list narrows that further to
+/// exactly those origins; the app passes an empty list, i.e. any web page.
 pub fn authorized_url(value: &str, origins: &[String]) -> bool {
     let Ok(url) = reqwest::Url::parse(value) else {
         return false;
@@ -76,7 +78,7 @@ pub fn authorized_url(value: &str, origins: &[String]) -> bool {
     matches!(url.scheme(), "http" | "https")
         && url.username().is_empty()
         && url.password().is_none()
-        && origins.iter().any(|origin| *origin == url.origin().ascii_serialization())
+        && (origins.is_empty() || origins.iter().any(|origin| *origin == url.origin().ascii_serialization()))
 }
 
 /// Origin + path only (no query or fragment, which often carry tokens).
@@ -335,7 +337,7 @@ pub(super) async fn authorized_pages(
         .collect())
 }
 
-/// Every frame in the tree must be on an allowed origin.
+/// Every frame in the tree must be a plain web page (and match the optional site list).
 pub(super) fn assert_frames(tree: &Value, origins: &[String]) -> Result<(), McpToolError> {
     let url = tree
         .get("frame")
@@ -449,6 +451,25 @@ mod tests {
             "ws://127.0.0.1:29200/devtools/browser/a/b",
         ] {
             assert!(validate_endpoint(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn without_a_site_list_only_plain_web_pages_are_in_scope() {
+        let any: Vec<String> = vec![];
+        assert!(authorized_url("https://mail.example.com/inbox?x=1", &any));
+        assert!(authorized_url("http://127.0.0.1:3000/", &any));
+        for bad in [
+            "file:///c:/windows/win.ini",
+            "chrome://settings/",
+            "devtools://devtools/bundled/inspector.html",
+            "chrome-extension://abc/page.html",
+            "about:blank",
+            "javascript:alert(1)",
+            "data:text/html,hi",
+            "https://user:pw@example.com/",
+        ] {
+            assert!(!authorized_url(bad, &any), "{bad}");
         }
     }
 

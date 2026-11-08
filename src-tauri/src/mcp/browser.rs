@@ -3,6 +3,9 @@ use std::time::Duration;
 
 use super::{cdp, cdp_act, error::McpToolError, server::McpServer};
 
+/// No per-site list: every http(s) page of an authorized environment is in scope.
+const ANY_SITE: &[String] = &[];
+
 /// Reads tabs (`page_id == None`) or one page snapshot from an authorized, running environment.
 pub(crate) async fn read_page(
     service: &McpServer,
@@ -19,12 +22,7 @@ pub(crate) async fn read_page(
     if !service.config().access.page_tools_enabled {
         return Err(McpToolError::invalid_params("Page tools are disabled"));
     }
-    let origins = &service.config().access.allowed_origins;
-    if origins.is_empty() {
-        return Err(McpToolError::invalid_params(
-            "No site origins are allowed for page tools; add the sites in the MCP settings first",
-        ));
-    }
+    let origins = ANY_SITE;
     let endpoint = service
         .bridge()
         .get_environment_cdp_endpoint(env_uuid)
@@ -72,7 +70,7 @@ impl ActOp<'_> {
     }
 }
 
-/// Runs a page action in an authorized, running environment on allowed sites only.
+/// Runs a page action in an authorized, running environment (http/https pages only).
 pub(crate) async fn act(
     service: &McpServer,
     env_uuid: &str,
@@ -86,7 +84,7 @@ pub(crate) async fn act(
         .clone()
         .try_acquire_owned()
         .map_err(|_| McpToolError::upstream("Browser capacity reached; retry later"))?;
-    let origins = &service.config().access.allowed_origins;
+    let origins = ANY_SITE;
     let endpoint = service
         .bridge()
         .get_environment_cdp_endpoint(env_uuid)

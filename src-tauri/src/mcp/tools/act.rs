@@ -1,5 +1,5 @@
 //! Page-action tools (the "act" tier). Registered only when the user turned them on, and every
-//! call is limited to authorized environments and allowed site origins.
+//! call is limited to authorized environments and http(s) pages.
 use std::borrow::Cow;
 
 use rmcp::{
@@ -38,7 +38,7 @@ pub struct NavigateInput {
     pub env_uuid: String,
     /// Page id from mz_browser_tabs.
     pub page_id: String,
-    /// Full http(s) URL; its origin must be on the allowed site list.
+    /// Full http(s) URL.
     pub url: String,
 }
 
@@ -46,7 +46,7 @@ pub struct NavigateInput {
 pub struct OpenTabInput {
     /// Environment UUID (must be authorized).
     pub env_uuid: String,
-    /// Full http(s) URL; its origin must be on the allowed site list.
+    /// Full http(s) URL.
     pub url: String,
 }
 
@@ -109,13 +109,13 @@ act_tool!(
     Navigate,
     NavigateInput,
     "mz_browser_navigate",
-    "Navigate an authorized page to a URL on an allowed site. Redirects off the allowed sites make later tools refuse the page."
+    "Navigate an authorized page to an http(s) URL. Only http(s) pages can be navigated to."
 );
 act_tool!(
     OpenTab,
     OpenTabInput,
     "mz_browser_open_tab",
-    "Open a new tab on an allowed site in an authorized running environment. Returns the new page id."
+    "Open a new http(s) tab in an authorized running environment. Returns the new page id."
 );
 act_tool!(
     Click,

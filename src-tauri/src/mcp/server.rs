@@ -62,18 +62,13 @@ impl McpServer {
         Ok(())
     }
 
-    /// Guard for the page-action tier; also needs page reading and an allowed site list.
+    /// Guard for the page-action tier; also needs page reading.
     pub async fn require_act(&self) -> Result<(), super::error::McpToolError> {
         self.require_session().await?;
         let access = &self.config.access;
         if !access.page_tools_enabled || !access.act_tools_enabled {
             return Err(super::error::McpToolError::invalid_params(
                 "Page action tools are disabled",
-            ));
-        }
-        if access.allowed_origins.is_empty() {
-            return Err(super::error::McpToolError::invalid_params(
-                "No site origins are allowed for page tools; add the sites in the MCP settings first",
             ));
         }
         Ok(())
@@ -104,7 +99,7 @@ impl ServerHandler for McpServer {
             text.push_str(" Page reading is enabled (tabs and an accessibility outline; field values and passwords are hidden).");
         }
         if access.act_tools_enabled {
-            text.push_str(" Page actions are enabled: you can navigate, click, type and press keys on allowed sites only.");
+            text.push_str(" Page actions are enabled: you can navigate, click, type and press keys on http(s) pages of authorized environments.");
         }
         if access.manage_tools_enabled {
             text.push_str(" Management is enabled: you can create, change, start, stop and delete environments, groups, proxies and tags. Confirm destructive actions with the user.");

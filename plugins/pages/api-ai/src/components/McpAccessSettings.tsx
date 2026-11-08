@@ -2,11 +2,9 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { getMcpAccessToken, listEnvironmentChoices, rotateMcpAccessToken } from '../api';
 import type { EnvironmentChoice } from '../api';
 import type { McpConfigSnapshot, UpdateMcpConfigRequest } from '../types';
-import { toOrigin } from '../utils/origin';
 
 interface Props {
   config: McpConfigSnapshot;
@@ -23,7 +21,6 @@ export function McpAccessSettings({ config, onUpdate, onRefresh }: Props) {
   const [pagesOn, setPagesOn] = useState(config.pageToolsEnabled);
   const [actOn, setActOn] = useState(config.actToolsEnabled);
   const [manageOn, setManageOn] = useState(config.manageToolsEnabled);
-  const [originCount, setOriginCount] = useState(config.allowedOrigins.length);
   const [choices, setChoices] = useState<EnvironmentChoice[] | null>(null);
   const [choicesError, setChoicesError] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set(config.allowedEnvironmentUuids));
@@ -78,17 +75,10 @@ export function McpAccessSettings({ config, onUpdate, onRefresh }: Props) {
   const save = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    const lines = (name: string) =>
-      String(data.get(name) ?? '')
-        .split(/[,\n]/)
-        .map((line) => line.trim())
-        .filter(Boolean);
-    const origins = Array.from(new Set(lines('origins').map(toOrigin)));
     void run(async () => {
       setToken(null);
       await onUpdate({
         allowedEnvironmentUuids: [...selected],
-        allowedOrigins: origins,
         pageToolsEnabled: pagesOn,
         actToolsEnabled: pagesOn && actOn,
         manageToolsEnabled: manageOn,
@@ -222,25 +212,6 @@ export function McpAccessSettings({ config, onUpdate, onRefresh }: Props) {
         </label>
         {manageOn && <p className="text-destructive">{t('mcp.manageWarning')}</p>}
       </fieldset>
-      <label className="block space-y-2 text-xs">
-        <span>{t('mcp.origins')}</span>
-        <Textarea
-          name="origins"
-          defaultValue={config.allowedOrigins.join('\n')}
-          rows={3}
-          disabled={busy}
-          placeholder="https://example.com"
-          onChange={(event) =>
-            setOriginCount(event.target.value.split(/[,\n]/).filter((line) => line.trim()).length)
-          }
-        />
-        <span className="block text-muted-foreground">{t('mcp.originsHelp')}</span>
-        {pagesOn && originCount === 0 && (
-          <span role="status" className="block text-destructive">
-            {t('mcp.originsEmpty')}
-          </span>
-        )}
-      </label>
       <label className="flex items-center gap-2 text-xs">
         <input
           type="checkbox"

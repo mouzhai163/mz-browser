@@ -37,7 +37,6 @@ export function McpServicePanel({
         <McpAccessSettings
           key={JSON.stringify([
             config.allowedEnvironmentUuids,
-            config.allowedOrigins,
             config.pageToolsEnabled,
           ])}
           config={config}
