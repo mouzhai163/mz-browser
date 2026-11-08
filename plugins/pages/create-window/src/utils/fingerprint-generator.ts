@@ -416,9 +416,12 @@ function shuffleArray<T>(arr: T[]): T[] {
 
 /**
  * 每台标准 Windows 10/11 都自带的字体（微软官方"Windows 10 字体列表"）。
- * 内核只会把列表内的系统字体暴露给网页，所以必须是完整的默认集：缺了 Arial、Microsoft YaHei，
+ * 内核只会把列表内的系统字体暴露给网页，所以必须是完整的默认集：缺了 Arial，
  * 常见的 font-family 回退链会全部落空；缺了 Candara、Corbel、Nirmala UI 等每台 Win10 都有的字体，
  * "只能检测到一半系统字体"本身就是特征。宿主机没有的字体仍然不会出现，列表只负责"允许暴露"。
+ *
+ * 不包含中文字体（微软雅黑、宋体、黑体、楷体、仿宋、微软正黑体、新细明体等）：按要求不向网页暴露。
+ * 中文文字不会因此变成方块：网页在中文字体被拒绝后，会按字符回退到系统里能显示该字符的字体。
  */
 const DEFAULT_WINDOWS_FONTS = [
   'Arial',
@@ -448,14 +451,11 @@ const DEFAULT_WINDOWS_FONTS = [
   'Malgun Gothic',
   'Marlett',
   'Microsoft Himalaya',
-  'Microsoft JhengHei',
   'Microsoft New Tai Lue',
   'Microsoft PhagsPa',
   'Microsoft Sans Serif',
   'Microsoft Tai Le',
-  'Microsoft YaHei',
   'Microsoft Yi Baiti',
-  'MingLiU-ExtB',
   'Mongolian Baiti',
   'MS Gothic',
   'MV Boli',
@@ -469,7 +469,6 @@ const DEFAULT_WINDOWS_FONTS = [
   'Segoe UI Emoji',
   'Segoe UI Historic',
   'Segoe UI Symbol',
-  'SimSun',
   'Sitka Text',
   'Sylfaen',
   'Symbol',
