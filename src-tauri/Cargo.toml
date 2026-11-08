@@ -73,6 +73,7 @@ serde_bytes = "0.11"    # 字节数组序列化
 indexmap = { version = "2.12.0", features = ["serde"] }
 runtime = { path = "crates/runtime" }
 business = { path = "crates/business" }
+tokio-tungstenite = { version = "0.30.0", default-features = false, features = ["connect"] }
 
 [target.'cfg(windows)'.dependencies]
 smbios-lib = "0.9.2"

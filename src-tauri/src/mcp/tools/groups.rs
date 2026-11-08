@@ -88,6 +88,7 @@ impl AsyncTool<McpServer> for ListGroupsTool {
         service: &McpServer,
         _param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         let response = service.bridge().list_groups().await?;
         Ok(ListGroupsOutput {
             items: response.items.into_iter().map(map_group).collect(),
@@ -114,6 +115,7 @@ impl AsyncTool<McpServer> for CreateGroupTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         if param.name.trim().is_empty() {
             return Err(McpToolError::invalid_params("name is required"));
         }
@@ -153,6 +155,7 @@ impl AsyncTool<McpServer> for UpdateGroupTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         let group_uuid = require_group_uuid(&param.group_uuid)?;
         service
             .bridge()
@@ -190,6 +193,7 @@ impl AsyncTool<McpServer> for DeleteGroupTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         let group_uuid = require_group_uuid(&param.group_uuid)?;
         service.bridge().delete_group(&group_uuid).await?;
 

@@ -157,6 +157,7 @@ impl AsyncTool<McpServer> for ListEnvironmentsTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         let filters = if param.keyword.is_some()
             || param.group_uuid.is_some()
             || param.tag_uuids.is_some()
@@ -209,6 +210,7 @@ impl AsyncTool<McpServer> for GetEnvironmentTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         if param.env_uuid.trim().is_empty() {
             return Err(McpToolError::invalid_params("env_uuid is required"));
         }
@@ -237,6 +239,7 @@ impl AsyncTool<McpServer> for StartEnvironmentTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         let result = service.bridge().start_environment(&env_uuid).await?;
         Ok(EnvironmentActionOutput {
@@ -265,6 +268,7 @@ impl AsyncTool<McpServer> for StopEnvironmentTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         let result = service.bridge().stop_environment(&env_uuid).await?;
         Ok(EnvironmentActionOutput {
@@ -293,6 +297,7 @@ impl AsyncTool<McpServer> for BatchStartEnvironmentsTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         let env_uuids = require_env_uuids(param.env_uuids)?;
         let items = service
             .bridge()
@@ -325,6 +330,7 @@ impl AsyncTool<McpServer> for BatchStopEnvironmentsTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         let env_uuids = require_env_uuids(param.env_uuids)?;
         let items = service
             .bridge()
@@ -357,6 +363,7 @@ impl AsyncTool<McpServer> for GetEnvironmentStatusTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         let status = service.bridge().get_environment_status(&env_uuid).await?;
 
@@ -387,6 +394,7 @@ impl AsyncTool<McpServer> for GetEnvironmentCdpEndpointTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         let endpoint = service.bridge().get_environment_cdp_endpoint(&env_uuid).await?;
 

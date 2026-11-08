@@ -310,6 +310,7 @@ macro_rules! environment_uuid_tool {
                 $service: &McpServer,
                 $param: Self::Parameter,
             ) -> Result<Self::Output, Self::Error> {
+                $service.require_manage().await?;
                 $body
             }
         }

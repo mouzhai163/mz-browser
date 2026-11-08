@@ -28,6 +28,9 @@ export interface McpConfigSnapshot {
   allowedEnvironmentUuids: string[];
   pageToolsEnabled: boolean;
   allowedOrigins: string[];
+  manageToolsEnabled: boolean;
+  actToolsEnabled: boolean;
+  autoStart: boolean;
 }
 
 export interface UpdateMcpConfigRequest {
@@ -35,4 +38,7 @@ export interface UpdateMcpConfigRequest {
   allowedEnvironmentUuids?: string[];
   pageToolsEnabled?: boolean;
   allowedOrigins?: string[];
+  manageToolsEnabled?: boolean;
+  actToolsEnabled?: boolean;
+  autoStart?: boolean;
 }

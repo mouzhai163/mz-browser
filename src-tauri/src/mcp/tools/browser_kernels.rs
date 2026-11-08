@@ -72,6 +72,7 @@ impl AsyncTool<McpServer> for ListBrowserKernelsTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         let items = service
             .bridge()
             .list_browser_kernels(LocalApiListBrowserKernelsRequest {

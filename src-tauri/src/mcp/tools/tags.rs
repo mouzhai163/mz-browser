@@ -88,6 +88,7 @@ impl AsyncTool<McpServer> for ListTagsTool {
         service: &McpServer,
         _param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         let items = service.bridge().list_tags().await?;
         Ok(ListTagsOutput {
             items: items.into_iter().map(map_tag).collect(),
@@ -114,6 +115,7 @@ impl AsyncTool<McpServer> for CreateTagTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         if param.name.trim().is_empty() {
             return Err(McpToolError::invalid_params("name is required"));
         }
@@ -156,6 +158,7 @@ impl AsyncTool<McpServer> for UpdateTagTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         let tag_uuid = require_tag_uuid(&param.tag_uuid)?;
         service
             .bridge()
@@ -193,6 +196,7 @@ impl AsyncTool<McpServer> for DeleteTagTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         let tag_uuid = require_tag_uuid(&param.tag_uuid)?;
         service.bridge().delete_tag(&tag_uuid).await?;
 

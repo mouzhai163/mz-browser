@@ -13,10 +13,21 @@ pub struct McpConfig {
     pub access_token: String,
     #[serde(default)]
     pub allowed_environment_uuids: Vec<String>,
+    /// Read tabs and page outlines of authorized environments (read-only).
     #[serde(default)]
     pub page_tools_enabled: bool,
     #[serde(default)]
     pub allowed_origins: Vec<String>,
+    /// Manage environments, groups, proxies, tags and kernels (full management, like the local
+    /// API). Not limited to the authorized environments.
+    #[serde(default)]
+    pub manage_tools_enabled: bool,
+    /// Click, type, navigate and press keys in authorized pages. Needs `page_tools_enabled`.
+    #[serde(default)]
+    pub act_tools_enabled: bool,
+    /// Start the MCP service automatically when the app starts. Off by default.
+    #[serde(default)]
+    pub auto_start: bool,
 }
 
 impl Default for McpConfig {
@@ -27,6 +38,9 @@ impl Default for McpConfig {
             allowed_environment_uuids: vec![],
             page_tools_enabled: false,
             allowed_origins: vec![],
+            manage_tools_enabled: false,
+            act_tools_enabled: false,
+            auto_start: false,
         }
     }
 }
@@ -41,6 +55,9 @@ impl McpConfig {
             || !self.access_token.bytes().all(|byte| byte.is_ascii_hexdigit())
         {
             return Err("MCP 凭证无效，请重新生成".into());
+        }
+        if self.act_tools_enabled && !self.page_tools_enabled {
+            return Err("开启页面操作前需要先开启页面读取".into());
         }
         if self.allowed_environment_uuids.len() > 50 || self.allowed_origins.len() > 50 {
             return Err("MCP 环境或站点授权最多各 50 项".into());
@@ -80,6 +97,9 @@ pub struct UpdateMcpConfigRequest {
     pub allowed_environment_uuids: Option<Vec<String>>,
     pub page_tools_enabled: Option<bool>,
     pub allowed_origins: Option<Vec<String>>,
+    pub manage_tools_enabled: Option<bool>,
+    pub act_tools_enabled: Option<bool>,
+    pub auto_start: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,6 +113,9 @@ pub struct McpRuntimeSnapshot {
     pub allowed_environment_uuids: Vec<String>,
     pub page_tools_enabled: bool,
     pub allowed_origins: Vec<String>,
+    pub manage_tools_enabled: bool,
+    pub act_tools_enabled: bool,
+    pub auto_start: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -162,6 +185,19 @@ pub fn update_config(
     }
     if let Some(enabled) = request.page_tools_enabled {
         config.page_tools_enabled = enabled;
+        if !enabled {
+            // page actions cannot outlive page reading
+            config.act_tools_enabled = false;
+        }
+    }
+    if let Some(enabled) = request.manage_tools_enabled {
+        config.manage_tools_enabled = enabled;
+    }
+    if let Some(enabled) = request.act_tools_enabled {
+        config.act_tools_enabled = enabled;
+    }
+    if let Some(auto_start) = request.auto_start {
+        config.auto_start = auto_start;
     }
     if let Some(origins) = request.allowed_origins {
         config.allowed_origins = origins
@@ -189,6 +225,9 @@ pub fn snapshot_from_config(config: McpConfig, status: McpManagerStatus) -> McpR
         allowed_environment_uuids: config.allowed_environment_uuids,
         page_tools_enabled: config.page_tools_enabled,
         allowed_origins: config.allowed_origins,
+        manage_tools_enabled: config.manage_tools_enabled,
+        act_tools_enabled: config.act_tools_enabled,
+        auto_start: config.auto_start,
     }
 }
 
@@ -227,11 +266,35 @@ mod tests {
         let config = McpConfig::default();
         config.validate().unwrap();
         assert!(!config.enabled && !config.page_tools_enabled);
+        assert!(!config.manage_tools_enabled && !config.act_tools_enabled && !config.auto_start);
         assert!(config.allowed_environment_uuids.is_empty());
         assert!(config.allowed_origins.is_empty());
         assert_ne!(config.access_token, McpConfig::default().access_token);
         let snapshot = snapshot_from_config(config.clone(), McpManagerStatus { running: false });
         assert!(!serde_json::to_string(&snapshot).unwrap().contains(&config.access_token));
+    }
+
+    #[test]
+    fn old_configs_without_tier_flags_load_as_read_only() {
+        let old = serde_json::json!({
+            "enabled": true,
+            "accessToken": "a".repeat(64),
+            "allowedEnvironmentUuids": [],
+            "pageToolsEnabled": true,
+            "allowedOrigins": []
+        });
+        let config: McpConfig = serde_json::from_value(old).unwrap();
+        config.validate().unwrap();
+        assert!(config.page_tools_enabled && !config.manage_tools_enabled && !config.act_tools_enabled);
+    }
+
+    #[test]
+    fn page_actions_require_page_reading() {
+        let mut config = McpConfig::default();
+        config.act_tools_enabled = true;
+        assert!(config.validate().is_err());
+        config.page_tools_enabled = true;
+        assert!(config.validate().is_ok());
     }
 
     #[test]

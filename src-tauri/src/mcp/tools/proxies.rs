@@ -135,6 +135,7 @@ impl AsyncTool<McpServer> for ListProxiesTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         let filters = if param.keyword.is_some()
             || param.proxy_type.is_some()
             || param.status.is_some()
@@ -187,6 +188,7 @@ impl AsyncTool<McpServer> for GetProxyTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         let proxy_uuid = require_proxy_uuid(&param.proxy_uuid)?;
         let detail = service.bridge().get_proxy(&proxy_uuid).await?;
         Ok(map_proxy_detail(detail))
@@ -212,6 +214,7 @@ impl AsyncTool<McpServer> for CreateProxyTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         validate_proxy_create(&param)?;
         let data = service
             .bridge()
@@ -257,6 +260,7 @@ impl AsyncTool<McpServer> for UpdateProxyTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         let proxy_uuid = require_proxy_uuid(&param.proxy_uuid)?;
         service
             .bridge()
@@ -303,6 +307,7 @@ impl AsyncTool<McpServer> for DeleteProxyTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         let proxy_uuid = require_proxy_uuid(&param.proxy_uuid)?;
         service.bridge().delete_proxy(&proxy_uuid).await?;
 
@@ -334,6 +339,7 @@ impl AsyncTool<McpServer> for BatchDeleteProxiesTool {
         service: &McpServer,
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
+        service.require_manage().await?;
         let proxy_uuids = require_proxy_uuids(param.proxy_uuids)?;
         service.bridge().batch_delete_proxies(proxy_uuids.clone()).await?;
 

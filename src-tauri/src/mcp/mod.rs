@@ -1,5 +1,7 @@
 pub mod bridge;
-mod browser;
+pub(crate) mod browser;
+pub mod cdp;
+mod cdp_act;
 pub mod config;
 pub mod error;
 pub mod manager;

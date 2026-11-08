@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { getMcpAccessToken, rotateMcpAccessToken } from '../api';
 import type { McpConfigSnapshot, UpdateMcpConfigRequest } from '../types';
+import { toOrigin } from '../utils/origin';
 
 interface Props {
   config: McpConfigSnapshot;
@@ -18,6 +19,10 @@ export function McpAccessSettings({ config, onUpdate, onRefresh }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmRotation, setConfirmRotation] = useState(false);
+  const [pagesOn, setPagesOn] = useState(config.pageToolsEnabled);
+  const [actOn, setActOn] = useState(config.actToolsEnabled);
+  const [manageOn, setManageOn] = useState(config.manageToolsEnabled);
+  const [originCount, setOriginCount] = useState(config.allowedOrigins.length);
 
   useEffect(() => {
     if (!token) return;
@@ -49,12 +54,16 @@ export function McpAccessSettings({ config, onUpdate, onRefresh }: Props) {
         .split(/[,\n]/)
         .map((line) => line.trim())
         .filter(Boolean);
+    const origins = Array.from(new Set(lines('origins').map(toOrigin)));
     void run(async () => {
       setToken(null);
       await onUpdate({
         allowedEnvironmentUuids: lines('environments'),
-        allowedOrigins: lines('origins'),
-        pageToolsEnabled: data.get('pages') === 'on',
+        allowedOrigins: origins,
+        pageToolsEnabled: pagesOn,
+        actToolsEnabled: pagesOn && actOn,
+        manageToolsEnabled: manageOn,
+        autoStart: data.get('autoStart') === 'on',
       });
     });
   };
@@ -74,15 +83,43 @@ export function McpAccessSettings({ config, onUpdate, onRefresh }: Props) {
           disabled={busy}
         />
       </label>
-      <label className="flex items-center gap-2 text-xs">
-        <input
-          type="checkbox"
-          name="pages"
-          defaultChecked={config.pageToolsEnabled}
-          disabled={busy}
-        />
-        {t('mcp.readOnlyPages')}
-      </label>
+      <fieldset className="space-y-2 text-xs" disabled={busy}>
+        <legend className="mb-1 font-semibold">{t('mcp.scopeTitle')}</legend>
+        <p className="text-muted-foreground">{t('mcp.scopeBase')}</p>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            data-testid="mcp-scope-pages"
+            checked={pagesOn}
+            onChange={(event) => {
+              setPagesOn(event.target.checked);
+              if (!event.target.checked) setActOn(false);
+            }}
+          />
+          {t('mcp.readOnlyPages')}
+        </label>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            data-testid="mcp-scope-act"
+            checked={pagesOn && actOn}
+            disabled={!pagesOn}
+            onChange={(event) => setActOn(event.target.checked)}
+          />
+          {t('mcp.actPages')}
+        </label>
+        {pagesOn && actOn && <p className="text-destructive">{t('mcp.actWarning')}</p>}
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            data-testid="mcp-scope-manage"
+            checked={manageOn}
+            onChange={(event) => setManageOn(event.target.checked)}
+          />
+          {t('mcp.manage')}
+        </label>
+        {manageOn && <p className="text-destructive">{t('mcp.manageWarning')}</p>}
+      </fieldset>
       <label className="block space-y-2 text-xs">
         <span>{t('mcp.origins')}</span>
         <Textarea
@@ -91,7 +128,26 @@ export function McpAccessSettings({ config, onUpdate, onRefresh }: Props) {
           rows={3}
           disabled={busy}
           placeholder="https://example.com"
+          onChange={(event) =>
+            setOriginCount(event.target.value.split(/[,\n]/).filter((line) => line.trim()).length)
+          }
         />
+        <span className="block text-muted-foreground">{t('mcp.originsHelp')}</span>
+        {pagesOn && originCount === 0 && (
+          <span role="status" className="block text-destructive">
+            {t('mcp.originsEmpty')}
+          </span>
+        )}
+      </label>
+      <label className="flex items-center gap-2 text-xs">
+        <input
+          type="checkbox"
+          name="autoStart"
+          data-testid="mcp-auto-start"
+          defaultChecked={config.autoStart}
+          disabled={busy}
+        />
+        {t('mcp.autoStart')}
       </label>
       <div className="flex flex-wrap gap-2">
         <Button type="submit" size="sm" disabled={busy}>

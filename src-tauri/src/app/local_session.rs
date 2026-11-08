@@ -34,8 +34,33 @@ pub async fn ensure_ready() -> Result<(), String> {
         if let Err(error) = app_context.local_api_manager.refresh(&context).await {
             log::warn!("failed to start the local API: {error}");
         }
+        start_mcp_if_configured(&app, app_context).await;
     }
     Ok(())
+}
+
+/// 用户在设置里选了“启动软件时自动开启”时，随软件一起启动 MCP 服务。
+async fn start_mcp_if_configured(app: &tauri::AppHandle, app_context: &AppContext) {
+    use crate::mcp::config::{UpdateMcpConfigRequest, load_config, update_config};
+
+    let wants_auto_start = match load_config(app) {
+        Ok(config) => config.auto_start,
+        Err(error) => {
+            log::warn!("cannot read the MCP settings: {error}");
+            return;
+        }
+    };
+    if !wants_auto_start {
+        return;
+    }
+    let enable = UpdateMcpConfigRequest { enabled: Some(true), ..Default::default() };
+    if let Err(error) = update_config(app, enable) {
+        log::warn!("cannot enable MCP for auto start: {error}");
+        return;
+    }
+    if let Err(error) = app_context.mcp_manager.start(app).await {
+        log::warn!("failed to auto-start MCP: {error}");
+    }
 }
 
 /// 把当前状态同步给内置运行时。
