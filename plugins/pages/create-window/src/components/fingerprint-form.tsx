@@ -138,13 +138,35 @@ export function FingerprintForm({ value, onChange }: FingerprintFormProps) {
             size="icon"
             className="h-8 w-8 shrink-0"
             onClick={() => {
-              const newFontList = generateFontListConfig(value.fontList.mode, 'Windows');
+              const newFontList = generateFontListConfig(
+                value.fontList.mode === 'ua-match' ? 'ua-match' : 'random',
+                'Windows',
+                value.fontList.includeChinese === true,
+              );
               onChange({ ...value, fontList: newFontList });
             }}
           >
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
         </div>
+      </div>
+
+      {/* 中文字体：只有两个选择，默认不包含 */}
+      <div className="flex items-center justify-between gap-4" data-testid="chinese-fonts-option">
+        <Label className="text-xs shrink-0">{t('advancedFingerprint.chineseFonts')}</Label>
+        <SegmentedControl
+          value={value.fontList.includeChinese === true ? 'yes' : 'no'}
+          options={[
+            { value: 'no' as const, label: t('advancedFingerprint.chineseFontsMode.no') },
+            { value: 'yes' as const, label: t('advancedFingerprint.chineseFontsMode.yes') },
+          ]}
+          onChange={(v) =>
+            onChange({
+              ...value,
+              fontList: generateFontListConfig('random', 'Windows', v === 'yes'),
+            })
+          }
+        />
       </div>
 
       {/* Client Rects & Speech Voices */}

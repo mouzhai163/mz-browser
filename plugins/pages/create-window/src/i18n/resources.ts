@@ -174,6 +174,11 @@ export const createWindowResources = {
         custom: '自定义',
         system: '跟随系统',
       },
+      chineseFonts: '中文字体',
+      chineseFontsMode: {
+        no: '不包含',
+        yes: '包含',
+      },
       fontListMode: {
         system: '系统',
         random: '随机',
@@ -663,6 +668,11 @@ export const createWindowResources = {
         real: 'Real',
         custom: 'Custom',
         system: 'Follow System',
+      },
+      chineseFonts: 'Chinese fonts',
+      chineseFontsMode: {
+        no: 'Not included',
+        yes: 'Included',
       },
       fontListMode: {
         system: 'System',

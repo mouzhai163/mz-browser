@@ -29,6 +29,8 @@ export interface Resolution {
 export interface FontListConfig {
   mode: 'system' | 'random' | 'ua-match' | 'custom';
   fonts?: string[];
+  /** 是否加入中文 Windows 自带字体（微软雅黑等）。缺省 = 不包含 */
+  includeChinese?: boolean;
 }
 
 export type WindowSizeMode = 'custom' | 'fullscreen';

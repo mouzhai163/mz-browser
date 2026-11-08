@@ -34,5 +34,6 @@ export function normalizeFontListConfig(value: unknown, system: string): FontLis
         ? mode
         : defaultFontList.mode,
     fonts,
+    includeChinese: value.includeChinese === true,
   };
 }

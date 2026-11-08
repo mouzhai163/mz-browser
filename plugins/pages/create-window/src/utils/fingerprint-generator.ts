@@ -496,11 +496,41 @@ const OFFICE_EXTRA_FONTS = [
 ];
 
 /**
- * 生成随机字体列表：完整的 Windows 默认字体 + 随机几个 Office 常见字体
+ * 简体中文版 Windows 10/11 自带的中文字体（固定整组，不随机：缺一半本身就是特征）。
+ * 同时放英文名和中文名，因为网页探测时两种写法都常见。
  */
-export function generateRandomFontList(): string[] {
+export const CHINESE_WINDOWS_FONTS = [
+  'Microsoft YaHei',
+  'Microsoft YaHei UI',
+  '微软雅黑',
+  'SimSun',
+  '宋体',
+  'NSimSun',
+  '新宋体',
+  'SimHei',
+  '黑体',
+  'KaiTi',
+  '楷体',
+  'FangSong',
+  '仿宋',
+  'DengXian',
+  '等线',
+  'Microsoft JhengHei',
+  'Microsoft JhengHei UI',
+  '微软正黑体',
+  'MingLiU',
+  'PMingLiU',
+  'DFKai-SB',
+];
+
+/**
+ * 生成随机字体列表：完整的 Windows 默认字体 + 随机几个 Office 常见字体；
+ * includeChinese 为真时再整组加入中文 Windows 字体，其余部分的生成规则不变。
+ */
+export function generateRandomFontList(includeChinese = false): string[] {
   const extras = shuffleArray(OFFICE_EXTRA_FONTS).slice(0, randomInt(0, 5));
-  return [...DEFAULT_WINDOWS_FONTS, ...extras];
+  const base = [...DEFAULT_WINDOWS_FONTS, ...(includeChinese ? CHINESE_WINDOWS_FONTS : []), ...extras];
+  return base;
 }
 
 /**
@@ -508,13 +538,17 @@ export function generateRandomFontList(): string[] {
  * @param mode - 字体列表模式
  * @param system - 系统类型（保留参数以兼容现有代码，但不再使用）
  */
-export function generateFontListConfig(mode: 'system' | 'random' | 'ua-match', system: string = 'Windows'): FontListConfig {
+export function generateFontListConfig(
+  mode: 'system' | 'random' | 'ua-match',
+  system: string = 'Windows',
+  includeChinese = false,
+): FontListConfig {
   if (mode === 'system') {
     return { mode: 'system', fonts: [] };
   }
 
   if (mode === 'random') {
-    return { mode: 'random', fonts: generateRandomFontList() };
+    return { mode: 'random', fonts: generateRandomFontList(includeChinese), includeChinese };
   }
 
   // ua-match 模式：返回完整的 CreepJS 检测列表
