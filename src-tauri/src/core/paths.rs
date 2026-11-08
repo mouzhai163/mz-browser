@@ -16,10 +16,10 @@ use winreg::RegKey;
 #[cfg(target_os = "windows")]
 use winreg::enums::HKEY_CURRENT_USER;
 
-const APP_DIR_NAME: &str = "Simprint";
+const APP_DIR_NAME: &str = "MZBrowser";
 const BOOTSTRAP_FILENAME: &str = "bootstrap.json";
 #[cfg(target_os = "windows")]
-const RUNTIME_PATHS_REGISTRY_SUBKEY: &str = "Software\\Simprint\\RuntimePaths";
+const RUNTIME_PATHS_REGISTRY_SUBKEY: &str = "Software\\MZBrowser\\RuntimePaths";
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 struct BootstrapConfig {
@@ -37,7 +37,7 @@ pub struct PathManager;
 impl PathManager {
     /// 默认根目录（不受 bootstrap 影响）
     pub fn get_default_root_dir() -> Result<PathBuf> {
-        if let Some(root) = Self::environment_root(std::env::var_os("SIMPRINT_ROOT_DIR"))? {
+        if let Some(root) = Self::environment_root(std::env::var_os("MZ_ROOT_DIR"))? {
             return Ok(root);
         }
         let base_dirs = BaseDirs::new().ok_or_else(|| anyhow!("无法获取系统基础目录"))?;
@@ -131,7 +131,11 @@ impl PathManager {
 
     /// SQLite database containing the local-first business data.
     pub fn get_business_database_file() -> Result<PathBuf> {
-        let path = Self::get_data_dir()?.join("simprint.db");
+        let data_dir = Self::get_data_dir()?;
+        let path = data_dir.join("mz.db");
+        // 改名前创建的数据目录里数据库叫 simprint.db：它还在、新名字还没有时继续用旧文件，不动用户数据。
+        let legacy = data_dir.join("simprint.db");
+        let path = if !path.exists() && legacy.is_file() { legacy } else { path };
         Self::ensure_parent_dir(&path)?;
         Ok(path)
     }
@@ -145,7 +149,7 @@ impl PathManager {
     pub fn get_profiles_dir(_app: &tauri::AppHandle) -> Result<PathBuf> {
         let dir = if let Some(value) = Self::read_store_storage_string("profilesPath") {
             Self::resolve_override_path(&value, &Self::get_root_dir()?)?
-        } else if std::env::var_os("SIMPRINT_ROOT_DIR").is_some() {
+        } else if std::env::var_os("MZ_ROOT_DIR").is_some() {
             Self::get_data_dir()?.join("profiles")
         } else if let Some(workspace_root) = Self::find_workspace_root() {
             workspace_root.join("data").join("profiles")
@@ -290,7 +294,7 @@ impl PathManager {
 
     pub fn sync_runtime_paths_registry(app: &tauri::AppHandle) -> Result<()> {
         // An isolated development run must not overwrite the installed app's registry paths.
-        if std::env::var_os("SIMPRINT_ROOT_DIR").is_some() {
+        if std::env::var_os("MZ_ROOT_DIR").is_some() {
             return Ok(());
         }
         #[cfg(target_os = "windows")]
@@ -348,7 +352,7 @@ impl PathManager {
         let Some(value) = value else { return Ok(None) };
         let path = PathBuf::from(value);
         if !path.is_absolute() {
-            return Err(anyhow!("SIMPRINT_ROOT_DIR 必须为非空绝对路径"));
+            return Err(anyhow!("MZ_ROOT_DIR 必须为非空绝对路径"));
         }
         Ok(Some(path))
     }
@@ -401,7 +405,7 @@ mod tests {
         assert!(PathManager::environment_root(Some("".into())).is_err());
         assert!(PathManager::environment_root(Some("relative/runtime".into())).is_err());
         assert!(PathManager::environment_root(None).unwrap().is_none());
-        let root = std::env::temp_dir().join("simprint-isolated-path-test");
+        let root = std::env::temp_dir().join("mz-isolated-path-test");
         assert_eq!(
             PathManager::environment_root(Some(root.clone().into_os_string())).unwrap(),
             Some(root)

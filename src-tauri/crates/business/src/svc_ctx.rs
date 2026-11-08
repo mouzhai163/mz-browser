@@ -5,7 +5,7 @@ use crate::{
 
 /// Shared resources used by handlers and services.
 ///
-/// Simprint is a single-user local workbench: there is no user, team or workspace,
+/// M Z指纹浏览器 is a single-user local workbench: there is no user, team or workspace,
 /// so the context is just the database pool.
 #[derive(Clone)]
 pub struct SvcCtx {

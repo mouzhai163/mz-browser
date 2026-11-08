@@ -22,7 +22,7 @@ pub(super) async fn read_page(
         return Err(McpToolError::invalid_params("Page tools are disabled"));
     }
     let node = PathBuf::from(
-        std::env::var_os("SIMPRINT_AGENT_NODE")
+        std::env::var_os("MZ_AGENT_NODE")
             .ok_or_else(|| McpToolError::internal("Trusted Node runtime is not configured"))?,
     );
     if !node.is_absolute() || !node.is_file() {

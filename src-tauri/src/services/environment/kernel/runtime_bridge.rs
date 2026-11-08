@@ -58,7 +58,7 @@ pub async fn launch_environment(
     };
 
     let response = match AppContext::get()
-        .simprint_runtime_manager
+        .mz_runtime_manager
         .send_environment_command(EnvironmentCommandRequest::StartEnvironment { request })
         .await
     {
@@ -71,7 +71,7 @@ pub async fn launch_environment(
 
     match response {
         EnvironmentCommandResponse::Ack | EnvironmentCommandResponse::Started { .. } => Ok(()),
-        other => Err(format!("simprint-runtime 返回了非预期响应: {:?}", other).into()),
+        other => Err(format!("mz-runtime 返回了非预期响应: {:?}", other).into()),
     }
 }
 
@@ -111,7 +111,7 @@ pub async fn batch_launch_environments(
     .await?;
 
     let response = AppContext::get()
-        .simprint_runtime_manager
+        .mz_runtime_manager
         .send_environment_command(EnvironmentCommandRequest::BatchStartEnvironments { requests })
         .await?;
 
@@ -129,7 +129,7 @@ pub async fn batch_launch_environments(
             }
             Ok(results.into_iter().map(map_batch_launch_result).collect())
         }
-        other => Err(format!("simprint-runtime 返回了非预期响应: {:?}", other).into()),
+        other => Err(format!("mz-runtime 返回了非预期响应: {:?}", other).into()),
     }
 }
 
@@ -157,19 +157,19 @@ async fn mark_launch_error(
 
 pub async fn stop_environment(env_uuid: String) -> Result<()> {
     let response = AppContext::get()
-        .simprint_runtime_manager
+        .mz_runtime_manager
         .send_environment_command(EnvironmentCommandRequest::StopEnvironment { env_uuid })
         .await?;
 
     match response {
         EnvironmentCommandResponse::Ack => Ok(()),
-        other => Err(format!("simprint-runtime 返回了非预期响应: {:?}", other).into()),
+        other => Err(format!("mz-runtime 返回了非预期响应: {:?}", other).into()),
     }
 }
 
 pub async fn batch_stop_environments(env_uuids: Vec<String>) -> Result<Vec<BatchLaunchResult>> {
     let response = AppContext::get()
-        .simprint_runtime_manager
+        .mz_runtime_manager
         .send_environment_command(EnvironmentCommandRequest::BatchStopEnvironments { env_uuids })
         .await?;
 
@@ -177,7 +177,7 @@ pub async fn batch_stop_environments(env_uuids: Vec<String>) -> Result<Vec<Batch
         EnvironmentCommandResponse::BatchLaunchResults { results } => {
             Ok(results.into_iter().map(map_batch_launch_result).collect())
         }
-        other => Err(format!("simprint-runtime 返回了非预期响应: {:?}", other).into()),
+        other => Err(format!("mz-runtime 返回了非预期响应: {:?}", other).into()),
     }
 }
 
@@ -188,13 +188,13 @@ pub async fn refresh_proxy(env_uuid: String, proxy: Option<ProxyConfig>) -> Resu
     };
 
     let response = AppContext::get()
-        .simprint_runtime_manager
+        .mz_runtime_manager
         .send_environment_command(EnvironmentCommandRequest::RefreshProxy { env_uuid, proxy })
         .await?;
 
     match response {
         EnvironmentCommandResponse::Ack => Ok(()),
-        other => Err(format!("simprint-runtime 返回了非预期响应: {:?}", other).into()),
+        other => Err(format!("mz-runtime 返回了非预期响应: {:?}", other).into()),
     }
 }
 
@@ -204,13 +204,13 @@ pub async fn get_connected_environments() -> Result<Vec<String>> {
     }
 
     let response = AppContext::get()
-        .simprint_runtime_manager
+        .mz_runtime_manager
         .send_environment_command(EnvironmentCommandRequest::GetConnectedEnvironments)
         .await?;
 
     match response {
         EnvironmentCommandResponse::ConnectedEnvironments { env_ids } => Ok(env_ids),
-        other => Err(format!("simprint-runtime 返回了非预期响应: {:?}", other).into()),
+        other => Err(format!("mz-runtime 返回了非预期响应: {:?}", other).into()),
     }
 }
 
@@ -220,7 +220,7 @@ pub async fn get_cdp_endpoint(env_uuid: String) -> Result<Option<CdpEndpointResp
     }
 
     let response = AppContext::get()
-        .simprint_runtime_manager
+        .mz_runtime_manager
         .send_environment_command(EnvironmentCommandRequest::GetCdpEndpoint { env_uuid })
         .await?;
 
@@ -235,13 +235,13 @@ pub async fn get_cdp_endpoint(env_uuid: String) -> Result<Option<CdpEndpointResp
                 browser_ws_url: endpoint.browser_ws_url,
             }))
         }
-        other => Err(format!("simprint-runtime 返回了非预期响应: {:?}", other).into()),
+        other => Err(format!("mz-runtime 返回了非预期响应: {:?}", other).into()),
     }
 }
 
 pub async fn list_rpa_tabs(env_uuid: String) -> Result<RpaTabsSnapshot> {
     let response = AppContext::get()
-        .simprint_runtime_manager
+        .mz_runtime_manager
         .send_environment_command(EnvironmentCommandRequest::ListRpaTabs { env_uuid })
         .await?;
 
@@ -261,13 +261,13 @@ pub async fn list_rpa_tabs(env_uuid: String) -> Result<RpaTabsSnapshot> {
             active_position: snapshot.active_position,
             total: snapshot.total,
         }),
-        other => Err(format!("simprint-runtime 返回了非预期响应: {:?}", other).into()),
+        other => Err(format!("mz-runtime 返回了非预期响应: {:?}", other).into()),
     }
 }
 
 pub async fn select_rpa_tab(env_uuid: String, position: u32) -> Result<RpaTabSelection> {
     let response = AppContext::get()
-        .simprint_runtime_manager
+        .mz_runtime_manager
         .send_environment_command(EnvironmentCommandRequest::SelectRpaTab { env_uuid, position })
         .await?;
 
@@ -276,13 +276,13 @@ pub async fn select_rpa_tab(env_uuid: String, position: u32) -> Result<RpaTabSel
             position: selection.position,
             target_id: selection.target_id,
         }),
-        other => Err(format!("simprint-runtime 返回了非预期响应: {:?}", other).into()),
+        other => Err(format!("mz-runtime 返回了非预期响应: {:?}", other).into()),
     }
 }
 
 pub async fn close_rpa_tab(env_uuid: String, position: u32) -> Result<RpaTabCloseResult> {
     let response = AppContext::get()
-        .simprint_runtime_manager
+        .mz_runtime_manager
         .send_environment_command(EnvironmentCommandRequest::CloseRpaTab { env_uuid, position })
         .await?;
 
@@ -292,7 +292,7 @@ pub async fn close_rpa_tab(env_uuid: String, position: u32) -> Result<RpaTabClos
             active_position: result.active_position,
             target_id: result.target_id,
         }),
-        other => Err(format!("simprint-runtime 返回了非预期响应: {:?}", other).into()),
+        other => Err(format!("mz-runtime 返回了非预期响应: {:?}", other).into()),
     }
 }
 
@@ -302,13 +302,13 @@ pub async fn get_environment_status(env_uuid: String) -> Result<Option<Environme
     }
 
     let response = AppContext::get()
-        .simprint_runtime_manager
+        .mz_runtime_manager
         .send_environment_command(EnvironmentCommandRequest::GetEnvironmentStatus { env_uuid })
         .await?;
 
     match response {
         EnvironmentCommandResponse::Status { status } => Ok(status),
-        other => Err(format!("simprint-runtime 返回了非预期响应: {:?}", other).into()),
+        other => Err(format!("mz-runtime 返回了非预期响应: {:?}", other).into()),
     }
 }
 
@@ -318,13 +318,13 @@ pub async fn get_all_environment_statuses() -> Result<HashMap<String, Environmen
     }
 
     let response = AppContext::get()
-        .simprint_runtime_manager
+        .mz_runtime_manager
         .send_environment_command(EnvironmentCommandRequest::GetAllEnvironmentStatuses)
         .await?;
 
     match response {
         EnvironmentCommandResponse::AllStatuses { statuses } => Ok(statuses),
-        other => Err(format!("simprint-runtime 返回了非预期响应: {:?}", other).into()),
+        other => Err(format!("mz-runtime 返回了非预期响应: {:?}", other).into()),
     }
 }
 
@@ -336,7 +336,7 @@ pub async fn set_window_bounds(
     height: i32,
 ) -> Result<()> {
     let response = AppContext::get()
-        .simprint_runtime_manager
+        .mz_runtime_manager
         .send_environment_command(EnvironmentCommandRequest::SetWindowBounds {
             request: WindowBoundsRequest {
                 env_uuid,
@@ -350,7 +350,7 @@ pub async fn set_window_bounds(
 
     match response {
         EnvironmentCommandResponse::Ack => Ok(()),
-        other => Err(format!("simprint-runtime 返回了非预期响应: {:?}", other).into()),
+        other => Err(format!("mz-runtime 返回了非预期响应: {:?}", other).into()),
     }
 }
 
@@ -484,10 +484,10 @@ fn ensure_browser_user_data_dir(path: &std::path::Path) -> Result<()> {
     fs::create_dir_all(path)
         .map_err(|error| format!("无法创建浏览器用户数据目录 {}: {error}", path.display()))?;
 
-    let probe_path = path.join(".simprint-write-probe");
+    let probe_path = path.join(".mz-write-probe");
     let probe_result = (|| -> std::io::Result<()> {
         let mut file = fs::File::create(&probe_path)?;
-        file.write_all(b"simprint")?;
+        file.write_all(b"mz")?;
         file.sync_all()?;
         Ok(())
     })();
@@ -508,10 +508,10 @@ mod tests {
     #[test]
     fn creates_and_validates_browser_user_data_dir() {
         let path =
-            std::env::temp_dir().join(format!("simprint-user-data-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("mz-user-data-{}", uuid::Uuid::new_v4()));
         ensure_browser_user_data_dir(&path).unwrap();
         assert!(path.is_dir());
-        assert!(!path.join(".simprint-write-probe").exists());
+        assert!(!path.join(".mz-write-probe").exists());
         let _ = std::fs::remove_dir_all(path);
     }
 }

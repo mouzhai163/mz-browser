@@ -490,9 +490,9 @@ fn base_browser_args(env_id: &str, user_data_dir: &str, cdp_port: u16) -> Vec<St
 
 #[cfg(all(feature = "desktop-e2e", debug_assertions, not(feature = "production")))]
 fn append_test_certificate(mut args: Vec<String>) -> Vec<String> {
-    let root = std::env::var_os("SIMPRINT_ROOT_DIR").map(std::path::PathBuf::from);
-    let spki = std::env::var("SIMPRINT_E2E_CERT_SPKI").unwrap_or_default();
-    let marked = root.is_some_and(|root| root.is_absolute() && root.join(".simprint-desktop-e2e").is_file());
+    let root = std::env::var_os("MZ_ROOT_DIR").map(std::path::PathBuf::from);
+    let spki = std::env::var("MZ_E2E_CERT_SPKI").unwrap_or_default();
+    let marked = root.is_some_and(|root| root.is_absolute() && root.join(".mz-desktop-e2e").is_file());
     if marked && spki.len() == 44 && spki.ends_with('=') && spki[..43].bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'+' || byte == b'/') {
         args.push(format!("--ignore-certificate-errors-spki-list={spki}"));
     }
@@ -636,7 +636,7 @@ mod policy_tests {
     #[test]
     fn accepts_a_kernel_without_standalone_crashpad_handler() {
         let dir = std::env::temp_dir().join(format!(
-            "simprint-kernel-layout-{}-{}",
+            "mz-kernel-layout-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -656,7 +656,7 @@ mod policy_tests {
     #[test]
     fn rejects_a_missing_browser_executable() {
         let dir = std::env::temp_dir().join(format!(
-            "simprint-kernel-layout-missing-{}-{}",
+            "mz-kernel-layout-missing-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

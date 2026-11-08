@@ -1,9 +1,9 @@
 //! 多模块、多文件日志
 //!
 //! - **多文件**：不同功能写入不同日志文件，所有日志位于统一路径层给出的 `logs/` 目录下：
-//!   - `simprint_app.log` — 本体、认证、代理、更新、存储、窗口等（默认）
-//!   - `simprint_api.log` — API 功能（target: `simprint::api`）
-//!   - `simprint_syncer.log` — 同步器功能（target: `simprint::syncer`）
+//!   - `mz_app.log` — 本体、认证、代理、更新、存储、窗口等（默认）
+//!   - `mz_api.log` — API 功能（target: `mz::api`）
+//!   - `mz_syncer.log` — 同步器功能（target: `mz::syncer`）
 //! - **可扩展**：在 [channels] 的 `channel_list()` 中增加一条 `Channel { target, file_stem }`，并在 [modules] 中增加对应常量即可新增一个独立日志文件。
 //! - 打日志请使用本模块的宏并传入 [modules] 中的 target，例如：`log_info!(logger::modules::APP, "msg")`。
 

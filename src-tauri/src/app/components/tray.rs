@@ -15,7 +15,7 @@ pub fn get_icon() -> Result<Image<'static>, tauri::Error> {
 
 // 获取tray 提示文本
 pub fn tooltip_text(app: &App) -> String {
-    app.config().product_name.clone().unwrap_or("simprint".to_string())
+    app.config().product_name.clone().unwrap_or("mz".to_string())
 }
 
 /// 创建tray 菜单

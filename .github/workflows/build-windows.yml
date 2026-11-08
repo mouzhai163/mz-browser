@@ -115,7 +115,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ENV_NAME: production
-          SIMPRINT_WEBVIEW_MODE: fixed-runtime
+          MZ_WEBVIEW_MODE: fixed-runtime
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
@@ -124,7 +124,7 @@ jobs:
           tagName: ${{ inputs.release_tag }}
           uploadUpdaterJson: false
           uploadUpdaterSignatures: true
-          releaseAssetNamePattern: Simprint_[version]_[arch]-full[setup].[ext]
+          releaseAssetNamePattern: M Z指纹浏览器_[version]_[arch]-full[setup].[ext]
           args: --features production --target x86_64-pc-windows-msvc
 
       - name: Prepare ARM64 fixed-runtime config
@@ -139,7 +139,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ENV_NAME: production
-          SIMPRINT_WEBVIEW_MODE: fixed-runtime
+          MZ_WEBVIEW_MODE: fixed-runtime
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
@@ -148,7 +148,7 @@ jobs:
           tagName: ${{ inputs.release_tag }}
           uploadUpdaterJson: false
           uploadUpdaterSignatures: true
-          releaseAssetNamePattern: Simprint_[version]_[arch]-full[setup].[ext]
+          releaseAssetNamePattern: M Z指纹浏览器_[version]_[arch]-full[setup].[ext]
           args: --features production --target aarch64-pc-windows-msvc
 
       - name: Prepare x86 fixed-runtime config
@@ -163,7 +163,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ENV_NAME: production
-          SIMPRINT_WEBVIEW_MODE: fixed-runtime
+          MZ_WEBVIEW_MODE: fixed-runtime
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
@@ -172,7 +172,7 @@ jobs:
           tagName: ${{ inputs.release_tag }}
           uploadUpdaterJson: false
           uploadUpdaterSignatures: true
-          releaseAssetNamePattern: Simprint_[version]_[arch]-full[setup].[ext]
+          releaseAssetNamePattern: M Z指纹浏览器_[version]_[arch]-full[setup].[ext]
           args: --features production --target i686-pc-windows-msvc
 
       - name: Prepare x64 embedBootstrapper config
@@ -187,7 +187,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ENV_NAME: production
-          SIMPRINT_WEBVIEW_MODE: embedBootstrapper
+          MZ_WEBVIEW_MODE: embedBootstrapper
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
@@ -196,7 +196,7 @@ jobs:
           tagName: ${{ inputs.release_tag }}
           uploadUpdaterJson: false
           uploadUpdaterSignatures: true
-          releaseAssetNamePattern: Simprint_[version]_[arch][setup].[ext]
+          releaseAssetNamePattern: M Z指纹浏览器_[version]_[arch][setup].[ext]
           args: --features production --target x86_64-pc-windows-msvc
 
       - name: Prepare ARM64 embedBootstrapper config
@@ -211,7 +211,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ENV_NAME: production
-          SIMPRINT_WEBVIEW_MODE: embedBootstrapper
+          MZ_WEBVIEW_MODE: embedBootstrapper
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
@@ -220,7 +220,7 @@ jobs:
           tagName: ${{ inputs.release_tag }}
           uploadUpdaterJson: false
           uploadUpdaterSignatures: true
-          releaseAssetNamePattern: Simprint_[version]_[arch][setup].[ext]
+          releaseAssetNamePattern: M Z指纹浏览器_[version]_[arch][setup].[ext]
           args: --features production --target aarch64-pc-windows-msvc
 
       - name: Prepare x86 embedBootstrapper config
@@ -235,7 +235,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ENV_NAME: production
-          SIMPRINT_WEBVIEW_MODE: embedBootstrapper
+          MZ_WEBVIEW_MODE: embedBootstrapper
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
@@ -244,5 +244,5 @@ jobs:
           tagName: ${{ inputs.release_tag }}
           uploadUpdaterJson: false
           uploadUpdaterSignatures: true
-          releaseAssetNamePattern: Simprint_[version]_[arch][setup].[ext]
+          releaseAssetNamePattern: M Z指纹浏览器_[version]_[arch][setup].[ext]
           args: --features production --target i686-pc-windows-msvc

@@ -9,14 +9,14 @@ export interface MainStartupTiming {
 }
 
 type MainTimingWindow = Window & {
-  __SIMPRINT_MAIN_HTML_STARTED_AT__?: number;
+  __MZ_MAIN_HTML_STARTED_AT__?: number;
 };
 
 const timingWindow = window as MainTimingWindow;
 
 export const mainStartupTiming: MainStartupTiming = {
   // The inline HTML marker runs before the module graph is fetched and evaluated.
-  htmlStartedAt: timingWindow.__SIMPRINT_MAIN_HTML_STARTED_AT__ ?? performance.now(),
+  htmlStartedAt: timingWindow.__MZ_MAIN_HTML_STARTED_AT__ ?? performance.now(),
 };
 
 export function elapsedSinceMainHtml(timestamp: number | undefined): number | undefined {

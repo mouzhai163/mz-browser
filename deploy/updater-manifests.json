@@ -11,32 +11,32 @@
     {
       "channel": "embedBootstrapper",
       "keys": ["windows-x86_64", "windows-x86_64-nsis"],
-      "asset": "Simprint_{version}_x64-setup.exe"
+      "asset": "M Z指纹浏览器_{version}_x64-setup.exe"
     },
     {
       "channel": "embedBootstrapper",
       "keys": ["windows-aarch64", "windows-aarch64-nsis"],
-      "asset": "Simprint_{version}_arm64-setup.exe"
+      "asset": "M Z指纹浏览器_{version}_arm64-setup.exe"
     },
     {
       "channel": "embedBootstrapper",
       "keys": ["windows-i686", "windows-i686-nsis"],
-      "asset": "Simprint_{version}_x86-setup.exe"
+      "asset": "M Z指纹浏览器_{version}_x86-setup.exe"
     },
     {
       "channel": "fixed-runtime",
       "keys": ["windows-x86_64", "windows-x86_64-nsis"],
-      "asset": "Simprint_{version}_x64-full-setup.exe"
+      "asset": "M Z指纹浏览器_{version}_x64-full-setup.exe"
     },
     {
       "channel": "fixed-runtime",
       "keys": ["windows-aarch64", "windows-aarch64-nsis"],
-      "asset": "Simprint_{version}_arm64-full-setup.exe"
+      "asset": "M Z指纹浏览器_{version}_arm64-full-setup.exe"
     },
     {
       "channel": "fixed-runtime",
       "keys": ["windows-i686", "windows-i686-nsis"],
-      "asset": "Simprint_{version}_x86-full-setup.exe"
+      "asset": "M Z指纹浏览器_{version}_x86-full-setup.exe"
     }
   ]
 }

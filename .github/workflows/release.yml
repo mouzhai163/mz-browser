@@ -64,7 +64,7 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
           REPOSITORY: ${{ github.repository }}
         run: |
-          $releaseDir = Join-Path $env:RUNNER_TEMP "simprint-release"
+          $releaseDir = Join-Path $env:RUNNER_TEMP "mz-release"
           $signatureDir = Join-Path $releaseDir "signatures"
           $manifestDir = Join-Path $releaseDir "manifests"
           New-Item -ItemType Directory -Path $signatureDir -Force | Out-Null

@@ -60,14 +60,14 @@ export const WindowManagerService: React.FC = () => {
                 };
 
                 void invoke('log_info', {
-                  module: 'simprint::frontend::main',
+                  module: 'mz::frontend::main',
                   message: `Main window frontend timing: ${JSON.stringify(frontendTiming)}`,
                 }).catch((error) => {
                   console.warn('[WindowManagerService] failed to report startup timing:', error);
                 });
 
                 await invoke('main_window_ready');
-                window.dispatchEvent(new Event('simprint:main-window-ready'));
+                window.dispatchEvent(new Event('mz:main-window-ready'));
                 console.log(
                   '[WindowManagerService] 主窗口真正就绪，已报告后端（检查次数:',
                   checkCount,

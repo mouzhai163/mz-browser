@@ -82,12 +82,12 @@ pub fn register_deep_link(app: AppHandle) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-pub fn init_simprint_runtime_background(app_handle: AppHandle) {
+pub fn init_mz_runtime_background(app_handle: AppHandle) {
     tauri::async_runtime::spawn(async move {
         use crate::app::context::AppContext;
 
         let ctx = AppContext::get();
-        ctx.simprint_runtime_manager.set_app_handle(app_handle.clone()).await;
+        ctx.mz_runtime_manager.set_app_handle(app_handle.clone()).await;
 
         // 没有用户和登录：启动时直接把依赖数据库的服务（运行时、本地 API）拉起来。
         if let Err(error) = crate::app::local_session::ensure_ready().await {
@@ -105,7 +105,7 @@ pub fn init_simprint_runtime_background(app_handle: AppHandle) {
         }));
         crate::services::default_browser::refresh_registration_if_needed(&app_handle);
 
-        if let Err(error) = ctx.simprint_runtime_manager.start_background().await {
+        if let Err(error) = ctx.mz_runtime_manager.start_background().await {
             log::warn!("failed to start embedded environment runtime: {}", error);
         }
     });

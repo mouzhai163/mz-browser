@@ -21,7 +21,7 @@ pub fn clear_default_browser_environment(app: AppHandle) -> Result<DefaultBrowse
     default_browser::clear_environment(&app)
 }
 
-/// 打开系统"默认应用"设置页，让用户把 Simprint 选为默认浏览器。
+/// 打开系统"默认应用"设置页，让用户把 M Z指纹浏览器 选为默认浏览器。
 #[tauri::command]
 pub fn open_default_apps_settings() -> Result<()> {
     default_browser::open_default_apps_settings()

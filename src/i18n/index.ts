@@ -3,7 +3,7 @@ import { initReactI18next } from 'react-i18next';
 
 export type Locale = 'zh-CN' | 'en-US';
 
-export const LOCALE_STORAGE_KEY = 'simprint-ui-locale';
+export const LOCALE_STORAGE_KEY = 'mz-ui-locale';
 
 export const SUPPORTED_LOCALES: Locale[] = ['zh-CN', 'en-US'];
 

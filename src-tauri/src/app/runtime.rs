@@ -26,12 +26,12 @@ struct ManagedRuntime {
     event_task: tokio::task::JoinHandle<()>,
 }
 
-pub struct SimprintRuntimeManager {
+pub struct MzRuntimeManager {
     app_handle: RwLock<Option<AppHandle>>,
     handle: Mutex<Option<Arc<ManagedRuntime>>>,
 }
 
-impl SimprintRuntimeManager {
+impl MzRuntimeManager {
     pub fn new() -> Self {
         Self {
             app_handle: RwLock::new(None),
@@ -133,7 +133,7 @@ impl SimprintRuntimeManager {
             context_init_lock: Mutex::new(()),
             event_task,
         }));
-        log::info!("embedded simprint runtime started");
+        log::info!("embedded mz runtime started");
         Ok(())
     }
 
@@ -307,7 +307,7 @@ fn is_runtime_authenticated() -> bool {
     crate::app::local_session::is_ready()
 }
 
-impl Default for SimprintRuntimeManager {
+impl Default for MzRuntimeManager {
     fn default() -> Self {
         Self::new()
     }

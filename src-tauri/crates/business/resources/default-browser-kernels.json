@@ -8,7 +8,7 @@
       "install_dir_name": "Chrome 156",
       "version": "156.0.8078.94",
       "name": "simprint-browser-156.0.8078.94-win-x64.zip",
-      "notes": "Simprint Chromium kernel",
+      "notes": "M Z指纹浏览器 Chromium kernel",
       "platform": "windows",
       "url": "https://github.com/mouzhai163/browser-kernel/releases/download/v156.0.8078.94/simprint-browser-156.0.8078.94-win-x64.zip",
       "priority": 100,

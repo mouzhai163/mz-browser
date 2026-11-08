@@ -103,7 +103,7 @@ async fn ensure_node_runtime() -> std::result::Result<(), String> {
 }
 
 fn build_temp_script_path() -> PathBuf {
-    env::temp_dir().join(format!("simprint-rpa-script-{}.cjs", Uuid::new_v4()))
+    env::temp_dir().join(format!("mz-rpa-script-{}.cjs", Uuid::new_v4()))
 }
 
 fn apply_hidden_window_flags(command: &mut Command) {

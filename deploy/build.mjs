@@ -34,4 +34,4 @@ const tauriArgs = ['-s', 'exec', 'tauri', 'build', '--features', 'production'];
 if (target) {
   tauriArgs.push('--target', target);
 }
-run('pnpm', tauriArgs, { SIMPRINT_WEBVIEW_MODE: webviewMode, ENV_NAME: 'production' });
+run('pnpm', tauriArgs, { MZ_WEBVIEW_MODE: webviewMode, ENV_NAME: 'production' });

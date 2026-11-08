@@ -95,7 +95,7 @@ function McpClientConfigContent({ config }: { config: McpConfigSnapshot }) {
         snippet: JSON.stringify(
           {
             servers: {
-              simprint: {
+              mz: {
                 type: 'http',
                 url: config.endpoint,
                 headers: { Authorization: 'Bearer <MCP_TOKEN>' },
@@ -114,7 +114,7 @@ function McpClientConfigContent({ config }: { config: McpConfigSnapshot }) {
         snippet: JSON.stringify(
           {
             mcpServers: {
-              simprint: {
+              mz: {
                 url: config.endpoint,
                 headers: { Authorization: 'Bearer <MCP_TOKEN>' },
               },
@@ -129,16 +129,16 @@ function McpClientConfigContent({ config }: { config: McpConfigSnapshot }) {
         docsLabel: t('mcp.clients.claude.docs'),
         docsUrl: 'https://docs.anthropic.com/en/docs/claude-code/mcp',
         hint: 'Claude Code CLI',
-        snippet: `claude mcp add --transport http simprint ${config.endpoint} --header "Authorization: Bearer $env:SIMPRINT_MCP_TOKEN"`,
+        snippet: `claude mcp add --transport http mz ${config.endpoint} --header "Authorization: Bearer $env:MZ_MCP_TOKEN"`,
       },
       codex: {
         title: t('mcp.clients.codex.title'),
         docsLabel: t('mcp.clients.codex.docs'),
         docsUrl: 'https://developers.openai.com/learn/docs-mcp',
         hint: '~/.codex/config.toml',
-        snippet: `[mcp_servers.simprint]
+        snippet: `[mcp_servers.mz]
  url = "${config.endpoint}"
- bearer_token_env_var = "SIMPRINT_MCP_TOKEN"`,
+ bearer_token_env_var = "MZ_MCP_TOKEN"`,
       },
     }),
     [config.endpoint, t]

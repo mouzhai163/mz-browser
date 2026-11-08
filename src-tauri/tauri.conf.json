@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Simprint",
+  "productName": "M Z指纹浏览器",
   "version": "0.1.0",
-  "identifier": "com.lius.simprint",
+  "identifier": "com.mzbrowser.app",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:5173",
@@ -48,7 +48,7 @@
         "installerHooks": "./windows/nsis/installer-hooks.nsi",
         "template": "./windows/nsis/installer.nsi",
         "sidebarImage": "./windows/assets/sidebarImage.bmp",
-        "startMenuFolder": "Simprint",
+        "startMenuFolder": "M Z指纹浏览器",
         "languages": [
           "English",
           "SimpChinese"
@@ -70,7 +70,7 @@
       "desktop": [
         {
           "schemes": [
-            "simprint"
+            "mz"
           ]
         }
       ]

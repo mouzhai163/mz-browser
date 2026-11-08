@@ -428,7 +428,7 @@ mod tests {
     #[test]
     fn staging_failure_reports_install_path_and_removes_temporary_directory() {
         let base = std::env::temp_dir().join(format!(
-            "simprint-kernel-staging-error-{}",
+            "mz-kernel-staging-error-{}",
             uuid::Uuid::new_v4()
         ));
         let staging_dir = base.join(".Chrome 144.staging-test");
@@ -458,7 +458,7 @@ mod tests {
     #[test]
     fn staging_failure_does_not_duplicate_kernel_prepare_prefix() {
         let base = std::env::temp_dir().join(format!(
-            "simprint-kernel-prefix-error-{}",
+            "mz-kernel-prefix-error-{}",
             uuid::Uuid::new_v4()
         ));
         let staging_dir = base.join(".Chrome 144.staging-test");

@@ -4,8 +4,8 @@
  */
 import { useEffect, useState } from 'react';
 
-const THEME_STORAGE_KEY = 'simprint-ui-theme';
-const LOCALE_STORAGE_KEY = 'simprint-ui-locale';
+const THEME_STORAGE_KEY = 'mz-ui-theme';
+const LOCALE_STORAGE_KEY = 'mz-ui-locale';
 
 function isTauriEnv(): boolean {
   return typeof window !== 'undefined' && '__TAURI__' in window;

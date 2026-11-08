@@ -180,7 +180,7 @@ mod tests {
 
     #[tokio::test]
     async fn graceful_stop_retains_the_job_until_owned_process_flushes_and_exits() {
-        let file = std::env::temp_dir().join(format!("simprint-flush-{}", rand::random::<u64>()));
+        let file = std::env::temp_dir().join(format!("mz-flush-{}", rand::random::<u64>()));
         let script = format!("Start-Sleep -Milliseconds 200; Set-Content -LiteralPath '{}' -Value flushed", file.to_string_lossy().replace('\'', "''"));
         let mut child = child(&script);
         let manager = JobManager::new();

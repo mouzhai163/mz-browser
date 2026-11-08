@@ -1,6 +1,6 @@
-# Contributing to Simprint
+# Contributing to M Z指纹浏览器
 
-Thanks for considering a contribution to Simprint.
+Thanks for considering a contribution to M Z指纹浏览器.
 
 This repository is in an active open-source transition. We welcome bug reports, documentation improvements, CI and packaging fixes, frontend refinements, test coverage, and well-scoped product improvements.
 

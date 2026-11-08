@@ -9,9 +9,9 @@ Var RuntimePathRoot
 ; 从当前运行中的安装包文件名提取完整文件名（包含 .exe 扩展名），原样写入 referral 目录。
 ; 当前客户端注册逻辑只会识别文件名中的 `R_<base64url(referral_code)>_R` 标记。
 ; 示例：
-;   simprint_setup-R_SU5WNzZGNDUwN0Y_R.exe  -> 可识别的邀请码载体
-;   simprint_setup-1BL5PQP.exe              -> 不会被识别为邀请码
-;   simprint-setup.exe                      -> 普通安装包，不包含邀请码
+;   mz_setup-R_SU5WNzZGNDUwN0Y_R.exe  -> 可识别的邀请码载体
+;   mz_setup-1BL5PQP.exe              -> 不会被识别为邀请码
+;   mz-setup.exe                      -> 普通安装包，不包含邀请码
 
 !macro NSIS_HOOK_POSTINSTALL
   SetShellVarContext current
@@ -21,10 +21,10 @@ Var RuntimePathRoot
   ${GetFileName} $EXEFILE $PromoCode
 
   ; 3. 先删除旧的 referral 目录，再创建目录并写入空文件
-  RMDir /r "$LOCALAPPDATA\Simprint\referral"
+  RMDir /r "$LOCALAPPDATA\MZBrowser\referral"
   StrCmp $PromoCode "" NoPromoFile
-  CreateDirectory "$LOCALAPPDATA\Simprint\referral"
-  FileOpen $0 "$LOCALAPPDATA\Simprint\referral\$PromoCode" w
+  CreateDirectory "$LOCALAPPDATA\MZBrowser\referral"
+  FileOpen $0 "$LOCALAPPDATA\MZBrowser\referral\$PromoCode" w
   FileClose $0
 
 NoPromoFile:
@@ -113,14 +113,14 @@ FunctionEnd
     Call un.RemoveRuntimePathIfSafe
 
     ; 默认根目录始终用 NSIS 原生命令删除
-    RmDir /r "$LOCALAPPDATA\Simprint"
+    RmDir /r "$LOCALAPPDATA\MZBrowser"
   ${EndIf}
 
   DeleteRegKey HKCU "Software\${PRODUCTNAME}\RuntimePaths"
 
-  ; 取消"默认浏览器"登记：卸载后 Simprint 不再出现在 Windows 的可选浏览器里。
+  ; 取消"默认浏览器"登记：卸载后 M Z指纹浏览器 不再出现在 Windows 的可选浏览器里。
   ; 登记名与 services/default_browser/registry.rs 的 RELEASE_NAMES 保持一致（开发运行用另一套名字，不受影响）。
-  DeleteRegKey HKCU "Software\Classes\SimprintHTML"
-  DeleteRegKey HKCU "Software\Clients\StartMenuInternet\Simprint"
-  DeleteRegValue HKCU "Software\RegisteredApplications" "Simprint"
+  DeleteRegKey HKCU "Software\Classes\MzHTML"
+  DeleteRegKey HKCU "Software\Clients\StartMenuInternet\M Z指纹浏览器"
+  DeleteRegValue HKCU "Software\RegisteredApplications" "M Z指纹浏览器"
 !macroend

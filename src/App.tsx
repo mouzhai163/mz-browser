@@ -19,7 +19,7 @@ const MODE_PLUGIN_IDS = {
   syncer: ['syncer'],
 } as const;
 
-const MAIN_WINDOW_READY_EVENT = 'simprint:main-window-ready';
+const MAIN_WINDOW_READY_EVENT = 'mz:main-window-ready';
 
 // Initialize plugin import mappings
 if (pluginImports.getPluginImport && pluginImports.getAvailablePluginIds) {
@@ -45,7 +45,7 @@ const loadPlugins = async (pluginIds: readonly string[]) => {
     };
 
     // @deprecated Compatibility fallback for @slotkitjs/core < 0.3.5.
-    // Remove after Simprint's lockfile is upgraded to a published 0.3.5+ release.
+    // Remove after this project's lockfile is upgraded to a published 0.3.5+ release.
     const plugins = selectivePluginLoader.loadPlugins
       ? await selectivePluginLoader.loadPlugins(pluginIds)
       : await pluginLoader.loadAllPlugins();

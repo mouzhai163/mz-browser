@@ -1,5 +1,5 @@
 {
-  "name": "@simprint/plugin-i18n",
+  "name": "@mz/plugin-i18n",
   "private": true,
   "version": "1.0.0",
   "type": "module",

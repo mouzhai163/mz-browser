@@ -6,8 +6,8 @@ function updatesEnabled(): boolean {
   return appUpdatesAllowed(import.meta.env.DEV, import.meta.env.VITE_DISABLE_APP_UPDATES);
 }
 
-export const APP_UPDATE_AVAILABLE_EVENT = 'simprint:app-update-available';
-export const APP_UPDATE_DIALOG_EVENT = 'simprint:open-app-update-dialog';
+export const APP_UPDATE_AVAILABLE_EVENT = 'mz:app-update-available';
+export const APP_UPDATE_DIALOG_EVENT = 'mz:open-app-update-dialog';
 
 let cachedUpdate: Update | null | undefined;
 let pendingCheck: Promise<Update | null> | null = null;

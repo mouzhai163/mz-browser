@@ -1,7 +1,7 @@
 export const commonResources = {
   'zh-CN': {
     app: {
-      name: 'Simprint',
+      name: 'M Z指纹浏览器',
     },
     language: {
       zhCN: '中文',
@@ -10,7 +10,7 @@ export const commonResources = {
   },
   'en-US': {
     app: {
-      name: 'Simprint',
+      name: 'M Z指纹浏览器',
     },
     language: {
       zhCN: '中文',

@@ -84,7 +84,7 @@ pub fn run() {
             );
 
             // Isolated runs must not replace an installed app's URL handler.
-            if std::env::var_os("SIMPRINT_ROOT_DIR").is_none() {
+            if std::env::var_os("MZ_ROOT_DIR").is_none() {
                 setup::register_deep_link(app.handle().clone())?;
             }
 
@@ -96,7 +96,7 @@ pub fn run() {
             // 初始化依赖 Tauri 的组件
             lifecycle::init_tauri_dependent(app.handle())?;
 
-            setup::init_simprint_runtime_background(app.handle().clone());
+            setup::init_mz_runtime_background(app.handle().clone());
 
             if startup::StartupService::backend_startup_ready(app.handle()).is_err() {
                 return Err(anyhow::anyhow!("Failed to complete the backend startup gate").into());

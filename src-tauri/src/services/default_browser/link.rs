@@ -1,7 +1,7 @@
 //! 外部链接的识别与校验。
 //!
 //! 链接来自其他软件（邮件、聊天……），必须当作不可信输入：只接受 http / https，
-//! 拒绝 `file:`、`javascript:`、`data:`、`chrome:`、`simprint:` 等一切其他协议，
+//! 拒绝 `file:`、`javascript:`、`data:`、`chrome:`、`mz:` 等一切其他协议，
 //! 也不允许空白或控制字符（防止被拆成多个参数或夹带内容）。
 
 /// 链接最大长度。浏览器地址栏的实际上限是 2MB，但外部链接超过这个长度几乎一定有问题。
@@ -44,11 +44,11 @@ fn strip_web_scheme(link: &str) -> Option<&str> {
 /// 参数分隔符：它之后的参数全部是"数据"，不是选项。
 pub const ARGS_SEPARATOR: &str = "--";
 /// 登记命令里携带的数据目录参数（仅开发/隔离运行需要，见 `registry`）。
-pub const ROOT_ARG_PREFIX: &str = "--simprint-root=";
+pub const ROOT_ARG_PREFIX: &str = "--mz-root=";
 
 /// 从进程参数里取出被系统交给我们的 http(s) 链接。
 ///
-/// 登记的命令是 `Simprint.exe [--simprint-root=<目录>] -- "<链接>"`：`--` 之后必须**恰好一个**参数，
+/// 登记的命令是 `mz-browser.exe [--mz-root=<目录>] -- "<链接>"`：`--` 之后必须**恰好一个**参数，
 /// 且是 http(s) 链接。链接里夹带引号会被拆成多个参数，此时整个请求作废，而不是挑其中一个去用。
 pub fn link_from_args<I>(args: I) -> Option<String>
 where
@@ -62,7 +62,7 @@ where
     }
 }
 
-/// 从进程参数里取出 `--simprint-root=<绝对路径>`（只看 `--` 之前的参数）。
+/// 从进程参数里取出 `--mz-root=<绝对路径>`（只看 `--` 之前的参数）。
 pub fn root_from_args<I>(args: I) -> Option<String>
 where
     I: IntoIterator<Item = String>,
@@ -117,7 +117,7 @@ mod tests {
             "javascript:alert(1)",
             "data:text/html,<script>1</script>",
             "chrome://settings",
-            "simprint://login",
+            "mz://login",
             "ftp://example.com/",
             "about:blank",
             "example.com",
@@ -165,38 +165,38 @@ mod tests {
     #[test]
     fn finds_the_link_after_the_separator() {
         assert_eq!(
-            link_from_args(args(&["Simprint.exe", "--", "https://example.com/x"])).as_deref(),
+            link_from_args(args(&["mz-browser.exe", "--", "https://example.com/x"])).as_deref(),
             Some("https://example.com/x")
         );
         assert_eq!(
-            link_from_args(args(&["Simprint.exe", "--simprint-root=C:/d", "--", "HTTP://example.com"])).as_deref(),
+            link_from_args(args(&["mz-browser.exe", "--mz-root=C:/d", "--", "HTTP://example.com"])).as_deref(),
             Some("HTTP://example.com")
         );
         // 没有分隔符、不是 http(s)、没有链接：都不算
-        assert_eq!(link_from_args(args(&["Simprint.exe", "https://example.com/x"])), None);
-        assert_eq!(link_from_args(args(&["Simprint.exe", "--", "simprint://login"])), None);
-        assert_eq!(link_from_args(args(&["Simprint.exe", "--"])), None);
-        assert_eq!(link_from_args(args(&["Simprint.exe"])), None);
+        assert_eq!(link_from_args(args(&["mz-browser.exe", "https://example.com/x"])), None);
+        assert_eq!(link_from_args(args(&["mz-browser.exe", "--", "mz://login"])), None);
+        assert_eq!(link_from_args(args(&["mz-browser.exe", "--"])), None);
+        assert_eq!(link_from_args(args(&["mz-browser.exe"])), None);
     }
 
     #[test]
     fn a_link_that_splits_into_several_arguments_is_rejected_entirely() {
         // 链接里的引号会让命令行多出参数；不能从中挑一个用
-        assert_eq!(link_from_args(args(&["S.exe", "--", "https://a.com/", "--simprint-root=C:/evil"])), None);
+        assert_eq!(link_from_args(args(&["S.exe", "--", "https://a.com/", "--mz-root=C:/evil"])), None);
         assert_eq!(link_from_args(args(&["S.exe", "--", "https://a.com/", "https://b.com/"])), None);
     }
 
     #[test]
     fn the_data_root_only_counts_before_the_separator() {
         assert_eq!(
-            root_from_args(args(&["S.exe", "--simprint-root=C:/data", "--", "https://a.com/"])).as_deref(),
+            root_from_args(args(&["S.exe", "--mz-root=C:/data", "--", "https://a.com/"])).as_deref(),
             Some("C:/data")
         );
         // 链接那一侧的内容不能改数据目录
-        assert_eq!(root_from_args(args(&["S.exe", "--", "--simprint-root=C:/evil"])), None);
+        assert_eq!(root_from_args(args(&["S.exe", "--", "--mz-root=C:/evil"])), None);
         // 必须是绝对路径
-        assert_eq!(root_from_args(args(&["S.exe", "--simprint-root=data"])), None);
-        assert_eq!(root_from_args(args(&["S.exe", "--simprint-root="])), None);
+        assert_eq!(root_from_args(args(&["S.exe", "--mz-root=data"])), None);
+        assert_eq!(root_from_args(args(&["S.exe", "--mz-root="])), None);
         assert_eq!(root_from_args(args(&["S.exe"])), None);
     }
 

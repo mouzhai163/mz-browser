@@ -272,7 +272,7 @@ impl WindowService {
         let builder =
             WebviewWindowBuilder::new(app_handle, "main", WebviewUrl::App("index.html".into()))
                 .data_directory(Self::get_webview_data_dir()?)
-                .title("Simprint")
+                .title("M Z指纹浏览器")
                 .inner_size(1438.0, 828.0)
                 .min_inner_size(1038.0, 688.0)
                 .resizable(true)

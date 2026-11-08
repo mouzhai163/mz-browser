@@ -75,11 +75,11 @@ impl ToolBase for ListGroupsTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_list_groups".into()
+        "mz_list_groups".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("List Simprint groups.".into())
+        Some("List M Z指纹浏览器 groups.".into())
     }
 }
 
@@ -101,11 +101,11 @@ impl ToolBase for CreateGroupTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_create_group".into()
+        "mz_create_group".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Create a Simprint group.".into())
+        Some("Create a M Z指纹浏览器 group.".into())
     }
 }
 
@@ -140,11 +140,11 @@ impl ToolBase for UpdateGroupTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_update_group".into()
+        "mz_update_group".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Update a Simprint group.".into())
+        Some("Update a M Z指纹浏览器 group.".into())
     }
 }
 
@@ -177,11 +177,11 @@ impl ToolBase for DeleteGroupTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_delete_group".into()
+        "mz_delete_group".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Delete a Simprint group by UUID.".into())
+        Some("Delete a M Z指纹浏览器 group by UUID.".into())
     }
 }
 

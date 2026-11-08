@@ -68,7 +68,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ mode = 'main', pluginsRead
   // 如果是 syncer 模式，渲染同步器窗口
   if (mode === 'syncer') {
     return (
-      <ThemeProvider defaultTheme="system" storageKey="simprint-ui-theme">
+      <ThemeProvider defaultTheme="system" storageKey="mz-ui-theme">
         <SyncerRenderer />
       </ThemeProvider>
     );
@@ -77,7 +77,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ mode = 'main', pluginsRead
   // 默认渲染主应用布局
   return (
     <SettingsBootstrap>
-      <ThemeProvider defaultTheme="system" storageKey="simprint-ui-theme">
+      <ThemeProvider defaultTheme="system" storageKey="mz-ui-theme">
         <I18nProvider resources={{ common: commonResources }}>
           <BrowserRouter>
             {pluginsReady && routesReady && windowManagerComponent

@@ -71,7 +71,7 @@ pub fn exe_name() -> &'static str {
 
 /// 校验内核目录是否包含启动所需的文件。
 ///
-/// Windows 版本的 Simprint Chromium 会在主进程启动时拉起 Crashpad
+/// Windows 版本的 M Z指纹浏览器 Chromium 会在主进程启动时拉起 Crashpad
 /// handler；只校验 chrome.dll 的哈希无法发现缺少该子进程的残缺安装包。
 /// 当前内核可将 Crashpad handler 集成在主程序中，因此这里只要求主程序存在。
 pub fn validate_kernel_package_layout(kernel_dir: &Path) -> Result<()> {
@@ -185,7 +185,7 @@ mod tests {
     #[test]
     fn rejects_kernel_without_browser_executable() {
         let dir = std::env::temp_dir().join(format!(
-            "simprint-kernel-layout-{}-{}",
+            "mz-kernel-layout-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -202,7 +202,7 @@ mod tests {
     #[test]
     fn accepts_kernel_without_standalone_crashpad_handler() {
         let dir = std::env::temp_dir().join(format!(
-            "simprint-kernel-layout-valid-{}-{}",
+            "mz-kernel-layout-valid-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

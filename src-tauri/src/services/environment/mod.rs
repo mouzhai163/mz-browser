@@ -44,7 +44,7 @@ impl EnvironmentService {
         };
 
         match ctx
-            .simprint_runtime_manager
+            .mz_runtime_manager
             .send_sync_command(SyncCommandRequest::GetRunningEnvironments)
             .await
         {
@@ -59,7 +59,7 @@ impl EnvironmentService {
             Ok(SyncCommandResponse::Ack) => vec![],
             Err(error) => {
                 log::warn!(
-                    "failed to query running environments from simprint-runtime: {}",
+                    "failed to query running environments from mz-runtime: {}",
                     error
                 );
                 vec![]
@@ -74,7 +74,7 @@ impl EnvironmentService {
 
         let ctx = AppContext::get();
         let response = ctx
-            .simprint_runtime_manager
+            .mz_runtime_manager
             .send_sync_command(SyncCommandRequest::StartSync {
                 master_env_id: params.master_env_id,
                 slave_env_ids: params.slave_env_ids,
@@ -83,7 +83,7 @@ impl EnvironmentService {
 
         match response {
             SyncCommandResponse::Ack => Ok(()),
-            other => Err(format!("simprint-runtime 返回了非预期响应: {:?}", other).into()),
+            other => Err(format!("mz-runtime 返回了非预期响应: {:?}", other).into()),
         }
     }
 
@@ -94,13 +94,13 @@ impl EnvironmentService {
 
         let ctx = AppContext::get();
         let response = ctx
-            .simprint_runtime_manager
+            .mz_runtime_manager
             .send_sync_command(SyncCommandRequest::StopSync)
             .await?;
 
         match response {
             SyncCommandResponse::Ack => Ok(()),
-            other => Err(format!("simprint-runtime 返回了非预期响应: {:?}", other).into()),
+            other => Err(format!("mz-runtime 返回了非预期响应: {:?}", other).into()),
         }
     }
 }

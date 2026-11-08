@@ -144,11 +144,11 @@ impl ToolBase for ListEnvironmentsTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_list_environments".into()
+        "mz_list_environments".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("List Simprint environments with optional filters.".into())
+        Some("List M Z指纹浏览器 environments with optional filters.".into())
     }
 }
 
@@ -196,11 +196,11 @@ impl ToolBase for GetEnvironmentTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_get_environment".into()
+        "mz_get_environment".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Get a Simprint environment by UUID.".into())
+        Some("Get a M Z指纹浏览器 environment by UUID.".into())
     }
 }
 
@@ -224,11 +224,11 @@ impl ToolBase for StartEnvironmentTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_start_environment".into()
+        "mz_start_environment".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Start a Simprint environment by UUID.".into())
+        Some("Start a M Z指纹浏览器 environment by UUID.".into())
     }
 }
 
@@ -252,11 +252,11 @@ impl ToolBase for StopEnvironmentTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_stop_environment".into()
+        "mz_stop_environment".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Stop a Simprint environment by UUID.".into())
+        Some("Stop a M Z指纹浏览器 environment by UUID.".into())
     }
 }
 
@@ -280,11 +280,11 @@ impl ToolBase for BatchStartEnvironmentsTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_batch_start_environments".into()
+        "mz_batch_start_environments".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Start multiple Simprint environments by UUID.".into())
+        Some("Start multiple M Z指纹浏览器 environments by UUID.".into())
     }
 }
 
@@ -312,11 +312,11 @@ impl ToolBase for BatchStopEnvironmentsTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_batch_stop_environments".into()
+        "mz_batch_stop_environments".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Stop multiple Simprint environments by UUID.".into())
+        Some("Stop multiple M Z指纹浏览器 environments by UUID.".into())
     }
 }
 
@@ -344,11 +344,11 @@ impl ToolBase for GetEnvironmentStatusTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_get_environment_status".into()
+        "mz_get_environment_status".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Get the runtime status of a Simprint environment.".into())
+        Some("Get the runtime status of a M Z指纹浏览器 environment.".into())
     }
 }
 
@@ -374,11 +374,11 @@ impl ToolBase for GetEnvironmentCdpEndpointTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_get_environment_cdp_endpoint".into()
+        "mz_get_environment_cdp_endpoint".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Get the CDP endpoint of a running Simprint environment.".into())
+        Some("Get the CDP endpoint of a running M Z指纹浏览器 environment.".into())
     }
 }
 

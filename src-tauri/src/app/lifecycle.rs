@@ -28,7 +28,7 @@ pub async fn shutdown() -> Result<()> {
     if let Some(ctx) = AppContext::try_get() {
         ctx.mcp_manager.stop().await;
         ctx.local_api_manager.stop().await;
-        ctx.simprint_runtime_manager.stop().await;
+        ctx.mz_runtime_manager.stop().await;
     }
     Ok(())
 }

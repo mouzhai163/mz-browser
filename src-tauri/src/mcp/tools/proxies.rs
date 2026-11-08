@@ -122,11 +122,11 @@ impl ToolBase for ListProxiesTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_list_proxies".into()
+        "mz_list_proxies".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("List Simprint proxies with optional filters.".into())
+        Some("List M Z指纹浏览器 proxies with optional filters.".into())
     }
 }
 
@@ -174,11 +174,11 @@ impl ToolBase for GetProxyTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_get_proxy".into()
+        "mz_get_proxy".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Get a Simprint proxy by UUID.".into())
+        Some("Get a M Z指纹浏览器 proxy by UUID.".into())
     }
 }
 
@@ -199,11 +199,11 @@ impl ToolBase for CreateProxyTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_create_proxy".into()
+        "mz_create_proxy".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Create a Simprint proxy.".into())
+        Some("Create a M Z指纹浏览器 proxy.".into())
     }
 }
 
@@ -244,11 +244,11 @@ impl ToolBase for UpdateProxyTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_update_proxy".into()
+        "mz_update_proxy".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Update a Simprint proxy.".into())
+        Some("Update a M Z指纹浏览器 proxy.".into())
     }
 }
 
@@ -290,11 +290,11 @@ impl ToolBase for DeleteProxyTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_delete_proxy".into()
+        "mz_delete_proxy".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Delete a Simprint proxy by UUID.".into())
+        Some("Delete a M Z指纹浏览器 proxy by UUID.".into())
     }
 }
 
@@ -321,11 +321,11 @@ impl ToolBase for BatchDeleteProxiesTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_batch_delete_proxies".into()
+        "mz_batch_delete_proxies".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Delete multiple Simprint proxies by UUID.".into())
+        Some("Delete multiple M Z指纹浏览器 proxies by UUID.".into())
     }
 }
 

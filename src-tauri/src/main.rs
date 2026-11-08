@@ -3,7 +3,7 @@
 
 use log::error;
 
-use simprint_lib::core::logger;
+use mz_browser_lib::core::logger;
 
 /// 屏蔽环境变量
 pub fn disable_env_var() {
@@ -18,18 +18,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         logger::log_app_panic(panic_info);
     }));
 
-    // 系统启动的新进程没有开发/隔离运行的环境变量：数据目录由登记命令里的 --simprint-root 提供。
-    simprint_lib::services::default_browser::apply_root_arg();
+    // 系统启动的新进程没有开发/隔离运行的环境变量：数据目录由登记命令里的 --mz-root 提供。
+    mz_browser_lib::services::default_browser::apply_root_arg();
 
     // 被系统当作默认浏览器拉起来，而应用已经在运行：把链接交给它就退出，不再启动第二个应用。
     if let Some(link) =
-        simprint_lib::services::default_browser::link_from_args(std::env::args().skip(1))
+        mz_browser_lib::services::default_browser::link_from_args(std::env::args().skip(1))
     {
-        if simprint_lib::services::default_browser::ipc::try_forward(&link) {
+        if mz_browser_lib::services::default_browser::ipc::try_forward(&link) {
             return Ok(());
         }
     }
-    simprint_lib::app::startup::mark_headless_launch_if_requested();
+    mz_browser_lib::app::startup::mark_headless_launch_if_requested();
 
     disable_env_var();
 
@@ -40,19 +40,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     logger::log_app_start();
 
     // 初始化应用核心组件
-    if let Err(e) = simprint_lib::app::lifecycle::init_early() {
+    if let Err(e) = mz_browser_lib::app::lifecycle::init_early() {
         error!("Failed to initialize app context: {}", e);
         std::process::exit(-1);
     }
 
     // 初始化应用状态
     {
-        simprint_lib::app::init_state::init_app_init_state().await;
+        mz_browser_lib::app::init_state::init_app_init_state().await;
     }
 
     // 使用 catch_unwind 来捕获可能的 panic
     let result = std::panic::catch_unwind(|| {
-        simprint_lib::run();
+        mz_browser_lib::run();
     });
 
     if let Err(panic_payload) = result {

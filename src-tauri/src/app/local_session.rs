@@ -42,7 +42,7 @@ pub async fn ensure_ready() -> Result<(), String> {
 pub(crate) async fn sync_runtime() -> Result<(), String> {
     if let Some(context) = AppContext::try_get() {
         context
-            .simprint_runtime_manager
+            .mz_runtime_manager
             .sync_session_state()
             .await
             .map_err(|error| error.to_string())?;

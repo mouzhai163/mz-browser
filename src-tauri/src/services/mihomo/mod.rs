@@ -24,7 +24,9 @@ const LOCAL_PROXY_SCHEME: &str = "http";
 const LOCAL_PROXY_LISTENER_TYPE: &str = "http";
 const LOCAL_PROXY_STATUS_UNKNOWN: &str = "unknown";
 const LOCAL_PROXY_PORT_BASE: u16 = 17601;
-const SIMPRINT_LISTENER_PREFIX: &str = "simprint-";
+const MZ_LISTENER_PREFIX: &str = "mz-";
+/// 改名前写进 Mihomo 配置里的监听器前缀，仍然要认得，否则会和新写的监听器重复。
+const LEGACY_LISTENER_PREFIX: &str = "simprint-";
 
 pub struct MihomoManager;
 
@@ -400,7 +402,7 @@ fn compile_local_proxies(
             controller: controller.to_string(),
             name: node_name.clone(),
             node_name: node_name.clone(),
-            listener_name: format!("simprint-node-{:03}", index + 1),
+            listener_name: format!("mz-node-{:03}", index + 1),
             listen_host: LOCAL_PROXY_HOST.to_string(),
             listen_port: LOCAL_PROXY_PORT_BASE.saturating_add(index as u16),
             listener_type: LOCAL_PROXY_LISTENER_TYPE.to_string(),
@@ -424,7 +426,7 @@ async fn sync_local_listeners(
     let original = tokio::fs::read_to_string(config_path)
         .await
         .map_err(|error| format!("读取 Mihomo 配置文件失败: {error}"))?;
-    let next = merge_simprint_listeners(&original, proxies)?;
+    let next = merge_mz_listeners(&original, proxies)?;
 
     if next != original {
         tokio::fs::write(config_path, &next)
@@ -449,7 +451,7 @@ async fn sync_local_listeners(
     Ok(())
 }
 
-fn merge_simprint_listeners(
+fn merge_mz_listeners(
     original: &str,
     proxies: &[MihomoLocalProxy],
 ) -> Result<String, String> {
@@ -466,7 +468,7 @@ fn merge_simprint_listeners(
             .as_sequence()
             .ok_or_else(|| "Mihomo 配置中的 listeners 字段不是数组".to_string())?;
         for item in sequence {
-            if !is_simprint_listener(item) {
+            if !is_mz_listener(item) {
                 preserved.push(item.clone());
             }
         }
@@ -485,12 +487,12 @@ fn merge_simprint_listeners(
     serde_yaml::to_string(&root).map_err(|error| format!("生成 Mihomo 配置文件失败: {error}"))
 }
 
-fn is_simprint_listener(value: &Value) -> bool {
+fn is_mz_listener(value: &Value) -> bool {
     value
         .as_mapping()
         .and_then(|mapping| mapping.get(&Value::String("name".to_string())))
         .and_then(Value::as_str)
-        .is_some_and(|name| name.starts_with(SIMPRINT_LISTENER_PREFIX))
+        .is_some_and(|name| name.starts_with(MZ_LISTENER_PREFIX) || name.starts_with(LEGACY_LISTENER_PREFIX))
 }
 
 fn build_listener_value(proxy: &MihomoLocalProxy) -> Value {

@@ -8,7 +8,7 @@
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 
-use crate::app::runtime::SimprintRuntimeManager;
+use crate::app::runtime::MzRuntimeManager;
 use crate::local_api::LocalApiManager;
 use crate::mcp::McpManager;
 use crate::services::environment::{EnvironmentPositionManager, EnvironmentStatusManager};
@@ -34,7 +34,7 @@ pub struct AppContext {
     pub mihomo_manager: Arc<MihomoManager>,
 
     /// 内嵌环境运行时管理器
-    pub simprint_runtime_manager: Arc<SimprintRuntimeManager>,
+    pub mz_runtime_manager: Arc<MzRuntimeManager>,
 }
 
 /// 全局应用上下文实例
@@ -59,7 +59,7 @@ impl AppContext {
         let mihomo_manager = Arc::new(MihomoManager::new());
 
         // 初始化内嵌环境运行时管理器
-        let simprint_runtime_manager = Arc::new(SimprintRuntimeManager::new());
+        let mz_runtime_manager = Arc::new(MzRuntimeManager::new());
 
         Ok(Self {
             env_status_manager,
@@ -67,7 +67,7 @@ impl AppContext {
             local_api_manager,
             mcp_manager,
             mihomo_manager,
-            simprint_runtime_manager,
+            mz_runtime_manager,
         })
     }
 

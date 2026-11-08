@@ -25,7 +25,7 @@ if (!dryRun && !token) {
 const headers = {
   Accept: 'application/vnd.github+json',
   'Content-Type': 'application/json',
-  'User-Agent': 'simprint-release-workflow',
+  'User-Agent': 'mz-release-workflow',
   'X-GitHub-Api-Version': '2022-11-28',
 };
 

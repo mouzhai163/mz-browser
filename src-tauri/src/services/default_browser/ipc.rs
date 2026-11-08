@@ -1,7 +1,7 @@
 //! 把"在默认环境里打开这个链接"从新启动的进程转交给已经在运行的应用（本机命名管道）。
 //!
 //! 为什么不用单实例插件：它只在正式版里启用（开发版和已安装版共用同一个应用标识，
-//! 一起启用会互相转发）。命名管道的名字由数据根目录（`SIMPRINT_ROOT_DIR`）决定，
+//! 一起启用会互相转发）。命名管道的名字由数据根目录（`MZ_ROOT_DIR`）决定，
 //! 开发/隔离运行和正式版互不干扰，两种构建的行为也一致，便于实测。
 //!
 //! 安全：管道只接受本机连接；消息只有一种格式 `OPEN_URL <链接>\n`，链接用 `validate_link`
@@ -17,8 +17,8 @@ const MAX_MESSAGE_LEN: usize = MAX_LINK_LEN + 32;
 
 /// 管道名。由数据根目录决定：同一份数据的应用共用一个名字，不同根目录互不干扰。
 pub fn pipe_name() -> String {
-    let root = std::env::var("SIMPRINT_ROOT_DIR").unwrap_or_default();
-    format!(r"\\.\pipe\simprint-open-url-{:016x}", fnv1a(root.to_lowercase().as_bytes()))
+    let root = std::env::var("MZ_ROOT_DIR").unwrap_or_default();
+    format!(r"\\.\pipe\mz-open-url-{:016x}", fnv1a(root.to_lowercase().as_bytes()))
 }
 
 fn fnv1a(bytes: &[u8]) -> u64 {
@@ -190,7 +190,7 @@ mod tests {
     #[test]
     fn pipe_name_depends_on_the_data_root_only() {
         let first = pipe_name();
-        assert!(first.starts_with(r"\\.\pipe\simprint-open-url-"));
+        assert!(first.starts_with(r"\\.\pipe\mz-open-url-"));
         assert_eq!(first, pipe_name());
         assert_ne!(fnv1a(b"c:\\a"), fnv1a(b"c:\\b"));
     }
@@ -198,7 +198,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn forwarding_reaches_a_running_server_and_fails_cleanly_without_one() {
-        let name = format!(r"\\.\pipe\simprint-open-url-test-{}", std::process::id());
+        let name = format!(r"\\.\pipe\mz-open-url-test-{}", std::process::id());
         // 没有服务端：返回 false，让调用方自己启动
         assert!(!try_forward_to(&name, LINK));
         // 非法链接永远不会被转发

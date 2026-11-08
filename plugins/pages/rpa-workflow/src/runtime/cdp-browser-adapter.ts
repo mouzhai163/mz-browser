@@ -190,7 +190,7 @@ export class CdpBrowserAdapter implements BrowserAdapter {
         'Runtime.evaluate',
         {
           expression: `(() => {
-            const state = window.__simprintRpaClickCapture;
+            const state = window.__mzRpaClickCapture;
             return state?.result ?? null;
           })()`,
           returnByValue: true,
@@ -265,13 +265,13 @@ export class CdpBrowserAdapter implements BrowserAdapter {
       throw new Error(`Failed to resolve upload target: ${JSON.stringify(target)}`);
     }
 
-    const marker = `simprint-upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const marker = `mz-upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     await this.client.send(
       'Runtime.callFunctionOn',
       {
         objectId,
         functionDeclaration: `function() {
-          this.setAttribute('data-simprint-upload-marker', ${JSON.stringify(marker)});
+          this.setAttribute('data-mz-upload-marker', ${JSON.stringify(marker)});
         }`,
         awaitPromise: true,
       },
@@ -288,7 +288,7 @@ export class CdpBrowserAdapter implements BrowserAdapter {
       'DOM.querySelector',
       {
         nodeId: rootNodeId,
-        selector: `[data-simprint-upload-marker="${marker}"]`,
+        selector: `[data-mz-upload-marker="${marker}"]`,
       },
       sessionId
     );
@@ -311,7 +311,7 @@ export class CdpBrowserAdapter implements BrowserAdapter {
       {
         objectId,
         functionDeclaration: `function() {
-          this.removeAttribute('data-simprint-upload-marker');
+          this.removeAttribute('data-mz-upload-marker');
           this.dispatchEvent(new Event('input', { bubbles: true }));
           this.dispatchEvent(new Event('change', { bubbles: true }));
         }`,
@@ -812,7 +812,7 @@ export class CdpBrowserAdapter implements BrowserAdapter {
       'Runtime.evaluate',
       {
         expression: `(() => {
-          const key = '__simprintRpaClickCapture';
+          const key = '__mzRpaClickCapture';
           const existing = window[key];
           if (existing?.active) {
             existing.result = null;
@@ -922,7 +922,7 @@ export class CdpBrowserAdapter implements BrowserAdapter {
       'Runtime.evaluate',
       {
         expression: `(() => {
-          const key = '__simprintRpaClickCapture';
+          const key = '__mzRpaClickCapture';
           const state = window[key];
           if (state?.highlighted instanceof HTMLElement) {
             state.highlighted.style.outline = state.previousOutline || '';

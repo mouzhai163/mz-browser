@@ -1,8 +1,8 @@
 use thiserror::Error;
 
-/// Simprint Server 错误类型
+/// M Z指纹浏览器 Server 错误类型
 #[derive(Error, Debug)]
-pub enum SimprintError {
+pub enum MzError {
     /// 用户不存在
     #[error("用户不存在")]
     UserNotFound,
@@ -96,9 +96,9 @@ pub enum SimprintError {
     Other(String),
 }
 
-impl From<&str> for SimprintError {
+impl From<&str> for MzError {
     fn from(err: &str) -> Self {
-        SimprintError::Other(err.to_string())
+        MzError::Other(err.to_string())
     }
 }
 

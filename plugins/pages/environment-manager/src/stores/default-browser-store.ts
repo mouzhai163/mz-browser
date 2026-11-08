@@ -11,7 +11,7 @@ export interface DefaultBrowserState {
   environmentUuid: string | null;
   /** 已向系统登记为可选浏览器 */
   registered: boolean;
-  /** 系统当前的默认浏览器就是 Simprint */
+  /** 系统当前的默认浏览器就是 M Z指纹浏览器 */
   isSystemDefault: boolean;
 }
 

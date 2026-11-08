@@ -1,9 +1,9 @@
 //! 默认浏览器：把外部链接固定交给一个"默认环境"打开。
 //!
 //! - 用户在环境管理里把某个环境设为"默认浏览器"，同一时刻只有一个；可随时取消。
-//! - 设置时把 Simprint 登记成 Windows 的可选浏览器（见 `registry`）；Windows 不允许程序替用户
-//!   选择默认浏览器，所以还需要用户在系统"默认应用"里选一次 Simprint。
-//! - 之后其他软件里点链接，系统以 `Simprint.exe "<链接>"` 启动（或交给已在运行的实例），
+//! - 设置时把 M Z指纹浏览器 登记成 Windows 的可选浏览器（见 `registry`）；Windows 不允许程序替用户
+//!   选择默认浏览器，所以还需要用户在系统"默认应用"里选一次 M Z指纹浏览器。
+//! - 之后其他软件里点链接，系统以 `mz-browser.exe "<链接>"` 启动（或交给已在运行的实例），
 //!   链接直接在默认环境里打开，不询问。没有默认环境时只提示、不打开，绝不挑一个环境顶替。
 
 pub mod ipc;
@@ -30,19 +30,19 @@ pub fn launched_for_link() -> bool {
     link_from_args(std::env::args().skip(1)).is_some()
 }
 
-/// 进程启动最早期调用：命令行带了 `--simprint-root=<目录>` 且环境变量没设置时，用它作为数据目录。
+/// 进程启动最早期调用：命令行带了 `--mz-root=<目录>` 且环境变量没设置时，用它作为数据目录。
 ///
-/// 系统启动的新进程没有开发/隔离运行时的 `SIMPRINT_ROOT_DIR` 环境变量，登记的命令里带上它，
+/// 系统启动的新进程没有开发/隔离运行时的 `MZ_ROOT_DIR` 环境变量，登记的命令里带上它，
 /// 才能找到同一份数据和运行中的应用。已经设置了环境变量就以环境变量为准。
 pub fn apply_root_arg() {
-    if std::env::var_os("SIMPRINT_ROOT_DIR").is_some() {
+    if std::env::var_os("MZ_ROOT_DIR").is_some() {
         return;
     }
     if let Some(root) = root_from_args(std::env::args().skip(1)) {
         // SAFETY: 只在 main 最开头调用；此时没有任何代码在读取这个变量（读取它的路径、日志目录等都在之后才初始化）。
         #[allow(unsafe_code)]
         unsafe {
-            std::env::set_var("SIMPRINT_ROOT_DIR", root)
+            std::env::set_var("MZ_ROOT_DIR", root)
         };
     }
 }
@@ -61,7 +61,7 @@ pub struct DefaultBrowserState {
     pub environment_uuid: Option<String>,
     /// 已向系统登记为可选浏览器
     pub registered: bool,
-    /// 系统当前的默认浏览器就是 Simprint
+    /// 系统当前的默认浏览器就是 M Z指纹浏览器
     pub is_system_default: bool,
 }
 
@@ -83,16 +83,16 @@ fn store_default_environment(app: &AppHandle, uuid: Option<&str>) -> Result<()> 
 #[cfg(windows)]
 const REGISTRY_ROOT: &str = "Software";
 
-/// 隔离/开发运行（设置了 SIMPRINT_ROOT_DIR）用另一套登记名，不覆盖已安装版本的登记。
-/// 登记命令里需要携带的数据目录：只有隔离/开发运行（设置了 SIMPRINT_ROOT_DIR）才有。
+/// 隔离/开发运行（设置了 MZ_ROOT_DIR）用另一套登记名，不覆盖已安装版本的登记。
+/// 登记命令里需要携带的数据目录：只有隔离/开发运行（设置了 MZ_ROOT_DIR）才有。
 #[cfg(windows)]
 fn registered_data_root() -> Option<std::path::PathBuf> {
-    std::env::var_os("SIMPRINT_ROOT_DIR").map(std::path::PathBuf::from)
+    std::env::var_os("MZ_ROOT_DIR").map(std::path::PathBuf::from)
 }
 
 #[cfg(windows)]
 fn registry_names() -> registry::Names {
-    if std::env::var_os("SIMPRINT_ROOT_DIR").is_some() {
+    if std::env::var_os("MZ_ROOT_DIR").is_some() {
         registry::ISOLATED_NAMES
     } else {
         registry::RELEASE_NAMES
@@ -143,8 +143,8 @@ pub fn set_environment(app: &AppHandle, env_uuid: &str) -> Result<DefaultBrowser
 
 /// 取消默认浏览器：清除默认环境，并取消向系统登记。
 ///
-/// 取消登记后 Simprint 不再出现在 Windows 的可选浏览器里；如果它此刻仍是系统默认，
-/// Windows 下次打开链接时会让用户重新选择，而不是把链接发给一个没有默认环境的 Simprint。
+/// 取消登记后 M Z指纹浏览器 不再出现在 Windows 的可选浏览器里；如果它此刻仍是系统默认，
+/// Windows 下次打开链接时会让用户重新选择，而不是把链接发给一个没有默认环境的 M Z指纹浏览器。
 pub fn clear_environment(app: &AppHandle) -> Result<DefaultBrowserState> {
     store_default_environment(app, None)?;
     #[cfg(windows)]
@@ -156,11 +156,11 @@ pub fn clear_environment(app: &AppHandle) -> Result<DefaultBrowserState> {
     Ok(get_state(app))
 }
 
-/// 打开 Windows 的"默认应用"设置页，让用户把 Simprint 选为默认浏览器。
+/// 打开 Windows 的"默认应用"设置页，让用户把 M Z指纹浏览器 选为默认浏览器。
 pub fn open_default_apps_settings() -> Result<()> {
     #[cfg(windows)]
     {
-        // 直达 Simprint 的页面（Windows 11）；Windows 10 会落到"默认应用"总页。
+        // 直达 M Z指纹浏览器 的页面（Windows 11）；Windows 10 会落到"默认应用"总页。
         let name = registry_names().display_name;
         let uri = format!("ms-settings:defaultapps?registeredAppUser={}", name.replace(' ', "%20"));
         std::process::Command::new("cmd")
@@ -181,7 +181,7 @@ pub fn refresh_registration_if_needed(app: &AppHandle) {
     #[cfg(windows)]
     {
         // 调试构建没有设置隔离目录时不碰登记：否则调试用的 exe 会顶替正式版的登记。
-        let isolated = std::env::var_os("SIMPRINT_ROOT_DIR").is_some();
+        let isolated = std::env::var_os("MZ_ROOT_DIR").is_some();
         if (cfg!(debug_assertions) && !isolated) || default_environment(app).is_none() {
             return;
         }

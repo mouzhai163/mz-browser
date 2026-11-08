@@ -373,7 +373,7 @@ Function PageLeaveDirectory
     Abort
   ${EndIf}
 
-  StrCpy $InstallDirProbeFile "$INSTDIR\.simprint_write_test"
+  StrCpy $InstallDirProbeFile "$INSTDIR\.mz_write_test"
   ClearErrors
   FileOpen $0 "$InstallDirProbeFile" w
   ${If} ${Errors}

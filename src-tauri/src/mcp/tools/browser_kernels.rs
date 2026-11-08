@@ -59,11 +59,11 @@ impl ToolBase for ListBrowserKernelsTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_list_browser_kernels".into()
+        "mz_list_browser_kernels".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("List Simprint browser kernel versions by platform or kernel type.".into())
+        Some("List M Z指纹浏览器 browser kernel versions by platform or kernel type.".into())
     }
 }
 

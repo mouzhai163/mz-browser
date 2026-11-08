@@ -8,13 +8,13 @@ use serde::Deserialize;
 // =============================================================================
 
 fn main() {
-    println!("cargo:rerun-if-env-changed=SIMPRINT_WEBVIEW_MODE");
+    println!("cargo:rerun-if-env-changed=MZ_WEBVIEW_MODE");
     println!("cargo:rerun-if-changed=tauri.conf.json");
 
     let webview_mode =
-        env::var("SIMPRINT_WEBVIEW_MODE").unwrap_or_else(|_| "embedBootstrapper".to_string());
+        env::var("MZ_WEBVIEW_MODE").unwrap_or_else(|_| "embedBootstrapper".to_string());
     validate_selected_tauri_config(&webview_mode);
-    println!("cargo:rustc-env=SIMPRINT_WEBVIEW_MODE={webview_mode}");
+    println!("cargo:rustc-env=MZ_WEBVIEW_MODE={webview_mode}");
 
     // 构建 Tauri 应用（处理 Windows manifest / 权限等）
     tauri_build_pipeline::build_tauri();
@@ -31,7 +31,7 @@ fn main() {
         );
         // The main binary already has Tauri's complete manifest in resource.lib.
         // Do not generate a second RT_MANIFEST resource with the same ID there.
-        println!("cargo:rustc-link-arg-bin=simprint=/MANIFEST:NO");
+        println!("cargo:rustc-link-arg-bin=mz-browser=/MANIFEST:NO");
     }
 }
 
@@ -82,13 +82,13 @@ fn validate_selected_tauri_config(mode: &str) {
         "embedBootstrapper" => ("embedBootstrapper", "latest.json"),
         "fixed-runtime" => ("fixedRuntime", "latest-fixed.json"),
         other => panic!(
-            "unsupported SIMPRINT_WEBVIEW_MODE '{other}'; expected embedBootstrapper or fixed-runtime"
+            "unsupported MZ_WEBVIEW_MODE '{other}'; expected embedBootstrapper or fixed-runtime"
         ),
     };
 
     assert_eq!(
         config.bundle.windows.webview_install_mode.kind, expected_install_mode,
-        "selected Tauri config does not match SIMPRINT_WEBVIEW_MODE '{mode}'"
+        "selected Tauri config does not match MZ_WEBVIEW_MODE '{mode}'"
     );
     assert!(
         config.bundle.create_updater_artifacts,

@@ -1,5 +1,5 @@
 {
-  "name": "@simprint/plugin-syncer",
+  "name": "@mz/plugin-syncer",
   "version": "1.0.0",
   "private": true,
   "main": "./src/index.tsx",

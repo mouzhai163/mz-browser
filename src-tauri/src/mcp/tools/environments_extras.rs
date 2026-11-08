@@ -320,8 +320,8 @@ environment_uuid_tool!(
     BatchGetEnvironmentsTool,
     BatchEnvironmentIdentityInput,
     BatchGetEnvironmentsOutput,
-    "simprint_batch_get_environments",
-    "Get multiple Simprint environments by UUID.",
+    "mz_batch_get_environments",
+    "Get multiple M Z指纹浏览器 environments by UUID.",
     |service, param| {
         let env_uuids = require_env_uuids(param.env_uuids)?;
         let items = service.bridge().batch_get_environments(env_uuids).await?;
@@ -336,8 +336,8 @@ environment_uuid_tool!(
     CreateEnvironmentTool,
     CreateEnvironmentInput,
     EnvironmentMutationOutput,
-    "simprint_create_environment",
-    "Create a Simprint environment.",
+    "mz_create_environment",
+    "Create a M Z指纹浏览器 environment.",
     |service, param| {
         if param.name.trim().is_empty() {
             return Err(McpToolError::invalid_params("name is required"));
@@ -373,8 +373,8 @@ environment_uuid_tool!(
     UpdateEnvironmentTool,
     UpdateEnvironmentInput,
     EnvironmentMutationOutput,
-    "simprint_update_environment",
-    "Update a Simprint environment.",
+    "mz_update_environment",
+    "Update a M Z指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         service
@@ -404,8 +404,8 @@ environment_uuid_tool!(
     DeleteEnvironmentTool,
     EnvironmentIdentityInput,
     EnvironmentMutationOutput,
-    "simprint_delete_environment",
-    "Delete a Simprint environment by UUID.",
+    "mz_delete_environment",
+    "Delete a M Z指纹浏览器 environment by UUID.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         service.bridge().delete_environment(&env_uuid).await?;
@@ -418,8 +418,8 @@ environment_uuid_tool!(
     BatchDeleteEnvironmentsTool,
     BatchEnvironmentIdentityInput,
     EnvironmentMutationOutput,
-    "simprint_batch_delete_environments",
-    "Delete multiple Simprint environments by UUID.",
+    "mz_batch_delete_environments",
+    "Delete multiple M Z指纹浏览器 environments by UUID.",
     |service, param| {
         let env_uuids = require_env_uuids(param.env_uuids)?;
         service.bridge().batch_delete_environments(env_uuids.clone()).await?;
@@ -432,8 +432,8 @@ environment_uuid_tool!(
     ListRecycleBinEnvironmentsTool,
     ListRecycleBinEnvironmentsInput,
     ListRecycleBinEnvironmentsOutput,
-    "simprint_list_recycle_bin_environments",
-    "List deleted Simprint environments in the recycle bin.",
+    "mz_list_recycle_bin_environments",
+    "List deleted M Z指纹浏览器 environments in the recycle bin.",
     |service, param| {
         let filters = list_environment_filters(param.keyword, param.group_uuid, param.tag_uuids);
         let response = service
@@ -458,8 +458,8 @@ environment_uuid_tool!(
     RestoreEnvironmentTool,
     EnvironmentIdentityInput,
     EnvironmentMutationOutput,
-    "simprint_restore_environment",
-    "Restore a deleted Simprint environment from the recycle bin.",
+    "mz_restore_environment",
+    "Restore a deleted M Z指纹浏览器 environment from the recycle bin.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         service.bridge().restore_environment(&env_uuid).await?;
@@ -472,8 +472,8 @@ environment_uuid_tool!(
     BatchRestoreEnvironmentsTool,
     BatchEnvironmentIdentityInput,
     EnvironmentMutationOutput,
-    "simprint_batch_restore_environments",
-    "Restore multiple deleted Simprint environments from the recycle bin.",
+    "mz_batch_restore_environments",
+    "Restore multiple deleted M Z指纹浏览器 environments from the recycle bin.",
     |service, param| {
         let env_uuids = require_env_uuids(param.env_uuids)?;
         service.bridge().batch_restore_environments(env_uuids.clone()).await?;
@@ -486,7 +486,7 @@ environment_uuid_tool!(
     PermanentDeleteEnvironmentTool,
     EnvironmentIdentityInput,
     EnvironmentMutationOutput,
-    "simprint_permanent_delete_environment",
+    "mz_permanent_delete_environment",
     "Permanently delete an environment from the recycle bin.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
@@ -500,7 +500,7 @@ environment_uuid_tool!(
     BatchPermanentDeleteEnvironmentsTool,
     BatchEnvironmentIdentityInput,
     EnvironmentMutationOutput,
-    "simprint_batch_permanent_delete_environments",
+    "mz_batch_permanent_delete_environments",
     "Permanently delete multiple environments from the recycle bin.",
     |service, param| {
         let env_uuids = require_env_uuids(param.env_uuids)?;
@@ -514,8 +514,8 @@ environment_uuid_tool!(
     SetEnvironmentProxyTool,
     SetEnvironmentProxyInput,
     EnvironmentMutationOutput,
-    "simprint_set_environment_proxy",
-    "Assign or clear a proxy for a Simprint environment.",
+    "mz_set_environment_proxy",
+    "Assign or clear a proxy for a M Z指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         service
@@ -534,8 +534,8 @@ environment_uuid_tool!(
     SetEnvironmentAccountsTool,
     SetEnvironmentAccountsInput,
     EnvironmentMutationOutput,
-    "simprint_set_environment_accounts",
-    "Set account bindings for a Simprint environment.",
+    "mz_set_environment_accounts",
+    "Set account bindings for a M Z指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         let account_uuids = require_named_uuids("account_uuids", param.account_uuids)?;
@@ -555,8 +555,8 @@ environment_uuid_tool!(
     AssignEnvironmentTagsTool,
     AssignEnvironmentTagsInput,
     EnvironmentMutationOutput,
-    "simprint_assign_environment_tags",
-    "Assign multiple tags to a Simprint environment.",
+    "mz_assign_environment_tags",
+    "Assign multiple tags to a M Z指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         let tag_uuids = require_named_uuids("tag_uuids", param.tag_uuids)?;
@@ -576,8 +576,8 @@ environment_uuid_tool!(
     BatchAssignEnvironmentTagsTool,
     BatchAssignEnvironmentTagsInput,
     EnvironmentMutationOutput,
-    "simprint_batch_assign_environment_tags",
-    "Assign a tag to multiple Simprint environments.",
+    "mz_batch_assign_environment_tags",
+    "Assign a tag to multiple M Z指纹浏览器 environments.",
     |service, param| {
         let env_uuids = require_env_uuids(param.env_uuids)?;
         let tag_uuid = require_non_empty("tag_uuid", param.tag_uuid)?;
@@ -597,8 +597,8 @@ environment_uuid_tool!(
     RemoveEnvironmentTagTool,
     RemoveEnvironmentTagInput,
     EnvironmentMutationOutput,
-    "simprint_remove_environment_tag",
-    "Remove a tag from a Simprint environment.",
+    "mz_remove_environment_tag",
+    "Remove a tag from a M Z指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         let tag_uuid = require_non_empty("tag_uuid", param.tag_uuid)?;
@@ -618,8 +618,8 @@ environment_uuid_tool!(
     BatchRemoveEnvironmentTagsTool,
     BatchRemoveEnvironmentTagsInput,
     EnvironmentMutationOutput,
-    "simprint_batch_remove_environment_tags",
-    "Remove one or all tags from multiple Simprint environments.",
+    "mz_batch_remove_environment_tags",
+    "Remove one or all tags from multiple M Z指纹浏览器 environments.",
     |service, param| {
         let env_uuids = require_env_uuids(param.env_uuids)?;
         service
@@ -638,8 +638,8 @@ environment_uuid_tool!(
     MoveEnvironmentToGroupTool,
     MoveEnvironmentToGroupInput,
     EnvironmentMutationOutput,
-    "simprint_move_environment_to_group",
-    "Move a Simprint environment to a group or clear its group.",
+    "mz_move_environment_to_group",
+    "Move a M Z指纹浏览器 environment to a group or clear its group.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         service
@@ -658,8 +658,8 @@ environment_uuid_tool!(
     BatchMoveEnvironmentsToGroupTool,
     BatchMoveEnvironmentsToGroupInput,
     EnvironmentMutationOutput,
-    "simprint_batch_move_environments_to_group",
-    "Move multiple Simprint environments to a group.",
+    "mz_batch_move_environments_to_group",
+    "Move multiple M Z指纹浏览器 environments to a group.",
     |service, param| {
         let env_uuids = require_env_uuids(param.env_uuids)?;
         let group_uuid = require_non_empty("group_uuid", param.group_uuid)?;
@@ -679,8 +679,8 @@ environment_uuid_tool!(
     ListEnvironmentUrlsTool,
     EnvironmentIdentityInput,
     ListEnvironmentUrlsOutput,
-    "simprint_list_environment_urls",
-    "List configured start URLs for a Simprint environment.",
+    "mz_list_environment_urls",
+    "List configured start URLs for a M Z指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         let items = service.bridge().list_environment_urls(&env_uuid).await?;
@@ -696,8 +696,8 @@ environment_uuid_tool!(
     AddEnvironmentUrlTool,
     EnvironmentUrlCreateInput,
     EnvironmentMutationOutput,
-    "simprint_add_environment_url",
-    "Add a start URL to a Simprint environment.",
+    "mz_add_environment_url",
+    "Add a start URL to a M Z指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         if param.url.trim().is_empty() {
@@ -728,7 +728,7 @@ environment_uuid_tool!(
     DeleteEnvironmentUrlTool,
     ItemIdentityInput,
     EnvironmentMutationOutput,
-    "simprint_delete_environment_url",
+    "mz_delete_environment_url",
     "Delete a stored environment URL by ID.",
     |service, param| {
         if param.id <= 0 {
@@ -750,8 +750,8 @@ environment_uuid_tool!(
     ClearEnvironmentUrlsTool,
     EnvironmentIdentityInput,
     EnvironmentMutationOutput,
-    "simprint_clear_environment_urls",
-    "Clear all stored URLs for a Simprint environment.",
+    "mz_clear_environment_urls",
+    "Clear all stored URLs for a M Z指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         service.bridge().clear_environment_urls(&env_uuid).await?;
@@ -764,8 +764,8 @@ environment_uuid_tool!(
     ListEnvironmentCookiesTool,
     EnvironmentIdentityInput,
     ListEnvironmentCookiesOutput,
-    "simprint_list_environment_cookies",
-    "List stored cookies for a Simprint environment.",
+    "mz_list_environment_cookies",
+    "List stored cookies for a M Z指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         let items = service.bridge().list_environment_cookies(&env_uuid).await?;
@@ -781,8 +781,8 @@ environment_uuid_tool!(
     AddEnvironmentCookieTool,
     EnvironmentCookieCreateInput,
     EnvironmentMutationOutput,
-    "simprint_add_environment_cookie",
-    "Add a cookie to a Simprint environment.",
+    "mz_add_environment_cookie",
+    "Add a cookie to a M Z指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         if param.site.trim().is_empty() {
@@ -815,7 +815,7 @@ environment_uuid_tool!(
     DeleteEnvironmentCookieTool,
     ItemIdentityInput,
     EnvironmentMutationOutput,
-    "simprint_delete_environment_cookie",
+    "mz_delete_environment_cookie",
     "Delete a stored environment cookie by ID.",
     |service, param| {
         if param.id <= 0 {
@@ -837,8 +837,8 @@ environment_uuid_tool!(
     ClearEnvironmentCookiesTool,
     EnvironmentIdentityInput,
     EnvironmentMutationOutput,
-    "simprint_clear_environment_cookies",
-    "Clear all stored cookies for a Simprint environment.",
+    "mz_clear_environment_cookies",
+    "Clear all stored cookies for a M Z指纹浏览器 environment.",
     |service, param| {
         let env_uuid = require_env_uuid(&param.env_uuid)?;
         service.bridge().clear_environment_cookies(&env_uuid).await?;

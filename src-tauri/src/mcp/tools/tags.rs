@@ -75,11 +75,11 @@ impl ToolBase for ListTagsTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_list_tags".into()
+        "mz_list_tags".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("List Simprint tags.".into())
+        Some("List M Z指纹浏览器 tags.".into())
     }
 }
 
@@ -101,11 +101,11 @@ impl ToolBase for CreateTagTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_create_tag".into()
+        "mz_create_tag".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Create a Simprint tag.".into())
+        Some("Create a M Z指纹浏览器 tag.".into())
     }
 }
 
@@ -143,11 +143,11 @@ impl ToolBase for UpdateTagTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_update_tag".into()
+        "mz_update_tag".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Update a Simprint tag.".into())
+        Some("Update a M Z指纹浏览器 tag.".into())
     }
 }
 
@@ -180,11 +180,11 @@ impl ToolBase for DeleteTagTool {
     type Error = McpToolError;
 
     fn name() -> Cow<'static, str> {
-        "simprint_delete_tag".into()
+        "mz_delete_tag".into()
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Delete a Simprint tag by UUID.".into())
+        Some("Delete a M Z指纹浏览器 tag by UUID.".into())
     }
 }
 

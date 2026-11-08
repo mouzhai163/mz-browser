@@ -35,7 +35,7 @@ export function UserMenu() {
 
   const handleLanguageChange = (lng: 'zh-CN' | 'en-US') => {
     void i18n.changeLanguage(lng);
-    localStorage.setItem('simprint-ui-locale', lng);
+    localStorage.setItem('mz-ui-locale', lng);
     void setGeneralSettings({ language: lng });
   };
 

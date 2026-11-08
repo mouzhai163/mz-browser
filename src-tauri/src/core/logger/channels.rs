@@ -8,12 +8,12 @@ use std::path::{Path, PathBuf};
 
 use crate::core::logger::modules;
 
-/// 单条通道：target 与对应日志文件名（不含路径，如 `simprint_api` → `simprint_api.log`）
+/// 单条通道：target 与对应日志文件名（不含路径，如 `mz_api` → `mz_api.log`）
 #[derive(Clone, Debug)]
 pub struct Channel {
-    /// 日志 target，如 `simprint::api`
+    /// 日志 target，如 `mz::api`
     pub target: &'static str,
-    /// 日志文件名（不含扩展名），如 `simprint_api`
+    /// 日志文件名（不含扩展名），如 `mz_api`
     pub file_stem: &'static str,
 }
 
@@ -22,22 +22,22 @@ fn channel_list() -> &'static [Channel] {
     &[
         Channel {
             target: modules::APP,
-            file_stem: "simprint_app",
+            file_stem: "mz_app",
         },
         Channel {
             target: modules::API,
-            file_stem: "simprint_api",
+            file_stem: "mz_api",
         },
         Channel {
             target: modules::SYNCER,
-            file_stem: "simprint_syncer",
+            file_stem: "mz_syncer",
         },
         // 扩展：在此追加新通道即可新增独立日志文件
     ]
 }
 
 /// 默认日志文件名（未匹配到任何通道的 target 使用）
-const DEFAULT_FILE_STEM: &str = "simprint_app";
+const DEFAULT_FILE_STEM: &str = "mz_app";
 
 /// 根据 target 解析出该条日志应写入的日志文件名（不含路径）
 pub fn file_stem_for_target(target: &str) -> &'static str {

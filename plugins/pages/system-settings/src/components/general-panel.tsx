@@ -120,7 +120,7 @@ export const GeneralPanel: React.FC = () => {
     (lng: string) => {
       const next = lng as Locale;
       void i18n.changeLanguage(next);
-      localStorage.setItem('simprint-ui-locale', next);
+      localStorage.setItem('mz-ui-locale', next);
       void setGeneralSettings({ language: next });
     },
     [i18n]
