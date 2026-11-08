@@ -58,3 +58,5 @@ mz-self-hosted
 # 实施记录和迭代文档只保存在本机，不上传
 /docs/
 .codegraph/
+/scripts/
+/tests/
