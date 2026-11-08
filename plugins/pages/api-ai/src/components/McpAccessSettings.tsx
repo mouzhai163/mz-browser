@@ -3,7 +3,8 @@ import type { FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { getMcpAccessToken, rotateMcpAccessToken } from '../api';
+import { getMcpAccessToken, listEnvironmentChoices, rotateMcpAccessToken } from '../api';
+import type { EnvironmentChoice } from '../api';
 import type { McpConfigSnapshot, UpdateMcpConfigRequest } from '../types';
 import { toOrigin } from '../utils/origin';
 
@@ -23,6 +24,34 @@ export function McpAccessSettings({ config, onUpdate, onRefresh }: Props) {
   const [actOn, setActOn] = useState(config.actToolsEnabled);
   const [manageOn, setManageOn] = useState(config.manageToolsEnabled);
   const [originCount, setOriginCount] = useState(config.allowedOrigins.length);
+  const [choices, setChoices] = useState<EnvironmentChoice[] | null>(null);
+  const [choicesError, setChoicesError] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set(config.allowedEnvironmentUuids));
+  const [filter, setFilter] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    listEnvironmentChoices()
+      .then((items) => alive && setChoices(items))
+      .catch(() => alive && setChoicesError(true));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const known = new Set((choices ?? []).map((choice) => choice.uuid));
+  // authorized ids whose environment no longer exists stay visible so they can be removed
+  const missing = choices ? [...selected].filter((id) => !known.has(id)) : [];
+  const visible = (choices ?? []).filter((choice) =>
+    `${choice.name} ${choice.uuid}`.toLowerCase().includes(filter.trim().toLowerCase())
+  );
+  const toggle = (uuid: string, on: boolean) =>
+    setSelected((previous) => {
+      const next = new Set(previous);
+      if (on) next.add(uuid);
+      else next.delete(uuid);
+      return next;
+    });
 
   useEffect(() => {
     if (!token) return;
@@ -58,7 +87,7 @@ export function McpAccessSettings({ config, onUpdate, onRefresh }: Props) {
     void run(async () => {
       setToken(null);
       await onUpdate({
-        allowedEnvironmentUuids: lines('environments'),
+        allowedEnvironmentUuids: [...selected],
         allowedOrigins: origins,
         pageToolsEnabled: pagesOn,
         actToolsEnabled: pagesOn && actOn,
@@ -74,15 +103,88 @@ export function McpAccessSettings({ config, onUpdate, onRefresh }: Props) {
         <h4 className="text-sm font-semibold">{t('mcp.accessTitle')}</h4>
         <p className="mt-1 text-xs text-muted-foreground">{t('mcp.accessWarning')}</p>
       </div>
-      <label className="block space-y-2 text-xs">
-        <span>{t('mcp.environments')}</span>
-        <Textarea
-          name="environments"
-          defaultValue={config.allowedEnvironmentUuids.join('\n')}
-          rows={3}
-          disabled={busy}
-        />
-      </label>
+      <div className="space-y-2 text-xs" data-testid="mcp-env-picker">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span>{t('mcp.environments')}</span>
+          <span className="text-muted-foreground">
+            {t('mcp.environmentsSelected', { count: selected.size })}
+          </span>
+        </div>
+        {choicesError && <p className="text-destructive">{t('mcp.environmentsLoadFailed')}</p>}
+        {!choices && !choicesError && (
+          <p className="text-muted-foreground">{t('mcp.environmentsLoading')}</p>
+        )}
+        {choices && choices.length === 0 && missing.length === 0 && (
+          <p className="text-muted-foreground">{t('mcp.environmentsNone')}</p>
+        )}
+        {choices && (choices.length > 0 || missing.length > 0) && (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              {choices.length > 6 && (
+                <input
+                  type="search"
+                  value={filter}
+                  onChange={(event) => setFilter(event.target.value)}
+                  placeholder={t('mcp.environmentsSearch')}
+                  className="h-8 min-w-0 flex-1 border border-border bg-background px-2 text-xs"
+                />
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busy || visible.length === 0}
+                onClick={() => setSelected((previous) => new Set([...previous, ...visible.map((c) => c.uuid)]))}
+              >
+                {t('mcp.environmentsSelectAll')}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busy || selected.size === 0}
+                onClick={() => setSelected(new Set())}
+              >
+                {t('mcp.environmentsClear')}
+              </Button>
+            </div>
+            <ul className="max-h-48 space-y-1 overflow-auto border border-border p-2">
+              {visible.map((choice) => (
+                <li key={choice.uuid}>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      data-testid={`mcp-env-${choice.uuid}`}
+                      checked={selected.has(choice.uuid)}
+                      disabled={busy}
+                      onChange={(event) => toggle(choice.uuid, event.target.checked)}
+                    />
+                    <span className="truncate">{choice.name}</span>
+                    <span className="text-muted-foreground">{choice.status}</span>
+                  </label>
+                </li>
+              ))}
+              {missing.map((uuid) => (
+                <li key={uuid}>
+                  <label className="flex items-center gap-2 text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked
+                      disabled={busy}
+                      onChange={() => toggle(uuid, false)}
+                    />
+                    <span className="truncate">{t('mcp.environmentsMissing')}</span>
+                    <span className="font-mono">{uuid.slice(0, 8)}</span>
+                  </label>
+                </li>
+              ))}
+              {visible.length === 0 && missing.length === 0 && (
+                <li className="text-muted-foreground">{t('mcp.environmentsNoMatch')}</li>
+              )}
+            </ul>
+          </>
+        )}
+      </div>
       <fieldset className="space-y-2 text-xs" disabled={busy}>
         <legend className="mb-1 font-semibold">{t('mcp.scopeTitle')}</legend>
         <p className="text-muted-foreground">{t('mcp.scopeBase')}</p>
