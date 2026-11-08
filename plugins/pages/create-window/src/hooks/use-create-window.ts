@@ -48,6 +48,15 @@ export interface UseCreateWindowReturn {
 }
 
 /**
+ * 新建环境的名称。只创建一个时原样使用输入的名称（没填则叫"窗口"）；
+ * 一次创建多个时才加 _1、_2… 序号来区分。
+ */
+export function buildEnvironmentName(name: string | undefined, index: number, total: number): string {
+  const base = name?.trim() || '窗口';
+  return total > 1 ? `${base}_${index + 1}` : base;
+}
+
+/**
  * 创建窗口 Hook
  * 管理窗口配置状态和创建逻辑
  */
@@ -426,9 +435,8 @@ export function useCreateWindow(
         ...windowConfig,
         windowInfo: {
           ...windowConfig.windowInfo,
-          name: windowConfig.windowInfo.name
-            ? `${windowConfig.windowInfo.name}_${index + 1}`
-            : `窗口_${index + 1}`,
+          // 只创建一个时直接用输入的名称；批量创建才加序号区分
+          name: buildEnvironmentName(windowConfig.windowInfo.name, index, createCount),
           // 批量创建时，其他数据相同，但代理需要按顺序分配
           proxyUuids: [], // 代理将在 API 调用时单独处理
           localProxyNodeNames: [], // 本地代理将在创建后单独处理
