@@ -155,6 +155,11 @@ impl EnvironmentLaunchRuntimeService {
         .await?;
 
         let mut fingerprint_config = build_fingerprint_config(detail.config.as_ref());
+        if let (Some(user_agent), Some(major)) =
+            (fingerprint_config.user_agent.as_mut(), resolved_kernel.major_version)
+        {
+            *user_agent = kernel::align_user_agent_major(user_agent, major);
+        }
         fingerprint_config.env_id = display_id;
         fingerprint_config.env_name = Some(
             env.name

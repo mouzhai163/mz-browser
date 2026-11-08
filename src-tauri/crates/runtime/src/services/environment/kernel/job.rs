@@ -140,7 +140,8 @@ impl JobManager {
         let forced = !job.wait_for_exit(grace).await;
         if forced {
             job.terminate()?;
-            if !job.wait_for_exit(std::time::Duration::from_secs(3)).await {
+            // 强制结束后进程退出也可能被机器负载拖慢（编译、杀毒），3 秒太短会误报失败
+            if !job.wait_for_exit(std::time::Duration::from_secs(15)).await {
                 return Err(RuntimeError::Internal("Owned browser did not exit after termination".into()));
             }
         }
