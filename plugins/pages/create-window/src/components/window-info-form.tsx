@@ -12,8 +12,10 @@ import { Button } from '@/components/ui/button';
 import { TextareaInput } from '@/components/textarea-input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { RefreshCw, X, Globe, Facebook, Youtube, Instagram, Linkedin, Twitter } from 'lucide-react';
-import { FaWindows, FaApple, FaLinux, FaGoogle, FaAmazon } from 'react-icons/fa';
+import { FiChrome } from 'react-icons/fi';
+import { FaFirefoxBrowser, FaWindows, FaApple, FaLinux, FaGoogle, FaAmazon } from 'react-icons/fa';
 import { SiGooglechrome } from 'react-icons/si';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { CookieGroup, WindowInfo } from '../types';
 import { CreateWindowSelectAccountDialog } from './create-window-select-account-dialog';
@@ -92,6 +94,7 @@ const systemOptions = [
 
 
 const KERNEL_TYPE_CHROME = 'chrome';
+const KERNEL_TYPE_FIREFOX = 'firefox';
 const MZ_KERNEL_CHROMIUM = 'MZ_KERNEL_CHROMIUM';
 
 export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
@@ -110,6 +113,11 @@ export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
 
   // 加载内核版本列表（仅 Chrome 支持）
   // 注意：所有系统都使用 Windows 平台的内核版本，系统选择只影响 UA 格式
+  const handleFirefoxClick = () => {
+    // 火狐内核还没有，点击只提示
+    toast.info(t('windowInfo.firefoxNotSupported'));
+  };
+
   // 只在 kernelType 变化时加载一次
   useEffect(() => {
     if (kernelType !== KERNEL_TYPE_CHROME) {
@@ -269,6 +277,40 @@ export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
         </div>
         <div className="space-y-2">
           <Label className="text-xs">{t('windowInfo.browser')}</Label>
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    'flex h-9 w-9 shrink-0 items-center justify-center rounded transition-all',
+                    kernelType === KERNEL_TYPE_CHROME
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  )}
+                >
+                  <FiChrome className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Chrome / Chromium</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleFirefoxClick}
+                  className={cn(
+                    'flex h-9 w-9 shrink-0 items-center justify-center rounded transition-all',
+                    kernelType === KERNEL_TYPE_FIREFOX
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground opacity-60 hover:bg-muted/80'
+                  )}
+                >
+                  <FaFirefoxBrowser className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{t('windowInfo.firefoxNotSupported')}</TooltipContent>
+            </Tooltip>
           <Select
             value={
               kernelVersions.some((v) => v.kernel_id === value.kernelId)
@@ -280,14 +322,14 @@ export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
             onValueChange={handleKernelVersionChange}
             disabled={kernelLoading || kernelVersions.length === 0}
           >
-            <SelectTrigger className="h-9 w-full" data-testid="kernel-select">
+            <SelectTrigger className="h-9 min-w-0 flex-1" data-testid="kernel-select">
               <SelectValue
                 placeholder={
                   kernelLoading ? '加载中...' : kernelVersions.length === 0 ? '暂无版本' : '选择版本'
                 }
               />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper" sideOffset={4}>
               {[...kernelVersions]
                 .sort((a, b) => a.version.localeCompare(b.version, undefined, { numeric: true }))
                 .map((v) => (
@@ -295,11 +337,9 @@ export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
                     {v.resource_name}
                   </SelectItem>
                 ))}
-              <SelectItem value="__firefox" disabled>
-                Firefox · {t('windowInfo.kernelPlanned', { defaultValue: '规划中' })}
-              </SelectItem>
             </SelectContent>
           </Select>
+          </div>
         </div>
       </div>
 
