@@ -9,7 +9,8 @@ import {
 import type { RpaTask, RpaWorkflowStep } from '../types';
 import { RpaRunner } from '../runtime/runner';
 import { CdpBrowserAdapter } from '../runtime/cdp-browser-adapter';
-import { getEnvironmentCdpEndpoint, getEnvironmentStatus } from '../runtime/tauri';
+import { waitForCdpEndpoint } from '../runtime/bound-environment';
+import { getEnvironmentStatus } from '../runtime/tauri';
 import {
   getEnvironmentDetail,
   startEnvironmentRuntime,
@@ -89,10 +90,6 @@ interface UseRpaExecutionResult {
   canViewExecution: (id: string) => boolean;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
 function normalizeExecutionError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
 
@@ -142,19 +139,6 @@ function normalizeExecutionError(error: unknown): string {
   }
 
   return message;
-}
-
-async function waitForCdpEndpoint(envUuid: string, timeoutMs = 30000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const endpoint = await getEnvironmentCdpEndpoint(envUuid);
-    if (endpoint?.browser_ws_url) {
-      return endpoint;
-    }
-    await sleep(500);
-  }
-
-  throw new Error('浏览器调试连接未及时就绪');
 }
 
 export function useRpaExecution(params: UseRpaExecutionParams): UseRpaExecutionResult {

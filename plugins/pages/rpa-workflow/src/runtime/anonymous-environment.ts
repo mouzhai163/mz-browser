@@ -6,6 +6,7 @@ import {
   MZ_KERNEL_CHROMIUM,
 } from '../../../../services/environment/src';
 import { getStorageSettings } from '../../../../services/store/src/stores/storage-settings/storage-settings-store';
+import { generateUserAgentByKernel } from '../../../create-window/src/utils/user-agent-generator';
 import { getEnvironmentCdpEndpoint, type CdpEndpoint } from './tauri';
 
 interface DefaultStoragePaths {
@@ -15,6 +16,7 @@ interface DefaultStoragePaths {
 
 interface FingerprintPayload {
   platform?: string;
+  user_agent?: string;
   env_id?: string;
   env_name?: string;
   window_width?: number;
@@ -93,6 +95,8 @@ export async function startAnonymousRpaEnvironment(
   const exePath = await invoke<string>('ensure_kernel_ready', {
     envUuid: anonymousEnvUuid,
     kernelValue: kernelDetail.kernel_id,
+    // 和普通环境用同一个安装目录，否则临时环境会再下载一份完整的内核
+    installDirName: kernelDetail.install_dir_name || kernelDetail.resource_name,
     profilesPath: effectiveProfiles,
     kernelDetail: {
       url: kernelDetail.url,
@@ -104,6 +108,8 @@ export async function startAnonymousRpaEnvironment(
 
   const fingerprintConfig: FingerprintPayload = {
     platform: system,
+    // 内核校验配置时 UA 是必填项，缺了会拒绝启动
+    user_agent: generateUserAgentByKernel(system, 'Chrome', kernelDetail.version),
     env_id: '0',
     env_name: `Anonymous RPA ${anonymousEnvUuid.slice(0, 13)}`,
     window_width: 1280,

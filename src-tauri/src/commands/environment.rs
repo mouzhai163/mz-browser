@@ -22,13 +22,16 @@ pub async fn ensure_kernel_ready(
     app: AppHandle,
     env_uuid: Option<String>,
     kernel_value: String,
+    install_dir_name: Option<String>,
     profiles_path: String,
     kernel_detail: KernelDetail,
 ) -> Result<String> {
-    KernelService::ensure_kernel_ready(
+    let install_dir_name = install_dir_name.unwrap_or_else(|| kernel_value.clone());
+    KernelService::ensure_kernel_ready_for_artifact(
         app.clone(),
         env_uuid,
         kernel_value,
+        install_dir_name,
         profiles_path,
         kernel_detail,
         Some(crate::services::environment::kernel::utils::build_tauri_status_emitter(app)),

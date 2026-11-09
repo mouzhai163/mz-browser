@@ -2,6 +2,7 @@
   kernel_id: string;
   type_code: string;
   resource_name: string;
+  install_dir_name?: string;
   version: string;
   name?: string;
   notes?: string;

@@ -17,11 +17,12 @@ import { Button } from '@/components/ui/button';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { FormattedDialog, FormattedDialogFooter } from '@/components/formatted-dialog';
 import { cn } from '@/lib/utils';
-import { createRpaTask, getRpaTaskDetail, updateRpaTask } from '../../api';
+import { createRpaTask, getRpaTaskDetail, listRpaEnvironments, updateRpaTask } from '../../api';
 import {
   startAnonymousRpaEnvironment,
   stopAnonymousRpaEnvironment,
 } from '../../runtime/anonymous-environment';
+import { connectBoundRpaEnvironment } from '../../runtime/bound-environment';
 import { CdpBrowserAdapter } from '../../runtime/cdp-browser-adapter';
 import {
   ENV_CONNECTION_STATUS_EVENT,
@@ -226,6 +227,8 @@ export function TaskEditor() {
   const [selectedAnonymousProxy, setSelectedAnonymousProxy] =
     useState<AnonymousProxyCandidate | null>(null);
   const stopRequestedRef = useRef(false);
+  // 用绑定环境运行时，“停止”只断开自动化连接，不关闭用户的环境
+  const boundRunAdapterRef = useRef<CdpBrowserAdapter | null>(null);
   const editorSnapshotRef = useRef<EditorHistorySnapshot>({
     steps: [],
     specialPositions: DEFAULT_SPECIAL_NODE_POSITIONS,
@@ -345,6 +348,39 @@ export function TaskEditor() {
     () => buildAnonymousProxyConfig(selectedAnonymousProxy),
     [selectedAnonymousProxy]
   );
+  const boundEnvironmentUuid = config.selectedEnvironments[0];
+  const [boundEnvironmentName, setBoundEnvironmentName] = useState('');
+  useEffect(() => {
+    setBoundEnvironmentName('');
+    if (!boundEnvironmentUuid) {
+      return;
+    }
+    let cancelled = false;
+    void listRpaEnvironments()
+      .then((environments) => {
+        if (!cancelled) {
+          const match = environments.find((item) => item.id === boundEnvironmentUuid);
+          setBoundEnvironmentName(match?.name ?? '');
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [boundEnvironmentUuid]);
+  const runEnvironmentLabel = boundEnvironmentUuid
+    ? t('editor.runEnvironment.bound', {
+        name: boundEnvironmentName || boundEnvironmentUuid.slice(0, 8),
+        defaultValue: '运行环境：{{name}}',
+      })
+    : t('editor.runEnvironment.temporary', { defaultValue: '运行环境：临时环境' });
+  const runEnvironmentHint =
+    config.selectedEnvironments.length > 1
+      ? t('editor.runEnvironment.firstOnly', {
+          count: config.selectedEnvironments.length,
+          defaultValue: '绑定了 {{count}} 个环境，这里只用第一个；要全部执行请到任务列表运行',
+        })
+      : runEnvironmentLabel;
   const canUndo = editorHistory.past.length > 0 && !runButtonBusy;
   const canRedo = editorHistory.future.length > 0 && !runButtonBusy;
 
@@ -1041,11 +1077,16 @@ export function TaskEditor() {
       setRunning(true);
       stopRequestedRef.current = false;
 
+      const boundEnvUuid = workflow.environments[0];
       try {
-        const endpoint = await startAnonymousRpaEnvironment(anonymousProxyConfig);
+        const endpoint = boundEnvUuid
+          ? await connectBoundRpaEnvironment(boundEnvUuid)
+          : await startAnonymousRpaEnvironment(anonymousProxyConfig);
         setActiveRunEnvUuid(endpoint.env_uuid);
 
-        const runner = new RpaRunner(new CdpBrowserAdapter());
+        const adapter = new CdpBrowserAdapter();
+        boundRunAdapterRef.current = boundEnvUuid ? adapter : null;
+        const runner = new RpaRunner(adapter);
         await runner.run(
           workflow,
           {
@@ -1061,14 +1102,20 @@ export function TaskEditor() {
         );
 
         setRunStatus('success');
-      } catch {
+      } catch (error) {
         if (stopRequestedRef.current) {
           setRunStatus('stopped');
         } else {
           setRunStatus('failed');
+          toast.error(error instanceof Error ? error.message : String(error));
         }
       } finally {
         setRunning(false);
+        if (boundEnvUuid) {
+          // 绑定环境运行完继续开着，但这次运行已经结束，按钮要回到“运行”
+          boundRunAdapterRef.current = null;
+          setActiveRunEnvUuid(null);
+        }
       }
     },
     [
@@ -1114,9 +1161,14 @@ export function TaskEditor() {
     }
 
     stopRequestedRef.current = true;
-    setActiveRunEnvStatus('stopping');
     setRunStatus('stopping');
 
+    if (boundRunAdapterRef.current) {
+      boundRunAdapterRef.current.close();
+      return;
+    }
+
+    setActiveRunEnvStatus('stopping');
     try {
       await stopAnonymousRpaEnvironment(activeRunEnvUuid);
     } catch {
@@ -1204,6 +1256,12 @@ export function TaskEditor() {
             <Settings className="h-3.5 w-3.5" />
             {t('editor.settings')}
           </button>
+          <span
+            className="max-w-48 truncate text-xs text-muted-foreground"
+            title={runEnvironmentHint}
+          >
+            {runEnvironmentLabel}
+          </span>
           <div className="inline-flex overflow-hidden rounded border border-border">
             <button
               onClick={runButtonBusy ? handleStopRunningEnvironment : handleRun}
@@ -1223,8 +1281,12 @@ export function TaskEditor() {
                 event.stopPropagation();
                 setProxyDrawerOpen(true);
               }}
-              disabled={proxyButtonDisabled}
-              title={anonymousProxyLabel}
+              disabled={proxyButtonDisabled || Boolean(boundEnvironmentUuid)}
+              title={
+                boundEnvironmentUuid
+                  ? t('editor.runEnvironment.proxyHint', { defaultValue: '绑定环境使用它自己的代理' })
+                  : anonymousProxyLabel
+              }
               aria-label={t('editor.proxy.openDrawer', { defaultValue: '配置匿名环境代理' })}
               className={cn(
                 'relative flex items-center justify-center px-2.5 py-2 border-l border-border hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed',

@@ -367,6 +367,12 @@ export const rpaResources = {
       },
       taskNamePlaceholder: '输入任务名称...',
       run: '运行',
+      runEnvironment: {
+        bound: '运行环境：{{name}}',
+        temporary: '运行环境：临时环境',
+        firstOnly: '绑定了 {{count}} 个环境，这里只用第一个；要全部执行请到任务列表运行',
+        proxyHint: '绑定环境使用它自己的代理',
+      },
       proxy: {
         title: '匿名环境代理',
         description: '为当前 RPA 试运行选择临时代理，仅影响匿名环境。',
@@ -798,6 +804,12 @@ export const rpaResources = {
       },
       taskNamePlaceholder: 'Enter task name...',
       run: 'Run',
+      runEnvironment: {
+        bound: 'Environment: {{name}}',
+        temporary: 'Environment: temporary',
+        firstOnly: '{{count}} environments are bound; only the first is used here. Run from the task list to use all of them.',
+        proxyHint: 'A bound environment uses its own proxy',
+      },
       proxy: {
         title: 'Anonymous Environment Proxy',
         description: 'Choose a temporary proxy for the current RPA trial run. It only affects the anonymous environment.',
