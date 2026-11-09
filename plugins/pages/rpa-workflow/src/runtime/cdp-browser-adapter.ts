@@ -473,7 +473,8 @@ export class CdpBrowserAdapter implements BrowserAdapter {
 
     await this.client.send('Page.enable', undefined, attached.sessionId);
     await this.client.send('DOM.enable', undefined, attached.sessionId);
-    await this.client.send('Runtime.enable', undefined, attached.sessionId);
+    // 不调用 Runtime.enable：它会让页面里的 Error.stack 序列化被观察到，是最常用的 CDP 检测特征。
+    // 这里只用 Runtime.evaluate / callFunctionOn，不依赖 Runtime 事件，不开也能正常执行。
 
     this.targets.push({
       targetId,
