@@ -137,6 +137,7 @@ export function EnvironmentList() {
     <div className="flex flex-col h-[calc(100vh-50px)]">
       <EnvironmentHeader
         environments={filteredEnvironments}
+        total={total}
         onComplete={refresh}
         onManageTags={dialogStore.openManageTagsDialog}
       />

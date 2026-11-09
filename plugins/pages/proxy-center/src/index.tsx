@@ -384,21 +384,21 @@ const ProxyCenterPage: React.FC = () => {
         onCreateNew={handlers.handleCreateProxy}
         onImport={handleImport}
         onExport={handleExport}
-      />
-
-      <ProxyStats
-        total={activeTotal}
-        healthy={activeStats.healthy}
-        unreachable={activeStats.unreachable}
-        selectedCount={
-          proxyMode === 'remote'
-            ? handlers.selection.selectedIds.size
-            : localSelection.selectedIds.size
-        }
-        onTestSelected={
-          proxyMode === 'remote' ? handleBatchTestWrapper : handleLocalBatchTestWrapper
-        }
-      />
+      >
+        <ProxyStats
+          total={activeTotal}
+          healthy={activeStats.healthy}
+          unreachable={activeStats.unreachable}
+          selectedCount={
+            proxyMode === 'remote'
+              ? handlers.selection.selectedIds.size
+              : localSelection.selectedIds.size
+          }
+          onTestSelected={
+            proxyMode === 'remote' ? handleBatchTestWrapper : handleLocalBatchTestWrapper
+          }
+        />
+      </ProxyHeader>
 
       {proxyMode === 'remote' && activeError && (
         <div className="px-6 py-2 text-xs text-destructive">代理列表加载失败：{activeError}</div>

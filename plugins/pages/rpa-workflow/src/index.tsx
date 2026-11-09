@@ -127,18 +127,18 @@ const RPAWorkflowPage: React.FC = () => {
         onSearchChange={handleSearchChangeWithReset}
         onCreateTask={handlers.handleCreateTask}
         onImportTask={handleImportTask}
-      />
-
-      <RpaStats
-        total={stats.total}
-        running={stats.running}
-        completed={stats.completed}
-        failed={stats.failed}
-        scheduled={stats.scheduled}
         statusFilter={statusFilter}
         onStatusFilterChange={handleStatusFilterChange}
         onRefresh={refresh}
-      />
+      >
+        <RpaStats
+          total={stats.total}
+          running={stats.running}
+          completed={stats.completed}
+          failed={stats.failed}
+          scheduled={stats.scheduled}
+        />
+      </RpaHeader>
 
       {error && (
         <div className="bg-destructive/10 px-4 py-2 text-xs text-destructive">

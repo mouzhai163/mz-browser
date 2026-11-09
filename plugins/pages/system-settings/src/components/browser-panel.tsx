@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Fingerprint, Globe, History } from 'lucide-react';
+import { Cpu, Fingerprint, Globe, History } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { SettingCard } from './setting-card';
 import { SettingRow } from './setting-row';
 import { fingerprintModes, type FingerprintMode } from '../config';
 import { getBrowserSettings, setBrowserSettings } from '../../../../services/store/src';
+import { listBrowserKernels, type BrowserKernelVersion } from '../../../create-window/src/api';
 
 /**
  * 浏览器与自动化面板
@@ -16,6 +17,24 @@ export const BrowserPanel: React.FC = () => {
   const [cleanTempOnClose, setCleanTempOnClose] = useState(true);
   const [autoRestoreSession, setAutoRestoreSession] = useState(false);
   const [browserSettingsLoaded, setBrowserSettingsLoaded] = useState(false);
+  const [kernels, setKernels] = useState<BrowserKernelVersion[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listBrowserKernels('windows')
+      .then((groups) => {
+        if (cancelled) return;
+        const all = Object.values(groups).flat();
+        all.sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }));
+        setKernels(all);
+      })
+      .catch(() => {
+        if (!cancelled) setKernels([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,7 +89,57 @@ export const BrowserPanel: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* 浏览器内核 */}
+      <SettingCard title={t('browserKernels', { defaultValue: '浏览器内核' })} icon={Cpu}>
+        <div className="space-y-2" data-testid="settings-kernel-list">
+          {kernels === null ? (
+            <p className="p-3 text-xs text-muted-foreground">{t('kernelsLoading', { defaultValue: '加载中…' })}</p>
+          ) : kernels.length === 0 ? (
+            <p className="p-3 text-xs text-muted-foreground">{t('kernelsEmpty', { defaultValue: '暂无可用内核' })}</p>
+          ) : (
+            kernels.map((kernel) => (
+              <div
+                key={kernel.kernel_id}
+                className="flex items-center justify-between rounded-md border border-border px-4 py-3"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <Cpu className="h-[18px] w-[18px]" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">{kernel.resource_name}</div>
+                    <div className="text-xs text-muted-foreground">{kernel.version}</div>
+                  </div>
+                </div>
+                <span
+                  className={
+                    kernel.installed
+                      ? 'rounded border border-success/30 bg-success/10 px-1.5 text-xs leading-5 text-success'
+                      : 'rounded border border-border bg-muted px-1.5 text-xs leading-5 text-muted-foreground'
+                  }
+                >
+                  {kernel.installed
+                    ? t('kernelInstalled', { defaultValue: '已安装' })
+                    : t('kernelNotInstalled', { defaultValue: '首次使用时下载' })}
+                </span>
+              </div>
+            ))
+          )}
+          <div className="flex items-center justify-between rounded-md border border-dashed border-border bg-muted/40 px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                <Cpu className="h-[18px] w-[18px]" />
+              </div>
+              <div className="text-sm font-semibold text-muted-foreground">Firefox</div>
+            </div>
+            <span className="rounded border border-border bg-muted px-1.5 text-xs leading-5 text-muted-foreground">
+              {t('kernelPlanned', { defaultValue: '规划中' })}
+            </span>
+          </div>
+        </div>
+      </SettingCard>
+
       {/* 浏览器环境 */}
       <SettingCard title={t('browserEnvironment')} icon={Fingerprint}>
         {/* 默认指纹模式 */}

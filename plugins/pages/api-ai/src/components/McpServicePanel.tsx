@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Switch } from '@/components/ui/switch';
 import type { McpConfigSnapshot, UpdateMcpConfigRequest } from '../types';
@@ -29,9 +29,7 @@ export function McpServicePanel({
 
   return (
     <div className="space-y-4">
-      <div className="bg-background p-4 relative border backdrop-blur-xl border-border rounded-sm">
-        {config ? <McpServiceControl config={config} onToggle={onToggle} /> : null}
-      </div>
+      {config ? <McpServiceControl config={config} onToggle={onToggle} /> : null}
 
       {config && (
         <McpAccessSettings
@@ -69,10 +67,30 @@ function McpServiceControl({
   const { t } = useTranslation('apiConsole');
 
   return (
-    <div className="flex items-center justify-between gap-4 ">
-      <div className="flex-1">
-        <h3 className="text-sm font-semibold text-foreground mb-1">{t('mcp.control')}</h3>
-        <p className="text-xs text-muted-foreground">{t('mcp.controlDesc')}</p>
+    <div
+      className={`flex items-center justify-between gap-4 rounded-lg border p-4 shadow-xs ${
+        config.running ? 'border-success/30 bg-success/5' : 'border-border bg-card'
+      }`}
+    >
+      <div className="flex items-center gap-4">
+        <div
+          className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+            config.running ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
+          }`}
+        >
+          <Zap className="h-5 w-5" />
+        </div>
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="text-[15px] font-semibold text-foreground">
+              {config.running
+                ? t('mcp.statusRunning', { defaultValue: 'MCP 服务运行中' })
+                : t('mcp.control')}
+            </h3>
+            {config.running ? <span className="h-2 w-2 rounded-full bg-success" /> : null}
+          </div>
+          <p className="mt-0.5 font-mono text-xs text-muted-foreground">{config.endpoint}</p>
+        </div>
       </div>
       <Switch data-testid="mcp-service-toggle" checked={config.running} onCheckedChange={onToggle} className="ml-4" />
     </div>
@@ -147,10 +165,9 @@ function McpClientConfigContent({ config }: { config: McpConfigSnapshot }) {
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.05fr_1.45fr]">
-      <div className="border border-border bg-background p-4">
+      <div className="rounded-lg border border-border bg-card p-4 shadow-xs">
         <div className="mb-4">
-          <h4 className="text-xs font-semibold text-foreground mb-2">{t('mcp.clientGrid')}</h4>
-          <p className="text-xs text-muted-foreground leading-relaxed">{t('mcp.clientGridDesc')}</p>
+          <h4 className="text-[15px] font-semibold text-foreground">{t('mcp.clientGrid')}</h4>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {Object.entries(clients).map(([key, client]) => {
@@ -175,7 +192,7 @@ function McpClientConfigContent({ config }: { config: McpConfigSnapshot }) {
         </div>
       </div>
 
-      <div className="border border-border bg-background p-4 space-y-3">
+      <div className="space-y-3 rounded-lg border border-border bg-card p-4 shadow-xs">
         <div>
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -192,9 +209,6 @@ function McpClientConfigContent({ config }: { config: McpConfigSnapshot }) {
               <ExternalLink className="w-3 h-3" />
             </a>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
-            {t('mcp.clientConfigDesc')}
-          </p>
         </div>
         <pre className="bg-muted border border-border rounded p-3 text-[11px] leading-5 overflow-auto whitespace-pre-wrap break-all font-mono">
           {selectedClient.snippet}

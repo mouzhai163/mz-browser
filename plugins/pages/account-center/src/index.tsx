@@ -101,14 +101,14 @@ const AccountCenterPage: React.FC = () => {
         onCreateNew={handlers.handleCreateAccount}
         onImport={handleImport}
         onExport={handleExport}
-      />
-
-      <AccountStats
-        total={total}
-        active={stats.active}
-        inactive={stats.inactive}
-        expired={stats.expired}
-      />
+      >
+        <AccountStats
+          total={total}
+          active={stats.active}
+          inactive={stats.inactive}
+          expired={stats.expired}
+        />
+      </AccountHeader>
 
       {error && <div className="px-6 py-2 text-xs text-destructive">账号列表加载失败：{error}</div>}
 

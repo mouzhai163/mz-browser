@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Tag, MousePointer2, Download, Search } from 'lucide-react';
+import { Tag, MousePointer2, Download, Search, LayoutList, Zap, TriangleAlert, Cpu } from 'lucide-react';
 import { invoke } from '@/lib/tauri';
 import { cn } from '@/lib/utils';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useEnvironmentFiltersStore, useEnvironmentSelectionStore } from '../stores';
+import { PageTitle } from '@/components/page-title';
+import { StatCards, type StatCardItem } from '@/components/stat-cards';
+import { Button } from '@/components/ui/button';
+import { useEnvironmentFiltersStore, useEnvironmentSelectionStore, useRunningEnvsStore } from '../stores';
 import type { EnvironmentViewType } from '../stores/filters-store';
 import type { Environment } from '../types';
 import { EnvironmentExportDialog } from './environment-export-dialog';
@@ -12,6 +14,8 @@ import { EnvironmentSearchDialog } from './environment-search-dialog';
 
 interface EnvironmentHeaderProps {
   environments: Environment[];
+  /** 服务端返回的当前视图总数 */
+  total?: number;
   onComplete?: () => void;
   onManageTags?: () => void;
 }
@@ -27,21 +31,19 @@ async function openSyncerWindow() {
   }
 }
 
-export function EnvironmentHeader({ environments, onManageTags }: EnvironmentHeaderProps) {
+const PROXY_ERROR_STATUSES = new Set(['error', 'failed', 'unavailable', 'offline', 'inactive', 'invalid']);
+
+export function EnvironmentHeader({ environments, total, onManageTags }: EnvironmentHeaderProps) {
   const { t } = useTranslation('environment');
   const filtersStore = useEnvironmentFiltersStore();
   const selectionStore = useEnvironmentSelectionStore();
+  const statusCache = useRunningEnvsStore((state) => state.statusCache);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
-
-  const handleExportClick = () => {
-    setExportDialogOpen(true);
-  };
 
   // 监听 Ctrl+K / Cmd+K 快捷键
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+K (Windows/Linux) 或 Cmd+K (Mac)
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         setSearchDialogOpen(true);
@@ -63,6 +65,23 @@ export function EnvironmentHeader({ environments, onManageTags }: EnvironmentHea
     return environments;
   })();
 
+  const stats = useMemo<StatCardItem[]>(() => {
+    let running = 0;
+    statusCache.forEach((status) => {
+      if (status === 'running') running += 1;
+    });
+    const proxyErrors = environments.filter(
+      (env) => env.proxy && PROXY_ERROR_STATUSES.has(String(env.proxy.status).toLowerCase())
+    ).length;
+    const kernels = new Set(environments.map((env) => env.kernel_info).filter(Boolean)).size;
+    return [
+      { key: 'total', label: t('header.statTotal', { defaultValue: '全部环境' }), value: total ?? environments.length, icon: LayoutList, tone: 'primary' },
+      { key: 'running', label: t('stats.running'), value: running, icon: Zap, tone: 'success' },
+      { key: 'proxy', label: t('stats.proxyErrors'), value: proxyErrors, icon: TriangleAlert, tone: 'danger' },
+      { key: 'kernels', label: t('header.statKernels', { defaultValue: '使用中的内核' }), value: kernels, icon: Cpu, tone: 'warning' },
+    ];
+  }, [environments, statusCache, t, total]);
+
   const viewTypes: { value: EnvironmentViewType; key: string }[] = [
     { value: 'all', key: 'header.viewAll' },
     { value: 'opened', key: 'header.viewOpened' },
@@ -70,83 +89,55 @@ export function EnvironmentHeader({ environments, onManageTags }: EnvironmentHea
   ];
 
   return (
-    <header className="border-b border-border flex items-center justify-between px-4 py-2 bg-background/10 backdrop-blur-2xl">
-      <div className="flex items-center gap-4">
-        {/* 视图类型菜单 */}
-        <div className="flex items-center gap-2 p-1 bg-secondary rounded-xl">
+    <header className="space-y-4 px-6 pb-3 pt-5">
+      <PageTitle
+        title={t('header.title', { defaultValue: '环境' })}
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={() => void openSyncerWindow()}>
+              <MousePointer2 className="h-4 w-4" />
+              {t('stats.syncer') || '同步器'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={onManageTags}>
+              <Tag className="h-4 w-4" />
+              {t('stats.manageTags') || '标签管理'}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setExportDialogOpen(true)}>
+              <Download className="h-4 w-4" />
+              {t('header.export')}
+            </Button>
+          </>
+        }
+      />
+
+      <StatCards items={stats} />
+
+      <div className="flex items-center justify-between gap-3">
+        {/* 视图类型：Ant Design 分段控制器样式 */}
+        <div className="inline-flex gap-0.5 rounded-md bg-black/[0.04] p-0.5 dark:bg-white/[0.08]">
           {viewTypes.map((view) => (
             <button
               key={view.value}
               onClick={() => filtersStore.setViewType(view.value)}
               className={cn(
-                'px-3 py-1.5 text-xs rounded-xl transition-all duration-200',
+                'h-7 rounded px-3 text-[13px] transition-colors',
                 filtersStore.viewType === view.value
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  ? 'bg-card text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
               )}
             >
               {t(view.key)}
             </button>
           ))}
         </div>
-      </div>
-      <div className="flex items-center gap-2">
-        {/* 搜索按钮 */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={() => setSearchDialogOpen(true)}
-              className="h-8 px-3 flex items-center justify-center gap-2 rounded-md border border-border bg-background hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-            >
-              <Search className="h-4 w-4" />
-              <div className="h-3 w-px bg-border" />
-              <span className="text-[10px] font-medium opacity-60">Ctrl+K</span>
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{t('header.search')}</p>
-          </TooltipContent>
-        </Tooltip>
 
-        {/* 同步器按钮 */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={() => void openSyncerWindow()}
-              className="h-8 px-3 flex items-center justify-center gap-2 rounded-md border border-border bg-background hover:bg-muted transition-colors text-muted-foreground hover:text-foreground text-xs font-medium"
-            >
-              <MousePointer2 className="h-4 w-4" />
-              <span>{t('stats.syncer') || '同步器'}</span>
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{t('stats.syncer') || '同步器'}</p>
-          </TooltipContent>
-        </Tooltip>
-
-        {/* 标签管理按钮 */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={onManageTags}
-              className="h-8 px-3 flex items-center justify-center gap-2 rounded-md border border-border bg-background hover:bg-muted transition-colors text-muted-foreground hover:text-foreground text-xs font-medium"
-            >
-              <Tag className="h-4 w-4" />
-              <span>{t('stats.manageTags') || '标签管理'}</span>
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{t('stats.manageTags') || '标签管理'}</p>
-          </TooltipContent>
-        </Tooltip>
-
-        {/* 导出按钮 */}
         <button
-          onClick={handleExportClick}
-          className="h-8 px-3 flex items-center justify-center gap-2 rounded-md border border-border bg-background hover:bg-muted transition-colors text-muted-foreground hover:text-foreground text-xs font-medium"
+          onClick={() => setSearchDialogOpen(true)}
+          className="flex h-8 w-72 items-center gap-2 rounded-md border border-input bg-card px-3 text-[13px] text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
         >
-          <Download className="h-4 w-4" />
-          <span>{t('header.export')}</span>
+          <Search className="h-4 w-4" />
+          <span className="flex-1 text-left">{t('header.searchPlaceholder')}</span>
+          <span className="text-[10px] opacity-60">Ctrl+K</span>
         </button>
       </div>
 
@@ -156,10 +147,7 @@ export function EnvironmentHeader({ environments, onManageTags }: EnvironmentHea
         onOpenChange={setExportDialogOpen}
       />
 
-      <EnvironmentSearchDialog
-        open={searchDialogOpen}
-        onOpenChange={setSearchDialogOpen}
-      />
+      <EnvironmentSearchDialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen} />
     </header>
   );
 }

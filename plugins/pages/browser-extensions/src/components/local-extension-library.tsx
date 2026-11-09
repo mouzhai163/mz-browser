@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Download, Plus, Ban, Play, Info, SearchX, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PageTitle } from '@/components/page-title';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { ExtensionItem } from '../types';
 import { ExtensionIcon } from './extension-icon';
@@ -144,18 +145,16 @@ export function LocalExtensionLibrary({
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-      <div className="shrink-0 min-h-14 px-4 py-3 border-b border-border bg-muted/30 flex items-center gap-3">
-        <div className="min-w-0">
-          <div className="text-sm font-medium text-foreground leading-none">{t('local.title')}</div>
-          <div className="text-[11px] text-muted-foreground leading-tight mt-1 line-clamp-1">
-            {t('local.description')}
-          </div>
-        </div>
-        <Button size="sm" className="ml-auto h-8 text-xs" onClick={onImport} disabled={importing}>
-          <Plus className="h-3.5 w-3.5 mr-1.5" />
-          {importing ? t('local.importing') : t('local.import')}
-        </Button>
-      </div>
+      <PageTitle
+        className="shrink-0 px-6 pb-3 pt-5"
+        title={t('local.title')}
+        actions={
+          <Button size="sm" onClick={onImport} disabled={importing}>
+            <Plus className="h-4 w-4" />
+            {importing ? t('local.importing') : t('local.import')}
+          </Button>
+        }
+      />
 
       <ScrollArea className="flex-1">
         {extensions.length === 0 ? (
