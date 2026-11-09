@@ -265,7 +265,7 @@ export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
             })}
           </div>
         </div>
-        <div className="space-y-2">
+        <div className="col-span-2 space-y-2">
           <Label className="text-xs">{t('windowInfo.browser')}</Label>
           {(() => {
             const selectedKernelId = kernelVersions.some((v) => v.kernel_id === value.kernelId)
@@ -274,7 +274,7 @@ export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
                 kernelVersions[0]?.kernel_id ||
                 '';
             return (
-              <div className="flex flex-wrap gap-2" data-testid="kernel-cards">
+              <div className="grid grid-cols-4 gap-2" data-testid="kernel-cards">
                 {kernelLoading ? (
                   <div className="col-span-full text-xs text-muted-foreground">加载中...</div>
                 ) : kernelVersions.length === 0 ? (
@@ -288,7 +288,7 @@ export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
                         type="button"
                         onClick={() => handleKernelVersionChange(v.kernel_id)}
                         className={cn(
-                          'min-w-[128px] whitespace-nowrap rounded-md border px-3 py-2.5 text-left transition-colors',
+                          'whitespace-nowrap rounded-md border px-3 py-2.5 text-left transition-colors',
                           active
                             ? 'border-primary bg-primary/10'
                             : 'border-border bg-card hover:border-primary/50'
@@ -310,7 +310,7 @@ export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
                 <button
                   type="button"
                   onClick={handleFirefoxClick}
-                  className="min-w-[96px] whitespace-nowrap rounded-md border border-dashed border-border bg-muted/40 px-3 py-2.5 text-left opacity-80"
+                  className="whitespace-nowrap rounded-md border border-dashed border-border bg-muted/40 px-3 py-2.5 text-left opacity-80"
                 >
                   <div className="flex items-center gap-1.5">
                     <span className="text-[13px] font-semibold text-muted-foreground">Firefox</span>
