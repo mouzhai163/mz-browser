@@ -1,13 +1,19 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { TextareaInput } from '@/components/textarea-input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { RefreshCw, X, Globe, Facebook, Youtube, Instagram, Linkedin, Twitter } from 'lucide-react';
 import { FaWindows, FaApple, FaLinux, FaGoogle, FaAmazon } from 'react-icons/fa';
 import { SiGooglechrome } from 'react-icons/si';
-import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { CookieGroup, WindowInfo } from '../types';
 import { CreateWindowSelectAccountDialog } from './create-window-select-account-dialog';
@@ -143,10 +149,6 @@ export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
       .finally(() => setKernelLoading(false));
   }, [kernelType]); // 只依赖 kernelType，不依赖 value.system
 
-  const handleFirefoxClick = () => {
-    toast.info(t('windowInfo.firefoxNotSupported'));
-  };
-
   const handleKernelVersionChange = (kernelId: string) => {
     const selected = kernelVersions.find((kernel) => kernel.kernel_id === kernelId);
     if (!selected) return;
@@ -265,63 +267,38 @@ export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
             })}
           </div>
         </div>
-        <div className="col-span-2 space-y-2">
+        <div className="space-y-2">
           <Label className="text-xs">{t('windowInfo.browser')}</Label>
-          {(() => {
-            const selectedKernelId = kernelVersions.some((v) => v.kernel_id === value.kernelId)
-              ? value.kernelId
-              : kernelVersions.find((v) => v.resource_name === value.kernel)?.kernel_id ||
-                kernelVersions[0]?.kernel_id ||
-                '';
-            return (
-              <div className="grid grid-cols-4 gap-2" data-testid="kernel-cards">
-                {kernelLoading ? (
-                  <div className="col-span-full text-xs text-muted-foreground">加载中...</div>
-                ) : kernelVersions.length === 0 ? (
-                  <div className="col-span-full text-xs text-muted-foreground">暂无版本</div>
-                ) : (
-                  kernelVersions.map((v, index) => {
-                    const active = v.kernel_id === selectedKernelId;
-                    return (
-                      <button
-                        key={v.kernel_id}
-                        type="button"
-                        onClick={() => handleKernelVersionChange(v.kernel_id)}
-                        className={cn(
-                          'whitespace-nowrap rounded-md border px-3 py-2.5 text-left transition-colors',
-                          active
-                            ? 'border-primary bg-primary/10'
-                            : 'border-border bg-card hover:border-primary/50'
-                        )}
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[13px] font-semibold text-foreground">{v.resource_name}</span>
-                          {index === 0 ? (
-                            <span className="rounded border border-success/30 bg-success/10 px-1 text-[10px] leading-4 text-success">
-                              {t('windowInfo.kernelLatest', { defaultValue: '推荐' })}
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="mt-0.5 text-[11px] text-muted-foreground">{v.version}</div>
-                      </button>
-                    );
-                  })
-                )}
-                <button
-                  type="button"
-                  onClick={handleFirefoxClick}
-                  className="whitespace-nowrap rounded-md border border-dashed border-border bg-muted/40 px-3 py-2.5 text-left opacity-80"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[13px] font-semibold text-muted-foreground">Firefox</span>
-                    <span className="rounded border border-border bg-muted px-1 text-[10px] leading-4 text-muted-foreground">
-                      {t('windowInfo.kernelPlanned', { defaultValue: '规划中' })}
-                    </span>
-                  </div>
-                </button>
-              </div>
-            );
-          })()}
+          <Select
+            value={
+              kernelVersions.some((v) => v.kernel_id === value.kernelId)
+                ? value.kernelId
+                : kernelVersions.find((v) => v.resource_name === value.kernel)?.kernel_id ||
+                  kernelVersions[0]?.kernel_id ||
+                  ''
+            }
+            onValueChange={handleKernelVersionChange}
+            disabled={kernelLoading || kernelVersions.length === 0}
+          >
+            <SelectTrigger className="h-9 w-full" data-testid="kernel-select">
+              <SelectValue
+                placeholder={
+                  kernelLoading ? '加载中...' : kernelVersions.length === 0 ? '暂无版本' : '选择版本'
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {kernelVersions.map((v, index) => (
+                <SelectItem key={v.kernel_id} value={v.kernel_id}>
+                  {v.resource_name}
+                  {index === 0 ? ` · ${t('windowInfo.kernelLatest', { defaultValue: '推荐' })}` : ''}
+                </SelectItem>
+              ))}
+              <SelectItem value="__firefox" disabled>
+                Firefox · {t('windowInfo.kernelPlanned', { defaultValue: '规划中' })}
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
