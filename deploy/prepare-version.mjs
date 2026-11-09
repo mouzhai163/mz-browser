@@ -71,20 +71,27 @@ if (!version) {
 }
 
 const root = repoRoot();
-const tauriConfPath = path.join(root, 'src-tauri', 'tauri.conf.json');
+// 打包时 prepare-tauri-config 会用后两个文件覆盖 tauri.conf.json，版本号必须三个一起改
+const tauriConfPaths = [
+  'tauri.conf.json',
+  'tauri.conf.embed-bootstrapper.json',
+  'tauri.conf.fixed-runtime.json',
+].map((name) => path.join(root, 'src-tauri', name));
 const cargoTomlPath = path.join(root, 'src-tauri', 'Cargo.toml');
 const packageJsonPath = path.join(root, 'package.json');
 
 console.log(`[prepare-version] Using version: ${version}`);
 
-// tauri.conf.json
-const tauriConf = readJson(tauriConfPath);
-if (tauriConf.version !== version) {
-  tauriConf.version = version;
-  writeJson(tauriConfPath, tauriConf);
-  console.log(`[prepare-version] Updated ${path.relative(root, tauriConfPath)} -> version=${version}`);
-} else {
-  console.log(`[prepare-version] Kept ${path.relative(root, tauriConfPath)} -> version=${version}`);
+// tauri.conf*.json
+for (const tauriConfPath of tauriConfPaths) {
+  const tauriConf = readJson(tauriConfPath);
+  if (tauriConf.version !== version) {
+    tauriConf.version = version;
+    writeJson(tauriConfPath, tauriConf);
+    console.log(`[prepare-version] Updated ${path.relative(root, tauriConfPath)} -> version=${version}`);
+  } else {
+    console.log(`[prepare-version] Kept ${path.relative(root, tauriConfPath)} -> version=${version}`);
+  }
 }
 
 // Cargo.toml

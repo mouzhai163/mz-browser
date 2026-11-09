@@ -1,6 +1,6 @@
 [package]
 name = "mz-browser"
-version = "0.1.0"
+version = "0.1.1"
 description = "MZ指纹浏览器"
 authors = ["liusnew"]
 edition = "2024"
