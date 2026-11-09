@@ -6,9 +6,15 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::io;
 use std::io::Read;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
+use std::time::SystemTime;
 
-use super::types::{EVENT_KERNEL_PREPARE_STATUS, KernelPrepareStatusPayload, KernelStatusEmitter};
+use super::types::{
+    EVENT_KERNEL_PREPARE_STATUS, KernelPrepareStatusPayload, KernelStatusEmitter,
+    LEGACY_SIGNATURE_HASH_SIZE, SIGNATURE_HASH_SIZE,
+};
 
 /// 解析有效的 profiles 根目录：若传入为空则使用应用默认
 pub fn resolve_profiles_base(
@@ -116,6 +122,45 @@ pub fn calculate_file_hash_head(file_path: &Path, size: u64) -> Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
+type SignatureCache = Mutex<HashMap<PathBuf, (u64, SystemTime, String)>>;
+
+/// 整文件哈希的进程内缓存。chrome.dll 有 300 多 MB，每次启动环境都重算一遍太慢；
+/// 文件的大小和修改时间都没变时直接用上次的结果。
+fn signature_cache() -> &'static SignatureCache {
+    static CACHE: OnceLock<SignatureCache> = OnceLock::new();
+    CACHE.get_or_init(Default::default)
+}
+
+fn whole_file_signature(file_path: &Path) -> Result<String> {
+    let metadata = fs::metadata(file_path)?;
+    let (len, modified) = (metadata.len(), metadata.modified()?);
+    {
+        let cache = signature_cache().lock().unwrap_or_else(|error| error.into_inner());
+        if let Some((cached_len, cached_modified, signature)) = cache.get(file_path) {
+            if *cached_len == len && *cached_modified == modified {
+                return Ok(signature.clone());
+            }
+        }
+    }
+    let signature = calculate_file_hash_head(file_path, SIGNATURE_HASH_SIZE)?.to_lowercase();
+    signature_cache()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .insert(file_path.to_path_buf(), (len, modified, signature.clone()));
+    Ok(signature)
+}
+
+/// 用 `expected`（小写）校验核心 DLL，返回实际匹配上的那个签名。
+/// 先按现行的整文件算法比对，比不上再按第一版的开头 10 MiB 算法比对。
+pub fn matched_core_dll_signature(dll_path: &Path, expected: &[String]) -> Result<Option<String>> {
+    let whole = whole_file_signature(dll_path)?;
+    if expected.contains(&whole) {
+        return Ok(Some(whole));
+    }
+    let head = calculate_file_hash_head(dll_path, LEGACY_SIGNATURE_HASH_SIZE)?.to_lowercase();
+    Ok(expected.contains(&head).then_some(head))
+}
+
 /// 从 XML 内容中提取属性值
 pub fn extract_xml_attribute(content: &str, attr_name: &str) -> Option<String> {
     let patterns = [format!("{}='", attr_name), format!("{}=\"", attr_name)];
@@ -219,8 +264,39 @@ mod tests {
 
 #[cfg(test)]
 mod head_hash_tests {
-    use super::calculate_file_hash_head;
-    use crate::services::environment::kernel::types::SIGNATURE_HASH_SIZE;
+    use super::{calculate_file_hash_head, matched_core_dll_signature};
+    use crate::services::environment::kernel::types::{
+        LEGACY_SIGNATURE_HASH_SIZE, SIGNATURE_HASH_SIZE,
+    };
+
+    #[test]
+    fn both_signature_formats_are_recognised() {
+        let dir = std::env::temp_dir().join(format!("mz-sig-formats-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let dll = dir.join("chrome.dll");
+        std::fs::write(&dll, vec![3u8; 11 * 1024 * 1024]).unwrap();
+        let whole = calculate_file_hash_head(&dll, SIGNATURE_HASH_SIZE).unwrap();
+        let head = calculate_file_hash_head(&dll, LEGACY_SIGNATURE_HASH_SIZE).unwrap();
+        assert_ne!(whole, head);
+
+        assert_eq!(
+            matched_core_dll_signature(&dll, &[whole.clone()]).unwrap(),
+            Some(whole.clone())
+        );
+        assert_eq!(
+            matched_core_dll_signature(&dll, &[head.clone()]).unwrap(),
+            Some(head)
+        );
+        assert_eq!(
+            matched_core_dll_signature(&dll, &["0".repeat(64)]).unwrap(),
+            None
+        );
+
+        // 内容变了就不能再用缓存的结果
+        std::fs::write(&dll, vec![4u8; 12 * 1024 * 1024]).unwrap();
+        assert_eq!(matched_core_dll_signature(&dll, &[whole]).unwrap(), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn a_change_late_in_the_file_changes_the_signature() {

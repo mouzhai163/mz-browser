@@ -157,14 +157,7 @@ export function AdvancedFingerprintForm({ value, onChange }: AdvancedFingerprint
       <div className="grid grid-cols-3 gap-x-8 gap-y-4">
         <div className="flex items-center justify-between gap-4">
           <Label className="text-xs shrink-0">{t('advancedFingerprint.colorDepth')}</Label>
-          <SegmentedControl
-            value={value.colorDepth.toString()}
-            options={[
-              { value: '24', label: '24bit' },
-              { value: '32', label: '32bit' },
-            ]}
-            onChange={(v) => onChange({ ...value, colorDepth: parseInt(v) as 24 | 32 })}
-          />
+          <span className="text-xs font-mono">{value.colorDepth}bit</span>
         </div>
         <div className="flex items-center justify-between gap-4">
           <Label className="text-xs shrink-0">{t('advancedFingerprint.devicePixelRatio')}</Label>

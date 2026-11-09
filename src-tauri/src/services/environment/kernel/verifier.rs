@@ -5,8 +5,8 @@ use crate::domain::environment::EnvironmentStatus;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::types::{KernelStatusEmitter, SIGNATURE_HASH_SIZE};
-use super::utils::{calculate_file_hash_head, core_dll_name, emit_status, extract_xml_attribute};
+use super::types::KernelStatusEmitter;
+use super::utils::{core_dll_name, emit_status, extract_xml_attribute, matched_core_dll_signature};
 
 /// 校验内核完整性
 ///
@@ -15,7 +15,6 @@ use super::utils::{calculate_file_hash_head, core_dll_name, emit_status, extract
 /// - `Ok(None)`: 校验失败
 /// - `Err`: 发生错误
 pub fn verify_kernel(
-    _app: &tauri::AppHandle,
     env_uuid: &Option<String>,
     kernel_value: &str,
     kernel_dir: &Path,
@@ -91,26 +90,16 @@ pub fn verify_kernel(
         expected.join(", ")
     );
 
-    let local_hash = calculate_file_hash_head(&dll_path, SIGNATURE_HASH_SIZE)?;
-    let local = local_hash.to_lowercase();
-
-    crate::log_info!(
-        crate::core::logger::modules::KERNEL,
-        "DLL 哈希计算完成，实际值: {}",
-        local
-    );
-
-    let Some(matched_index) = expected.iter().position(|signature| signature == &local) else {
+    let Some(local) = matched_core_dll_signature(&dll_path, &expected)? else {
         crate::log_warn!(
             crate::core::logger::modules::KERNEL,
-            "核心 DLL 哈希不一致，可接受值: {}, 实际: {}",
-            expected.join(", "),
-            local
+            "核心 DLL 哈希不一致，可接受值: {}",
+            expected.join(", ")
         );
         return Ok(None);
     };
 
-    if matched_index > 0 {
+    if expected.first() != Some(&local) {
         crate::log_warn!(
             crate::core::logger::modules::KERNEL,
             "使用兼容签名接受已安装内核: {}",

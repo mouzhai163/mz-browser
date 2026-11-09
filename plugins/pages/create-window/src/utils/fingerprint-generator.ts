@@ -29,118 +29,10 @@ function randomHex(length: number): string {
   return result;
 }
 
-// ==================== WebGL 数据 ====================
-
-/** WebGL 供应商列表 */
-const WEBGL_VENDORS = [
-  'Google Inc. (Intel)',
-  'Google Inc. (NVIDIA)',
-  'Google Inc. (AMD)',
-  'Google Inc. (Apple)',
-  'Intel Inc.',
-  'NVIDIA Corporation',
-  'ATI Technologies Inc.',
-  'Apple Inc.',
-];
-
-/** WebGL 渲染器模板 */
-interface WebGLRendererTemplate {
-  vendor: string;
-  renderers: string[];
-}
-
-const WEBGL_RENDERERS: WebGLRendererTemplate[] = [
-  {
-    vendor: 'Google Inc. (Intel)',
-    renderers: [
-      'ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-      'ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-      'ANGLE (Intel, Intel(R) Iris Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)',
-      'ANGLE (Intel, Intel(R) HD Graphics 4000 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-      'ANGLE (Intel, Intel(R) HD Graphics 530 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-      'ANGLE (Intel, Intel(R) HD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-      'ANGLE (Intel(R) UHD Graphics 770 Direct3D11 vs_5_0 ps_5_0, D3D11-31.0.101.5592)',
-    ],
-  },
-  {
-    vendor: 'Google Inc. (NVIDIA)',
-    renderers: [
-      'ANGLE (NVIDIA, NVIDIA GeForce GTX 1080 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-      'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-      'ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-      'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-      'ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-      'ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-      'ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Ti Direct3D11 vs_5_0 ps_5_0, D3D11)',
-      'ANGLE (NVIDIA GeForce GTX 1070 Direct3D11 vs_5_0 ps_5_0, D3D11-30.0.15.1277)',
-    ],
-  },
-  {
-    vendor: 'Google Inc. (AMD)',
-    renderers: [
-      'ANGLE (AMD, AMD Radeon RX 580 Series Direct3D11 vs_5_0 ps_5_0, D3D11)',
-      'ANGLE (AMD, AMD Radeon RX 5700 XT Direct3D11 vs_5_0 ps_5_0, D3D11)',
-      'ANGLE (AMD, AMD Radeon RX 6800 XT Direct3D11 vs_5_0 ps_5_0, D3D11)',
-      'ANGLE (AMD, AMD Radeon RX 7900 XTX Direct3D11 vs_5_0 ps_5_0, D3D11)',
-      'ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)',
-      'ANGLE (AMD Radeon RX 570 Series Direct3D11 vs_5_0 ps_5_0, D3D11-31.0.14057.5006)',
-    ],
-  },
-  {
-    vendor: 'Google Inc. (Apple)',
-    renderers: [
-      'ANGLE (Apple, Apple M1, OpenGL 4.1)',
-      'ANGLE (Apple, Apple M1 Pro, OpenGL 4.1)',
-      'ANGLE (Apple, Apple M1 Max, OpenGL 4.1)',
-      'ANGLE (Apple, Apple M2, OpenGL 4.1)',
-      'ANGLE (Apple, Apple M2 Pro, OpenGL 4.1)',
-      'ANGLE (Apple, Apple M3, OpenGL 4.1)',
-      'ANGLE (Apple, Apple M3 Pro, OpenGL 4.1)',
-    ],
-  },
-  {
-    vendor: 'Intel Inc.',
-    renderers: [
-      'Intel Iris OpenGL Engine',
-      'Intel Iris Pro OpenGL Engine',
-      'Intel Iris Plus Graphics OpenGL Engine',
-      'Intel HD Graphics 4000 OpenGL Engine',
-      'Intel UHD Graphics 630 OpenGL Engine',
-    ],
-  },
-  {
-    vendor: 'NVIDIA Corporation',
-    renderers: [
-      'NVIDIA GeForce GTX 1080/PCIe/SSE2',
-      'NVIDIA GeForce RTX 3060/PCIe/SSE2',
-      'NVIDIA GeForce RTX 3070/PCIe/SSE2',
-      'NVIDIA GeForce RTX 4070/PCIe/SSE2',
-    ],
-  },
-  {
-    vendor: 'ATI Technologies Inc.',
-    renderers: [
-      'AMD Radeon Pro 5500M OpenGL Engine',
-      'AMD Radeon Pro 580 OpenGL Engine',
-      'AMD Radeon RX 580 OpenGL Engine',
-    ],
-  },
-  {
-    vendor: 'Apple Inc.',
-    renderers: ['Apple M1', 'Apple M1 Pro', 'Apple M2', 'Apple M3'],
-  },
-];
-
 // ==================== 设备数据 ====================
 
 /** 设备名称前缀 */
 const DEVICE_NAME_PREFIXES = ['DESKTOP', 'LAPTOP', 'PC', 'WORKSTATION', 'WIN'];
-
-/** 常见 CPU 核心数（与 UI 保持一致）*/
-const HARDWARE_CONCURRENCY_OPTIONS = [4, 6, 8, 12, 16];
-
-/** 常见内存大小 (GB)（与 UI 保持一致）*/
-const DEVICE_MEMORY_OPTIONS = [4, 8];
 
 /** 常见屏幕分辨率 */
 const SCREEN_RESOLUTIONS = [
@@ -156,12 +48,6 @@ const SCREEN_RESOLUTIONS = [
   { width: 3440, height: 1440 },
   { width: 3840, height: 2160 },
 ];
-
-/** 像素密度选项（与 UI 保持一致）*/
-const DEVICE_PIXEL_RATIO_OPTIONS = [1, 1.25, 1.5, 2];
-
-/** 颜色深度选项 */
-
 
 // ==================== 生成函数 ====================
 
@@ -235,35 +121,8 @@ function generateFingerprintMode(): FingerprintMode {
   return randomChoice<FingerprintMode>(['random', 'system']);
 }
 
-/**
- * 颜色深度。Windows 上的 Chrome 恒报 24（HDR 屏才可能是 30），32 在真机上不存在，随机出来反而是特征。
- */
-export function generateRandomColorDepth(): 24 | 32 {
-  return 24;
-}
-
-/** 生成随机像素比 */
-export function generateRandomDevicePixelRatio(): number {
-  return randomChoice(DEVICE_PIXEL_RATIO_OPTIONS);
-}
-
-/**
- * 最大触摸点。
- * 桌面 Windows 环境固定为 0：UA/UA-CH 声明为桌面、媒体查询是 pointer: fine，
- * 随机出 5/10 会得到"带触摸屏的桌面"这种少见组合，反而更容易被识别。
- */
 export function generateRandomMaxTouchPoints(): number {
   return 0;
-}
-
-/** 生成随机硬件并发数 */
-export function generateRandomHardwareConcurrency(): number {
-  return randomChoice(HARDWARE_CONCURRENCY_OPTIONS);
-}
-
-/** 生成随机设备内存 */
-export function generateRandomDeviceMemory(): number {
-  return randomChoice(DEVICE_MEMORY_OPTIONS);
 }
 
 /**
@@ -274,7 +133,7 @@ export function generateRandomFingerprintSettings(
 ): AdvancedFingerprintSettings {
   return {
     resolution: hardware.resolution,
-    colorDepth: generateRandomColorDepth(),
+    colorDepth: 24,
     devicePixelRatio: hardware.devicePixelRatio,
     maxTouchPoints: generateRandomMaxTouchPoints(),
     fontFingerprint: generateFingerprintMode(),
@@ -497,11 +356,13 @@ export function getSystemScreenResolution(): { width: number; height: number } {
 export function generateAllFingerprintSettings(): {
   fingerprintSettings: AdvancedFingerprintSettings;
   deviceSettings: Partial<DeviceSettings>;
+  platformVersion: string;
 } {
   // 两部分共用同一套设备画像，GPU / 核心数 / 内存 / 屏幕才会互相匹配
   const profile = generateDeviceProfile();
   return {
     fingerprintSettings: generateRandomFingerprintSettings(profile),
     deviceSettings: generateRandomDeviceSettings(profile),
+    platformVersion: profile.platformVersion,
   };
 }

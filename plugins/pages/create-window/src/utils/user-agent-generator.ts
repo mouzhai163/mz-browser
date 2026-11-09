@@ -2,11 +2,8 @@
  * User Agent 生成器
  * 基于真实浏览器版本数据动态生成标准的 User Agent 字符串
  *
- * 版本策略说明（AdsPower 方案）：
- * - 支持多个 Chromium 内核版本（120-144+）
- * - User-Agent 策略：保持主版本号与内核一致，只随机化次版本号（build.patch）
- * - 原因：避免版本伪装的复杂性，同时提供一定的指纹隔离
- * - 优势：不需要隐藏新版本 API，不会被检测到特性不匹配
+ * 版本策略：Chromium 系的 UA 主版本号与内核一致，其余三段固定为 0（UA 精简策略），
+ * 完整版本只出现在 Client Hints 里。启动时后端还会按实际内核再校正一次。
  */
 
 // ==================== 工具函数 ====================
@@ -22,192 +19,6 @@ function randomChoice<T>(arr: T[]): T {
 }
 
 // ==================== 版本号生成规则 ====================
-
-/**
- * Chrome 版本号生成规则
- * 根据主版本号返回对应的真实官方版本号
- */
-function generateChromeVersion(major: number): { major: number; build: number; patch: number } {
-  // 使用真实的 Chrome 官方发布版本号，而不是随机生成
-  // 这样可以避免被 browserscan 检测到版本号不在官方列表中
-  const officialVersions: Record<number, Array<{ build: number; patch: number }>> = {
-    120: [
-      { build: 6099, patch: 109 },
-      { build: 6099, patch: 130 },
-      { build: 6099, patch: 200 },
-    ],
-    121: [
-      { build: 6167, patch: 85 },
-      { build: 6167, patch: 139 },
-      { build: 6167, patch: 184 },
-    ],
-    122: [
-      { build: 6261, patch: 57 },
-      { build: 6261, patch: 94 },
-      { build: 6261, patch: 112 },
-    ],
-    123: [
-      { build: 6312, patch: 58 },
-      { build: 6312, patch: 105 },
-      { build: 6312, patch: 122 },
-    ],
-    124: [
-      { build: 6367, patch: 60 },
-      { build: 6367, patch: 78 },
-      { build: 6367, patch: 91 },
-      { build: 6367, patch: 118 },
-    ],
-    125: [
-      { build: 6422, patch: 60 },
-      { build: 6422, patch: 76 },
-      { build: 6422, patch: 112 },
-    ],
-    126: [
-      { build: 6478, patch: 55 },
-      { build: 6478, patch: 114 },
-      { build: 6478, patch: 126 },
-    ],
-    127: [
-      { build: 6533, patch: 57 },
-      { build: 6533, patch: 88 },
-      { build: 6533, patch: 99 },
-    ],
-    128: [
-      { build: 6613, patch: 84 },
-      { build: 6613, patch: 119 },
-      { build: 6613, patch: 138 },
-    ],
-    129: [
-      { build: 6668, patch: 58 },
-      { build: 6668, patch: 89 },
-      { build: 6668, patch: 100 },
-    ],
-    130: [
-      { build: 6723, patch: 58 },
-      { build: 6723, patch: 91 },
-      { build: 6723, patch: 116 },
-    ],
-    131: [
-      { build: 6778, patch: 69 },
-      { build: 6778, patch: 108 },
-      { build: 6778, patch: 139 },
-    ],
-    132: [
-      { build: 6834, patch: 83 },
-      { build: 6834, patch: 110 },
-      { build: 6834, patch: 159 },
-    ],
-    133: [
-      { build: 6890, patch: 56 },
-      { build: 6890, patch: 68 },
-      { build: 6890, patch: 99 },
-    ],
-    134: [
-      { build: 6945, patch: 60 },
-      { build: 6945, patch: 90 },
-      { build: 6945, patch: 110 },
-    ],
-    135: [
-      { build: 7000, patch: 58 },
-      { build: 7000, patch: 88 },
-      { build: 7000, patch: 107 },
-    ],
-    136: [
-      { build: 7055, patch: 55 },
-      { build: 7055, patch: 100 },
-      { build: 7055, patch: 141 },
-    ],
-    137: [
-      { build: 7110, patch: 54 },
-      { build: 7110, patch: 89 },
-      { build: 7110, patch: 113 },
-    ],
-    138: [
-      { build: 7165, patch: 63 },
-      { build: 7165, patch: 98 },
-      { build: 7165, patch: 134 },
-    ],
-    139: [
-      { build: 7220, patch: 56 },
-      { build: 7220, patch: 93 },
-      { build: 7220, patch: 127 },
-    ],
-    140: [
-      { build: 7275, patch: 63 },
-      { build: 7275, patch: 98 },
-      { build: 7275, patch: 115 },
-    ],
-    141: [
-      { build: 7330, patch: 58 },
-      { build: 7330, patch: 91 },
-      { build: 7330, patch: 116 },
-    ],
-    142: [
-      { build: 7385, patch: 62 },
-      { build: 7385, patch: 106 },
-      { build: 7385, patch: 134 },
-    ],
-    143: [
-      { build: 6351, patch: 62 },
-      { build: 6351, patch: 93 },
-      { build: 6351, patch: 112 },
-    ],
-    144: [
-      { build: 6367, patch: 60 },
-      { build: 6367, patch: 78 },
-      { build: 6367, patch: 91 },
-      { build: 6367, patch: 118 },
-      { build: 6367, patch: 155 },
-      { build: 6367, patch: 201 },
-    ],
-    145: [
-      { build: 6422, patch: 56 },
-      { build: 6422, patch: 92 },
-      { build: 6422, patch: 133 },
-    ],
-  };
-
-  const versions = officialVersions[major];
-  if (versions && versions.length > 0) {
-    // 随机选择一个官方版本
-    const version = versions[Math.floor(Math.random() * versions.length)];
-    return { major, build: version.build, patch: version.patch };
-  }
-
-  // 降级：如果没有找到对应的版本，使用默认值
-  return { major, build: 6367, patch: 78 };
-}
-
-/**
- * Edge 版本号生成规则
- * Edge 版本号与 Chrome 主版本号一致，但 build 号不同
- */
-function generateEdgeVersion(chromeMajor: number): { major: number; build: number; patch: number } {
-  // Edge build 号规律：约为 Chrome major * 21 + 2000
-  const baseBuild = chromeMajor * 21 + 2000;
-  const build = baseBuild + randomInt(0, 50);
-  const patch = randomInt(40, 130);
-
-  return { major: chromeMajor, build, patch };
-}
-
-/**
- * Opera 版本号生成规则
- * Opera 主版本号 = Chrome 主版本号 - 14（大致规律）
- */
-function generateOperaVersion(chromeMajor: number): {
-  major: number;
-  chromeMajor: number;
-  build: number;
-  patch: number;
-} {
-  const operaMajor = chromeMajor - 14;
-  const baseBuild = 5000 + (chromeMajor - 120) * 100;
-  const build = baseBuild + randomInt(0, 100);
-  const patch = randomInt(60, 90);
-
-  return { major: operaMajor, chromeMajor, build, patch };
-}
 
 /**
  * Firefox 真实版本数据 (2024-2025)
@@ -364,15 +175,20 @@ const CHROME_PLATFORM_TOKENS: Record<string, string> = {
   Linux: 'X11; Linux x86_64',
 };
 
+/** 从内核版本号（如 "159.0.8147.2"）取主版本，取不到时用兜底值 */
+function chromeMajorOf(versionString?: string): number {
+  const parsed = versionString ? parseInt(versionString.split('.')[0], 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CHROME_MAJOR;
+}
+
 /**
  * 生成 Chrome User-Agent：版本号写成 `主版本.0.0.0`，完整版本只在 Client Hints 里出现。
  * @param system 操作系统
- * @param versionString 内核版本号（如 "159.0.8147.2"），只取主版本
+ * @param versionString 内核版本号，只取主版本
  */
 function generateChromeUA(system: string, versionString?: string): string {
-  const parsed = versionString ? parseInt(versionString.split('.')[0], 10) : NaN;
-  const major = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CHROME_MAJOR;
   const platform = CHROME_PLATFORM_TOKENS[system] ?? CHROME_PLATFORM_TOKENS.Windows;
+  const major = chromeMajorOf(versionString);
   return `Mozilla/5.0 (${platform}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`;
 }
 
@@ -384,25 +200,10 @@ function generateFirefoxUA(system: string): string {
   return `Mozilla/5.0 (${os}; rv:${versionStr}) Gecko/20100101 Firefox/${versionStr}`;
 }
 
-/**
- * 生成 Edge User-Agent
- * @param system 操作系统
- * @param chromeVersionString 可选的 Chrome 完整版本号字符串
- */
+/** 生成 Edge User-Agent：Edge 和 Chrome 主版本相同，同样做了 UA 精简 */
 function generateEdgeUA(system: string, chromeVersionString?: string): string {
-  const os = getOSString(system);
-
-  // 直接使用传入的完整 Chrome 版本号
-  const chromeStr = chromeVersionString || '144.0.7559.118';
-
-  // 从 Chrome 版本中提取主版本号用于生成 Edge 版本号
-  const match = chromeStr.match(/^(\d+)\./);
-  const chromeMajor = match ? parseInt(match[1], 10) : 144;
-
-  const edgeVersion = generateEdgeVersion(chromeMajor);
-  const edgeStr = `${edgeVersion.major}.0.${edgeVersion.build}.${edgeVersion.patch}`;
-
-  return `Mozilla/5.0 (${os}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeStr} Safari/537.36 Edg/${edgeStr}`;
+  const major = chromeMajorOf(chromeVersionString);
+  return `${generateChromeUA(system, chromeVersionString)} Edg/${major}.0.0.0`;
 }
 
 /** 生成 Safari User-Agent (仅 macOS) */
@@ -417,25 +218,10 @@ function generateSafariUA(): string {
   return `Mozilla/5.0 (${osStr}) AppleWebKit/${version.webkit} (KHTML, like Gecko) Version/${versionStr} Safari/${version.webkit}`;
 }
 
-/**
- * 生成 Opera User-Agent
- * @param system 操作系统
- * @param chromeVersionString 可选的 Chrome 完整版本号字符串
- */
+/** 生成 Opera User-Agent：Opera 主版本 = Chrome 主版本 - 14（大致规律） */
 function generateOperaUA(system: string, chromeVersionString?: string): string {
-  const os = getOSString(system);
-
-  // 直接使用传入的完整 Chrome 版本号
-  const chromeStr = chromeVersionString || '144.0.7559.118';
-
-  // 从 Chrome 版本中提取主版本号用于生成 Opera 版本号
-  const match = chromeStr.match(/^(\d+)\./);
-  const chromeMajor = match ? parseInt(match[1], 10) : 144;
-
-  const operaVersion = generateOperaVersion(chromeMajor);
-  const operaStr = `${operaVersion.major}.0.${operaVersion.build}.${operaVersion.patch}`;
-
-  return `Mozilla/5.0 (${os}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeStr} Safari/537.36 OPR/${operaStr}`;
+  const major = chromeMajorOf(chromeVersionString) - 14;
+  return `${generateChromeUA(system, chromeVersionString)} OPR/${major}.0.0.0`;
 }
 
 /**
@@ -455,20 +241,9 @@ function generateBraveUA(system: string, versionString?: string): string {
  * @param chromeVersionString 可选的 Chrome 完整版本号字符串
  */
 function generateVivaldiUA(system: string, chromeVersionString?: string): string {
-  const os = getOSString(system);
-
-  // 直接使用传入的完整 Chrome 版本号
-  const chromeStr = chromeVersionString || '144.0.7559.118';
-
   // Vivaldi 版本范围 6.x - 7.x
-  const vivaldiMajor = randomInt(6, 7);
-  const vivaldiMinor = randomInt(0, 5);
-  const vivaldiBuild = randomInt(3000, 3500);
-  const vivaldiPatch = randomInt(0, 100);
-  const vivaldiStr = `${vivaldiMajor}.${vivaldiMinor}.${vivaldiBuild}.${vivaldiPatch}`;
-
-  // Vivaldi 也使用固定的 AppleWebKit/537.36 和 Safari/537.36
-  return `Mozilla/5.0 (${os}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeStr} Safari/537.36 Vivaldi/${vivaldiStr}`;
+  const vivaldiStr = [randomInt(6, 7), randomInt(0, 5), randomInt(3000, 3500), randomInt(0, 100)].join('.');
+  return `${generateChromeUA(system, chromeVersionString)} Vivaldi/${vivaldiStr}`;
 }
 
 // ==================== 导出 API ====================

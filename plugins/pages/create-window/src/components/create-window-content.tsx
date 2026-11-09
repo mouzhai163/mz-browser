@@ -218,11 +218,12 @@ export function CreateWindowContent({
 
   // 一键随机指纹
   const handleRandomizeFingerprint = useCallback(() => {
-    const { fingerprintSettings, deviceSettings } = generateAllFingerprintSettings();
-    // 同时更新 User Agent
+    const { fingerprintSettings, deviceSettings, platformVersion } = generateAllFingerprintSettings();
+    // 同时更新 User Agent。kernel 是 "Chrome 159" 这样的资源名，主版本号从里面取
     const newUserAgent = generateUserAgentByKernel(
       windowConfig.windowInfo.system,
-      windowConfig.windowInfo.kernel
+      windowConfig.windowInfo.kernel,
+      windowConfig.windowInfo.kernel.match(/\d+/)?.[0]
     );
     // 一次性更新所有配置
     handleFullConfigUpdate({
@@ -235,6 +236,7 @@ export function CreateWindowContent({
       windowInfo: {
         ...windowConfig.windowInfo,
         userAgent: newUserAgent,
+        platformVersion,
       },
     });
   }, [windowConfig, handleFullConfigUpdate]);

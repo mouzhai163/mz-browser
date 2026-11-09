@@ -8,7 +8,7 @@ export type MatchMode = 'ip' | 'custom';
 
 export type GeolocationPrompt = 'ask' | 'allow' | 'forbid';
 
-// 'replace'（替换为代理出口 IP）内核未实现，已移除；旧配置里的 'replace' 一律按 'disable' 处理。
+// 'replace'：RTCPeerConnection 照常工作，只放行经代理的候选，不暴露真实 IP。
 export type WebRTCMode = 'real' | 'replace' | 'disable';
 
 export type FingerprintMode = 'random' | 'real' | 'custom' | 'system';
@@ -88,7 +88,7 @@ export interface BasicSettings {
  */
 export interface AdvancedFingerprintSettings {
   resolution: Resolution;
-  colorDepth: 24 | 32; // 屏幕深度
+  colorDepth: 24; // 屏幕深度：Windows 上的 Chrome 恒报 24
   devicePixelRatio: number; // 像素比
   maxTouchPoints: number; // 最大触摸点数
   fontFingerprint: FingerprintMode;

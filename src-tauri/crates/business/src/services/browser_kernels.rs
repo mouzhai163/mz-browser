@@ -269,14 +269,76 @@ async fn import_catalog(pool: &DbPool, catalog: &BrowserKernelCatalog) -> Result
     }
 
     retire_unlisted_kernels(&mut tx, catalog).await?;
+    rebind_superseded_kernels(&mut tx).await?;
 
     tx.commit().await.map_err(|error| error.to_string())?;
     Ok(catalog.kernels.len())
 }
 
+/// A retired kernel that shares its install directory with an active one has been superseded by a
+/// rebuild (for example the mz1 and mz2 packages of Chrome 156). Only one of them can occupy that
+/// directory, so environments and templates still pointing at the old build move to the new one.
+/// Retired kernels without a successor keep their bindings.
+async fn rebind_superseded_kernels(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+) -> Result<(), String> {
+    let superseded: Vec<(String, String)> = sqlx::query_as(
+        r#"
+        SELECT old.kernel_id, (
+            SELECT new.kernel_id FROM browser_kernel_artifacts new
+            WHERE new.status = 'active'
+              AND new.type_code = old.type_code
+              AND new.platform = old.platform
+              AND new.arch = old.arch
+              AND COALESCE(new.install_dir_name, new.resource_name)
+                  = COALESCE(old.install_dir_name, old.resource_name)
+            ORDER BY new.is_latest DESC, new.version DESC
+            LIMIT 1
+        ) AS successor
+        FROM browser_kernel_artifacts old
+        WHERE old.status = 'retired' AND successor IS NOT NULL
+        "#,
+    )
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(|error| error.to_string())?;
+
+    for (old_id, new_id) in superseded {
+        sqlx::query(
+            "UPDATE environment_kernel_bindings SET kernel_id = $1, updated_at = CURRENT_TIMESTAMP \
+             WHERE kernel_id = $2",
+        )
+        .bind(&new_id)
+        .bind(&old_id)
+        .execute(&mut **tx)
+        .await
+        .map_err(|error| error.to_string())?;
+        sqlx::query(
+            "UPDATE environment_configs SET window_info = json_set(window_info, '$.kernel_id', $1) \
+             WHERE json_valid(window_info) AND json_extract(window_info, '$.kernel_id') = $2",
+        )
+        .bind(&new_id)
+        .bind(&old_id)
+        .execute(&mut **tx)
+        .await
+        .map_err(|error| error.to_string())?;
+        sqlx::query(
+            "UPDATE templates SET config_json = json_set(config_json, '$.config.window_info.kernel_id', $1) \
+             WHERE json_valid(config_json) AND json_extract(config_json, '$.config.window_info.kernel_id') = $2",
+        )
+        .bind(&new_id)
+        .bind(&old_id)
+        .execute(&mut **tx)
+        .await
+        .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
 /// A kernel that this source used to list but no longer does (for example Chrome 144 after the
-/// bundled catalog moved to 156) stops being offered. Its row, install record and environment
-/// bindings stay, so environments already bound to it keep launching.
+/// bundled catalog moved to 156) stops being offered. Its row, install record and source URLs
+/// stay, so environments still bound to it keep launching; see `rebind_superseded_kernels` for
+/// the case where a rebuild replaces it.
 async fn retire_unlisted_kernels(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     catalog: &BrowserKernelCatalog,
@@ -321,9 +383,9 @@ async fn retire_unlisted_kernels(
     Ok(())
 }
 
-/// Import the bundled manifest into the runtime registry. Import is additive:
-/// the content-derived kernel identity and existing environment bindings are
-/// never replaced when a manifest record changes.
+/// Import the bundled manifest into the runtime registry. The content-derived
+/// kernel identity is never replaced when a manifest record changes; environment
+/// bindings only move when a rebuild takes over the same install directory.
 pub async fn import_default_catalog(pool: &DbPool) -> Result<usize, String> {
     import_catalog(pool, default_catalog()?).await
 }
@@ -357,8 +419,8 @@ const KERNEL_SELECT: &str = r#"
         (
             SELECT source.url
             FROM browser_kernel_sources source
-            WHERE source.kernel_id = a.kernel_id AND source.is_active = 1
-            ORDER BY source.priority ASC, source.id ASC
+            WHERE source.kernel_id = a.kernel_id AND (source.is_active = 1 OR a.status = 'retired')
+            ORDER BY source.is_active DESC, source.priority ASC, source.id ASC
             LIMIT 1
         ) AS url,
         a.package_hash AS hash,
@@ -640,7 +702,7 @@ mod tests {
         assert_eq!(kernels[0].resource_name, "Chrome 156");
         assert_eq!(kernels[0].install_dir_name, "Chrome 156");
         assert_eq!(kernels[0].kernel_id.len(), 64);
-        assert!(kernels[0].compatible_signatures.is_empty());
+        assert_eq!(kernels[0].compatible_signatures.len(), 1);
         assert!(kernels[0]
             .url
             .as_deref()
@@ -673,11 +735,77 @@ mod tests {
         );
         let still_there = get_browser_kernel(&pool, &old_id).await.unwrap().unwrap();
         assert_eq!(still_there.status, "retired");
+        assert!(
+            still_there.url.is_some(),
+            "a retired kernel can still be downloaded by the environments bound to it"
+        );
 
         // listed again later: offered again
         import_catalog(&pool, &old).await.unwrap();
         let again = get_browser_kernel(&pool, &old_id).await.unwrap().unwrap();
         assert_eq!(again.status, "active");
+    }
+
+    #[tokio::test]
+    async fn a_rebuild_takes_over_the_environments_of_the_build_it_replaces() {
+        let mut config = DatabaseConfig::embedded("sqlite::memory:");
+        config.max_connections = 1;
+        config.min_connections = 1;
+        let context = crate::svc_ctx::SvcCtx::new(&config).await.unwrap();
+
+        // 上一版的 Chrome 156：同一个安装目录，不同的包
+        let mut previous = parse_default_catalog().unwrap();
+        previous.kernels[0].hash = "1".repeat(64);
+        import_catalog(&context.db, &previous).await.unwrap();
+        let old_id = kernel_id(&previous.kernels[0]).unwrap();
+        // 目录里已经没有的版本（没有接替者）
+        let mut dropped = parse_default_catalog().unwrap();
+        dropped.kernels[0].hash = "2".repeat(64);
+        dropped.kernels[0].resource_name = "Chrome 144".to_string();
+        dropped.kernels[0].install_dir_name = Some("Chrome 144".to_string());
+        import_catalog(&context.db, &dropped).await.unwrap();
+        let dropped_id = kernel_id(&dropped.kernels[0]).unwrap();
+
+        let mut bound = Vec::new();
+        for id in [&old_id, &dropped_id] {
+            let environment = crate::models::environments::insert_environment(
+                &context.db, "Env", None, None, None, Some("Windows"), None,
+            )
+            .await
+            .unwrap();
+            crate::models::environments::upsert_environment_config(
+                &context.db,
+                environment,
+                &serde_json::json!({ "kernel_id": id }),
+                &serde_json::json!({}),
+                &serde_json::json!({}),
+                &serde_json::json!({}),
+                &serde_json::json!({}),
+                &serde_json::json!({}),
+            )
+            .await
+            .unwrap();
+            bind_environment_kernel(&context.db, environment, id).await.unwrap();
+            bound.push(environment);
+        }
+
+        import_default_catalog(&context.db).await.unwrap();
+
+        let current = parse_default_catalog().unwrap();
+        let new_id = kernel_id(&current.kernels[0]).unwrap();
+        let moved = get_environment_kernel(&context.db, bound[0]).await.unwrap().unwrap();
+        assert_eq!(moved.kernel_id, new_id);
+        assert!(moved.url.as_deref().unwrap().contains("-mz2/"));
+        let stored = crate::models::environments::fetch_environment_config(&context.db, bound[0])
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.window_info["kernel_id"].as_str(), Some(new_id.as_str()));
+
+        let kept = get_environment_kernel(&context.db, bound[1]).await.unwrap().unwrap();
+        assert_eq!(kept.kernel_id, dropped_id);
+        assert_eq!(kept.status, "retired");
+        assert!(kept.url.is_some());
     }
 
     #[tokio::test]

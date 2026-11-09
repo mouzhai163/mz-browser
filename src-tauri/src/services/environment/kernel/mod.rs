@@ -116,6 +116,7 @@ impl KernelService {
                     &base,
                     &kernel_dir,
                     &kernel_detail,
+                    downloader::REQUIRED_DOWNLOAD_ATTEMPTS,
                     status_emitter,
                 )
                 .await?;
@@ -145,14 +146,28 @@ impl KernelService {
                     }
                 }
 
-                match verifier::verify_kernel(
-                    &app,
-                    &env_uuid,
-                    &install_dir_name,
-                    &kernel_dir,
-                    &accepted_signatures,
-                    status_emitter.clone(),
-                ) {
+                // 哈希 300 多 MB 的 DLL 是阻塞操作，不能占着异步线程
+                let verification = {
+                    let env_uuid = env_uuid.clone();
+                    let install_dir_name = install_dir_name.clone();
+                    let kernel_dir = kernel_dir.clone();
+                    let status_emitter = status_emitter.clone();
+                    tokio::task::spawn_blocking(move || {
+                        verifier::verify_kernel(
+                            &env_uuid,
+                            &install_dir_name,
+                            &kernel_dir,
+                            &accepted_signatures,
+                            status_emitter,
+                        )
+                    })
+                    .await
+                    .map_err(|error| format!("内核校验任务异常: {error}"))?
+                };
+
+                // 已安装的是目录里记录过的历史版本：能升级就升级，升级不了也不影响启动
+                let mut usable_older_version = false;
+                match verification {
                     Ok(Some(verified_signature))
                         if is_current_kernel_signature(&verified_signature, primary_signature) =>
                     {
@@ -179,6 +194,7 @@ impl KernelService {
                             kernel_dir.display(),
                             verified_signature
                         );
+                        usable_older_version = true;
                     }
                     Ok(None) => {
                         crate::log_warn!(
@@ -197,24 +213,69 @@ impl KernelService {
                     }
                 }
 
-                let exe_path = download_and_replace_kernel(
+                if usable_older_version && state::upgrade_recently_failed(&kernel_id) {
+                    utils::emit_status(
+                        status_emitter.as_ref(),
+                        &env_uuid,
+                        &install_dir_name,
+                        EnvironmentStatus::Ready,
+                        Some("就绪"),
+                        None,
+                        None,
+                        None,
+                    );
+                    return Ok(exe_path.to_string_lossy().to_string());
+                }
+
+                let attempts = if usable_older_version {
+                    downloader::UPGRADE_DOWNLOAD_ATTEMPTS
+                } else {
+                    downloader::REQUIRED_DOWNLOAD_ATTEMPTS
+                };
+                match download_and_replace_kernel(
                     &app,
                     &env_uuid,
                     &install_dir_name,
                     &base,
                     &kernel_dir,
                     &kernel_detail,
-                    status_emitter,
+                    attempts,
+                    status_emitter.clone(),
                 )
-                .await?;
-                record_ready_installation(
-                    &app,
-                    &kernel_id,
-                    &exe_path,
-                    kernel_detail.signature.as_deref().unwrap_or_default(),
-                )
-                .await;
-                return Ok(exe_path.to_string_lossy().to_string());
+                .await
+                {
+                    Ok(exe_path) => {
+                        record_ready_installation(
+                            &app,
+                            &kernel_id,
+                            &exe_path,
+                            kernel_detail.signature.as_deref().unwrap_or_default(),
+                        )
+                        .await;
+                        return Ok(exe_path.to_string_lossy().to_string());
+                    }
+                    Err(error) if usable_older_version => {
+                        crate::log_warn!(
+                            crate::core::logger::modules::KERNEL,
+                            "新内核下载失败，本次继续使用已安装的版本: {} - {}",
+                            kernel_dir.display(),
+                            error
+                        );
+                        state::remember_upgrade_failure(&kernel_id);
+                        utils::emit_status(
+                            status_emitter.as_ref(),
+                            &env_uuid,
+                            &install_dir_name,
+                            EnvironmentStatus::Ready,
+                            Some("新内核下载失败，继续使用已安装版本"),
+                            None,
+                            None,
+                            None,
+                        );
+                        return Ok(exe_path.to_string_lossy().to_string());
+                    }
+                    Err(error) => return Err(error),
+                }
             }
         }
 
@@ -226,6 +287,7 @@ impl KernelService {
             &base,
             &kernel_dir,
             &kernel_detail,
+            downloader::REQUIRED_DOWNLOAD_ATTEMPTS,
             status_emitter,
         )
         .await?;
@@ -340,6 +402,7 @@ async fn download_and_replace_kernel(
     base: &Path,
     kernel_dir: &Path,
     kernel_detail: &KernelDetail,
+    download_attempts: u32,
     status_emitter: Option<KernelStatusEmitter>,
 ) -> Result<PathBuf> {
     let staging_name = format!(".{install_dir_name}.staging-{}", Uuid::new_v4());
@@ -350,6 +413,7 @@ async fn download_and_replace_kernel(
         install_dir_name,
         &staging_dir,
         kernel_detail,
+        download_attempts,
         status_emitter,
     )
     .await

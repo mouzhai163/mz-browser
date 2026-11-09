@@ -19,7 +19,9 @@ pub(super) fn build_fingerprint_config(config: Option<&Value>) -> FingerprintCon
         geolocation_prompt: get_string(&basic_settings, "geolocationPrompt"),
         geolocation: get_json_string(&basic_settings, "geolocation"),
         platform: get_string_from_map(&window_info, "system"),
-        platform_version: get_string_from_map(&window_info, "platformVersion"),
+        // 环境里存的都是 Windows 的版本号；macOS / Linux 环境发出去会和 platform 矛盾
+        platform_version: get_string_from_map(&window_info, "platformVersion")
+            .filter(|_| window_info.get("system").and_then(Value::as_str) == Some("Windows")),
         user_agent: get_string_from_map(&window_info, "userAgent"),
         sound: get_bool(&basic_settings, "sound"),
         images: get_bool(&basic_settings, "images"),
@@ -31,8 +33,7 @@ pub(super) fn build_fingerprint_config(config: Option<&Value>) -> FingerprintCon
         window_x: get_i32(&basic_settings, "windowX"),
         window_y: get_i32(&basic_settings, "windowY"),
         resolution: get_value(&fingerprint_settings, "resolution"),
-        // Windows 上的 Chrome 恒报 24；旧环境里随机出来的 32 在真机上不存在，启动时一律按 24 发给内核
-        color_depth: get_i32(&fingerprint_settings, "colorDepth").map(|depth| if depth == 32 { 24 } else { depth }),
+        color_depth: get_i32(&fingerprint_settings, "colorDepth"),
         device_pixel_ratio: get_f64(&fingerprint_settings, "devicePixelRatio"),
         max_touch_points: get_i32(&fingerprint_settings, "maxTouchPoints"),
         canvas: get_string(&fingerprint_settings, "canvas"),
@@ -145,7 +146,20 @@ pub(super) fn with_device_id(renderer: &str) -> String {
 
 #[cfg(test)]
 mod device_id_tests {
-    use super::{normalize_gpu_name, with_device_id, GPU_DEVICE_IDS};
+    use super::{build_fingerprint_config, normalize_gpu_name, with_device_id, GPU_DEVICE_IDS};
+
+    #[test]
+    fn platform_version_is_only_sent_for_windows() {
+        let config_for = |system: &str| {
+            serde_json::json!({ "window_info": { "system": system, "platformVersion": "19.0.0" } })
+        };
+        assert_eq!(
+            build_fingerprint_config(Some(&config_for("Windows"))).platform_version.as_deref(),
+            Some("19.0.0")
+        );
+        assert_eq!(build_fingerprint_config(Some(&config_for("macOS"))).platform_version, None);
+        assert_eq!(build_fingerprint_config(Some(&config_for("Linux"))).platform_version, None);
+    }
 
     #[test]
     fn table_is_sorted_for_binary_search() {

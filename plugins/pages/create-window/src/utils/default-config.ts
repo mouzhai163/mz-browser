@@ -1,7 +1,6 @@
 import type { WindowConfig } from '../types';
 import { generateUserAgentByKernel } from './user-agent-generator';
 import {
-  generateRandomColorDepth,
   generateRandomMaxTouchPoints,
   generateDeviceName,
   generateMacAddress,
@@ -55,7 +54,7 @@ export function getDefaultWindowConfig(): WindowConfig {
     },
     advancedFingerprintSettings: {
       resolution: profile.resolution,
-      colorDepth: generateRandomColorDepth(),
+      colorDepth: 24,
       devicePixelRatio: profile.devicePixelRatio,
       maxTouchPoints: generateRandomMaxTouchPoints(),
       fontFingerprint: 'random',

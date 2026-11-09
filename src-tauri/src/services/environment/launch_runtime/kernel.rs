@@ -39,7 +39,23 @@ pub(super) fn align_user_agent_major(user_agent: &str, kernel_major: u32) -> Str
     }
     let token_end = rest.find(' ').unwrap_or(rest.len());
     let aligned = format!("{}{}.0.0.0{}", &user_agent[..digits_start], kernel_major, &rest[token_end..]);
+    // Edge 和 Chrome 主版本相同，Opera 比 Chrome 小 14（和前端生成器的规则一致）；Vivaldi 的版本号是独立的，不动。
+    let aligned = align_brand_version(&aligned, "Edg/", kernel_major);
+    let aligned = align_brand_version(&aligned, "OPR/", kernel_major.saturating_sub(14));
     canonical_platform_token(&aligned)
+}
+
+fn align_brand_version(user_agent: &str, marker: &str, major: u32) -> String {
+    let Some(start) = user_agent.find(marker) else {
+        return user_agent.to_string();
+    };
+    let version_start = start + marker.len();
+    let rest = &user_agent[version_start..];
+    let token_end = rest.find(' ').unwrap_or(rest.len());
+    if !rest[..token_end].starts_with(|c: char| c.is_ascii_digit()) {
+        return user_agent.to_string();
+    }
+    format!("{}{major}.0.0.0{}", &user_agent[..version_start], &rest[token_end..])
 }
 
 fn canonical_platform_token(user_agent: &str) -> String {
@@ -83,6 +99,16 @@ mod ua_tests {
         );
         assert_eq!(align_user_agent_major("custom agent", 159), "custom agent");
         assert_eq!(align_user_agent_major("Chrome/x.0", 159), "Chrome/x.0");
+    }
+
+    #[test]
+    fn edge_and_opera_versions_follow_the_kernel() {
+        let edge = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.8078.94 Safari/537.36 Edg/156.0.5276.77";
+        assert!(align_user_agent_major(edge, 159).ends_with("Chrome/159.0.0.0 Safari/537.36 Edg/159.0.0.0"));
+        let opera = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 OPR/142.0.8000.70";
+        assert!(align_user_agent_major(opera, 159).ends_with("Chrome/159.0.0.0 Safari/537.36 OPR/145.0.0.0"));
+        let vivaldi = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 Vivaldi/7.1.3200.5";
+        assert!(align_user_agent_major(vivaldi, 159).ends_with("Vivaldi/7.1.3200.5"));
     }
 
     #[test]

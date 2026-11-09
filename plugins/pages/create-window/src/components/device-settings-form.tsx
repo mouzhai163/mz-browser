@@ -6,6 +6,7 @@ import { TextareaInput } from '@/components/textarea-input';
 import { RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { DeviceSettings } from '../types';
+import { HARDWARE_CONCURRENCY_CHOICES } from '../utils/device-samples';
 
 // 生成随机设备名称
 function generateRandomDeviceName(): string {
@@ -180,7 +181,7 @@ export function DeviceSettingsForm({ value, onChange }: DeviceSettingsFormProps)
           <Label className="text-xs shrink-0">{t('deviceSettings.hardwareConcurrency')}</Label>
           <NumberSelector
             value={value.hardwareConcurrency}
-            options={[2, 4, 6, 8, 12, 16, 20, 24]}
+            options={HARDWARE_CONCURRENCY_CHOICES}
             onChange={(v) => onChange({ ...value, hardwareConcurrency: v })}
             unit={t('deviceSettings.cores')}
           />

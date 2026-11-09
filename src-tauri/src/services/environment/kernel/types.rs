@@ -125,6 +125,9 @@ pub const EVENT_KERNEL_PREPARE_STATUS: &str = "kernel-prepare-status";
 /// 核心 DLL 签名覆盖的字节数。这里取整个文件：只哈希开头 10 MiB 时，只改了 Blink 等后面部分代码的重编译
 /// 会得到同一个签名，已安装的旧内核会被当成最新版而不重新下载。
 pub const SIGNATURE_HASH_SIZE: u64 = u64::MAX;
+/// 第一版内核目录里的签名只哈希了 chrome.dll 开头 10 MiB。这些值还留在数据库、用户自维护的目录和
+/// compatible_signatures 里，校验时要能认出来，否则这些内核再也装不上。
+pub const LEGACY_SIGNATURE_HASH_SIZE: u64 = 10 * 1024 * 1024;
 pub const TIMEZONE_DETECTION_TIMEOUT_SECS: u64 = 10;
 
 /// 批量启动请求

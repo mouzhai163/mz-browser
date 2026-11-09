@@ -246,6 +246,74 @@ mod tests {
         assert_eq!(foreign_keys, 1, "foreign keys must be switched back on");
     }
 
+    /// 早期环境和模板里的 webrtc=replace、colorDepth=32 要归一化，其它字段和其它取值不动。
+    #[tokio::test]
+    async fn legacy_webrtc_and_color_depth_values_are_normalized() {
+        const VERSION: i64 = 20261109000002;
+        let pool = connect(&memory_config()).await.expect("SQLite should open");
+        let older: Vec<_> = MIGRATOR.iter().filter(|m| m.version < VERSION).cloned().collect();
+        Migrator { migrations: std::borrow::Cow::Owned(older), ..Migrator::DEFAULT }
+            .run(&pool)
+            .await
+            .expect("older migrations should apply");
+
+        let settings = [
+            r#"{"webrtc":"replace","colorDepth":32,"canvas":"random"}"#,
+            r#"{"webrtc":"real","colorDepth":24}"#,
+        ];
+        let mut environments = Vec::new();
+        for value in settings {
+            let environment = uuid::Uuid::new_v4();
+            sqlx::query("INSERT INTO environments (uuid, name) VALUES ($1, 'E')")
+                .bind(environment)
+                .execute(&pool)
+                .await
+                .unwrap();
+            sqlx::query("INSERT INTO environment_configs (environment_uuid, fingerprint_settings) VALUES ($1, $2)")
+                .bind(environment)
+                .bind(value)
+                .execute(&pool)
+                .await
+                .unwrap();
+            environments.push(environment);
+        }
+        sqlx::query("INSERT INTO templates (name, config_json) VALUES ('T', $1)")
+            .bind(format!(r#"{{"config":{{"fingerprint_settings":{}}}}}"#, settings[0]))
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        MIGRATOR.run(&pool).await.expect("the normalization should apply");
+
+        let stored = |environment: uuid::Uuid| {
+            let pool = pool.clone();
+            async move {
+                let raw: String = sqlx::query_scalar(
+                    "SELECT fingerprint_settings FROM environment_configs WHERE environment_uuid = $1",
+                )
+                .bind(environment)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+                serde_json::from_str::<serde_json::Value>(&raw).unwrap()
+            }
+        };
+        let legacy = stored(environments[0]).await;
+        assert_eq!(legacy["webrtc"], "disable");
+        assert_eq!(legacy["colorDepth"], 24);
+        assert_eq!(legacy["canvas"], "random");
+        let current = stored(environments[1]).await;
+        assert_eq!(current["webrtc"], "real");
+
+        let template: String = sqlx::query_scalar("SELECT config_json FROM templates")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let template: serde_json::Value = serde_json::from_str(&template).unwrap();
+        assert_eq!(template["config"]["fingerprint_settings"]["webrtc"], "disable");
+        assert_eq!(template["config"]["fingerprint_settings"]["colorDepth"], 24);
+    }
+
     /// 回归：改名迁移要下架改名前的内核、解除绑定并清掉环境配置里的旧内核 id，新内核不受影响。
     #[tokio::test]
     async fn pre_rename_kernels_are_retired_and_unbound() {

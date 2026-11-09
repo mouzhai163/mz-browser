@@ -5,6 +5,7 @@ import { RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AdvancedFingerprintSettings, DeviceSettings, ResolutionMode } from '../types';
 import { generateScreenResolution, getSystemScreenResolution } from '../utils/fingerprint-generator';
+import { HARDWARE_CONCURRENCY_CHOICES } from '../utils/device-samples';
 
 interface ScreenHardwareFormProps {
   advancedSettings: AdvancedFingerprintSettings;
@@ -156,22 +157,8 @@ export function ScreenHardwareForm({
         </div>
         <div className="space-y-1">
           <Label className="text-xs">{t('advancedFingerprint.colorDepth')}</Label>
-          <div className="flex items-center gap-1">
-            <div className="flex-1 h-8 px-2 flex items-center text-xs font-mono bg-muted rounded overflow-hidden">
-              <span className="truncate">{advancedSettings.colorDepth}bit</span>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0"
-              onClick={() => {
-                const newDepth = advancedSettings.colorDepth === 24 ? 32 : 24;
-                onAdvancedSettingsChange({ ...advancedSettings, colorDepth: newDepth as 24 | 32 });
-              }}
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-            </Button>
+          <div className="h-8 px-2 flex items-center text-xs font-mono bg-muted rounded overflow-hidden">
+            <span className="truncate">{advancedSettings.colorDepth}bit</span>
           </div>
         </div>
       </div>
@@ -217,7 +204,7 @@ export function ScreenHardwareForm({
             <Label className="text-xs shrink-0">{t('deviceSettings.hardwareConcurrency')}</Label>
             <NumberSelector
               value={deviceSettings.hardwareConcurrency}
-              options={[2, 4, 6, 8, 12, 16, 20, 24]}
+              options={HARDWARE_CONCURRENCY_CHOICES}
               onChange={(v) =>
                 onDeviceSettingsChange({ ...deviceSettings, hardwareConcurrency: v })
               }

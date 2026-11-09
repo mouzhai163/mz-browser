@@ -80,7 +80,7 @@ export function transformEnvironmentConfigToWindowConfig(
     },
     advancedFingerprintSettings: {
       resolution,
-      colorDepth: (fingerprintSettings.colorDepth as 24 | 32) || 24,
+      colorDepth: 24,
       devicePixelRatio: (fingerprintSettings.devicePixelRatio as number) || 1.0,
       maxTouchPoints: (fingerprintSettings.maxTouchPoints as number) || 0,
       fontFingerprint:

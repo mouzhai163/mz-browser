@@ -80,6 +80,9 @@ const LAPTOP_DISPLAYS: DisplaySample[] = [
   { width: 1536, height: 960, dpr: 1.25, weight: 4 }, // 1920x1200 屏 125%
 ];
 
+/** 表单里可以手动选择的逻辑核心数 */
+export const HARDWARE_CONCURRENCY_CHOICES = [2, 4, 6, 8, 12, 16, 20, 24];
+
 /** 各档位 × 机型可选的逻辑核心数 */
 const CORES: Record<GpuRenderer['tier'], Record<GpuRenderer['formFactor'], number[]>> = {
   low: { laptop: [4, 8], desktop: [4, 6, 8] },
