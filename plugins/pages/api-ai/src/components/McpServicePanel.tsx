@@ -197,7 +197,6 @@ function McpClientConfigContent({ config }: { config: McpConfigSnapshot }) {
           <div className="flex items-start justify-between gap-3">
             <div>
               <h4 className="text-xs font-semibold text-foreground mb-1">{selectedClient.title}</h4>
-              <p className="text-xs text-muted-foreground">{selectedClient.hint}</p>
             </div>
             <a
               href={selectedClient.docsUrl}

@@ -79,7 +79,7 @@ export const apiConsoleResources = {
       },
       accessTitle: 'MCP 认证与最小授权',
       accessWarning:
-        '默认不授权任何环境，只开放“列出已授权环境”和“查看状态”两个只读工具。页面文本可能包含隐私信息，外部 AI 客户端可将其发送给模型。页面读取不会显示输入框内容和密码，也不会开放脚本执行；“环境管理”档会开放 Cookie 和调试地址，请只在信任客户端时开启。',
+        '默认不授权任何环境。页面内容会被 AI 客户端读到，请只授权需要的环境、只连接信任的客户端。',
       scopeTitle: '功能范围',
       scopeBase: '基础（始终开启）：列出已授权环境、查看运行状态。',
       actPages: '允许操作页面：打开网址、点击、输入文字、按键（不会往密码框输入）',
@@ -215,7 +215,7 @@ export const apiConsoleResources = {
       },
       accessTitle: 'MCP authentication and least privilege',
       accessWarning:
-        'No environments are authorized by default, and only two read-only tools are offered (list authorized environments, read status). Page text may contain private data and external AI clients may send it to a model. Page reading hides field values and passwords and never runs scripts; the management tier exposes cookies and debugging addresses, so enable it only for clients you trust.',
+        'No environment is authorized by default. AI clients can read page content, so authorize only what is needed and connect only trusted clients.',
       scopeTitle: 'Capabilities',
       scopeBase: 'Always on: list authorized environments and read their status.',
       actPages: 'Allow page actions: open URLs, click, type, press keys (never into password fields)',

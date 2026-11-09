@@ -163,9 +163,6 @@ export function LocalExtensionLibrary({
               <SearchX className="h-8 w-8 text-sky-500/70" />
             </div>
             <h4 className="text-sm font-medium text-foreground mb-1">{t('local.empty')}</h4>
-            <p className="text-xs text-muted-foreground max-w-[280px]">
-              {t('local.emptyDescription')}
-            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 p-4">

@@ -47,9 +47,6 @@ const EmptyState: React.FC<{
         <Monitor className="h-8 w-8 text-blue-500/60" />
       </div>
       <h4 className="text-sm font-medium text-foreground mb-1">{content.title}</h4>
-      <p className="text-xs text-muted-foreground text-center max-w-[240px]">
-        {content.description}
-      </p>
     </div>
   );
 };

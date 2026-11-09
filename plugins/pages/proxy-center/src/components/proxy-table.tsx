@@ -29,9 +29,9 @@ const EmptyState: React.FC<{
     <h4 className="text-sm font-medium text-foreground mb-1">
       {title || t('table.empty')}
     </h4>
-    <p className="text-xs text-muted-foreground text-center max-w-[240px]">
-      {description || t('table.emptyDescription', { defaultValue: '添加第一个代理，开始管理您的代理服务器' })}
-    </p>
+    {description ? (
+      <p className="text-xs text-muted-foreground text-center max-w-[240px]">{description}</p>
+    ) : null}
   </div>
 );
 

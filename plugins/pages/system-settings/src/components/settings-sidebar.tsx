@@ -28,7 +28,6 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({ activeTab, onT
       <div className="relative z-10 flex flex-col h-full">
         <div className="p-4 border-b border-border shrink-0">
           <h1 className="text-lg font-semibold text-foreground">{t('pageTitle')}</h1>
-          <p className="text-xs text-muted-foreground mt-1">{t('pageDescription')}</p>
         </div>
         <SettingsNavigation navItems={navItems} activeTab={activeTab} onTabChange={onTabChange} />
       </div>

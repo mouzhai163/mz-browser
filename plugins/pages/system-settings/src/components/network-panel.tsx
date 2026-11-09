@@ -120,7 +120,6 @@ export const NetworkPanel: React.FC = () => {
         <div className="flex items-center justify-between p-4 bg-accent/30 rounded-lg mx-2 my-2">
           <div>
             <p className="text-sm font-medium text-foreground">{t('networkStatus')}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{t('networkStatusDesc')}</p>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />

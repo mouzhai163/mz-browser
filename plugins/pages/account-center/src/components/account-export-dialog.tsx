@@ -4,7 +4,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -40,7 +39,6 @@ export function AccountExportDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t('dialog.export.title')}</DialogTitle>
-          <DialogDescription>{t('dialog.export.description')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">

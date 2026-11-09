@@ -3,7 +3,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { PageTitle } from '@/components/page-title';
 import { useApiService } from '../hooks/useApiService';
 import { useMcpService } from '../hooks/useMcpService';
-import { ApiInfoCards } from './ApiInfoCards';
 import { ApiServiceConfigForm } from './ApiServiceConfig';
 import { ApiServiceControl } from './ApiServiceControl';
 import { ApiServiceSkeleton } from './api-service-skeleton';
@@ -74,14 +73,13 @@ export function ApiConsolePage() {
                 ) : config ? (
                   <>
                     <ApiServiceControl running={running} onToggle={setEnabled} />
-                    <div className="mt-4 grid grid-cols-[2fr_1fr] gap-4">
+                    <div className="mt-4">
                       <ApiServiceConfigForm
                         config={config}
                         onUpdate={updateConfig}
                         onResetApiKey={resetApiKey}
                         resetting={resetting}
                       />
-                      <ApiInfoCards />
                     </div>
                   </>
                 ) : null}

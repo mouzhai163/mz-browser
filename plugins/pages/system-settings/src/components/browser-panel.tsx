@@ -79,15 +79,6 @@ export const BrowserPanel: React.FC = () => {
     return labels[id] || id;
   };
 
-  const getFingerprintDesc = (id: string) => {
-    const descs: Record<string, string> = {
-      random: t('fingerprintRandomDesc'),
-      custom: t('fingerprintCustomDesc'),
-      real: t('fingerprintRealDesc'),
-    };
-    return descs[id] || '';
-  };
-
   return (
     <div className="space-y-4">
       {/* 浏览器内核 */}
@@ -163,9 +154,6 @@ export const BrowserPanel: React.FC = () => {
                     className={`text-sm font-medium ${isActive ? 'text-primary' : 'text-foreground'}`}
                   >
                     {getFingerprintLabel(mode.id)}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {getFingerprintDesc(mode.id)}
                   </p>
                 </button>
               );

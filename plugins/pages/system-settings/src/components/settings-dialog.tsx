@@ -50,7 +50,6 @@ export function SettingsDialog() {
               <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-foreground">
                 {t('pageTitle')}
               </h2>
-              <p className="mt-2 text-sm text-muted-foreground">{t('pageDescription')}</p>
             </div>
 
             <DrawerClose asChild>

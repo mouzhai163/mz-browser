@@ -6,7 +6,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -144,9 +143,6 @@ export function AccountCreateDialog({
               <KeyRound className="h-5 w-5 text-blue-500" />
               {t('dialog.create.title')}
             </DialogTitle>
-            <DialogDescription className="text-xs">
-              {t('dialog.create.description', { defaultValue: '添加一个新的平台账号' })}
-            </DialogDescription>
           </DialogHeader>
         </div>
 

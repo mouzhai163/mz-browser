@@ -366,7 +366,6 @@ export const GeneralPanel: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <h4 className="text-sm font-medium">{t('templateList')}</h4>
-              <p className="text-xs text-muted-foreground">{t('templateListDesc')}</p>
             </div>
             <span className="text-xs text-muted-foreground">
               {t('templateCount', { count: templates.length })}

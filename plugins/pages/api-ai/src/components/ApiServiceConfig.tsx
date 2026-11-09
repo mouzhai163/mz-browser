@@ -89,7 +89,6 @@ export function ApiServiceConfigForm({
           <label className="text-xs font-medium text-foreground block mb-1">
             {t('service.remoteAccess')}
           </label>
-          <p className="text-xs text-muted-foreground">{t('service.remoteAccessDesc')}</p>
         </div>
         <Switch
           checked={config.remoteAccess}
@@ -125,7 +124,6 @@ export function ApiServiceConfigForm({
           className="min-h-24 w-full resize-none field-sizing-fixed overflow-x-hidden whitespace-pre-wrap break-all text-xs placeholder:text-xs"
           placeholder={corsFocused ? t('service.corsOriginsPlaceholder') : ''}
         />
-        <p className="text-xs text-muted-foreground">{t('service.corsOriginsDesc')}</p>
       </div>
     </div>
   );

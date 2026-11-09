@@ -14,7 +14,6 @@ export function ApiServiceControl({ running, onToggle }: ApiServiceControlProps)
       <div className="flex items-center justify-between ">
         <div className="flex-1">
           <h3 className="text-sm font-semibold text-foreground mb-1">{t('service.control')}</h3>
-          <p className="text-xs text-muted-foreground">{t('service.controlDesc')}</p>
         </div>
         <Switch checked={running} onCheckedChange={onToggle} className="ml-4" />
       </div>

@@ -17,9 +17,6 @@ const EmptyState: React.FC<{
       <FolderTree className="h-8 w-8 text-blue-500/60" />
     </div>
     <h4 className="text-sm font-medium text-foreground mb-1">{t('table.empty')}</h4>
-    <p className="text-xs text-muted-foreground text-center max-w-[240px]">
-      {t('table.emptyDescription')}
-    </p>
   </div>
 );
 

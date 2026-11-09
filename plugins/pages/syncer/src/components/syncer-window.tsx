@@ -282,7 +282,6 @@ export function SyncerWindow() {
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
             <MousePointer2 className="h-8 w-8 mb-2 opacity-50" />
             <p className="text-xs">暂无运行中的浏览器</p>
-            <p className="text-[10px] mt-1">请先在环境管理中启动浏览器</p>
           </div>
         ) : (
           <div className="space-y-1">
@@ -334,9 +333,8 @@ export function SyncerWindow() {
       </div>
 
       {/* 状态栏 - 收起时隐藏 */}
-      <footer className={`h-6 flex items-center justify-between px-3 border-t border-border text-[10px] text-muted-foreground ${isCollapsed ? 'hidden' : ''}`}>
+      <footer className={`h-7 flex items-center px-3 border-t border-border text-[10px] text-muted-foreground ${isCollapsed ? 'hidden' : ''}`}>
         <span>已选择 {selectedEnvs.size} 个浏览器</span>
-        <span>{isSyncing ? '同步模式已启用' : '同步模式已关闭'}</span>
       </footer>
     </div>
   );

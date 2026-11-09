@@ -13,7 +13,6 @@ export interface SettingRowProps {
 export const SettingRow: React.FC<SettingRowProps> = ({
   icon: Icon,
   title,
-  description,
   children,
 }) => (
   <div className="flex items-center justify-between p-3 hover:bg-accent/30 rounded-lg transition-colors">
@@ -21,7 +20,6 @@ export const SettingRow: React.FC<SettingRowProps> = ({
       {Icon && <Icon className="w-4 h-4 text-muted-foreground shrink-0" />}
       <div>
         <p className="text-sm font-medium text-foreground">{title}</p>
-        {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
       </div>
     </div>
     <div className="shrink-0">{children}</div>

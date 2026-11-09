@@ -8,7 +8,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -134,9 +133,6 @@ export function EnvironmentCreateAccountDialog({
               <KeyRound className="h-5 w-5 text-blue-500" />
               {t('dialog.account.createTitle')}
             </DialogTitle>
-            <DialogDescription className="text-xs">
-              {t('dialog.account.createDescription')}
-            </DialogDescription>
           </DialogHeader>
         </div>
 
