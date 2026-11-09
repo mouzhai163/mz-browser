@@ -21,6 +21,7 @@ pub struct FingerprintConfig {
     pub geolocation_prompt: Option<String>,
     pub geolocation: Option<String>,
     pub platform: Option<String>,
+    pub platform_version: Option<String>,
     pub user_agent: Option<String>,
     pub sound: Option<bool>,
     pub images: Option<bool>,

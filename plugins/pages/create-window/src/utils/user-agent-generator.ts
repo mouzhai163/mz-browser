@@ -350,37 +350,30 @@ function getOSString(system: string): string {
 
 // ==================== User Agent 生成函数 ====================
 
+/** 没有选中内核时的兜底主版本号；真正启动时会按实际内核再校正一次 */
+const DEFAULT_CHROME_MAJOR = 156;
+
 /**
- * 生成 Chrome User-Agent
+ * Chrome 现在发出的 UA 系统部分只有三种固定写法（UA 精简策略）：
+ * Windows 恒为 NT 10.0（Windows 11 也是），macOS 恒为 10_15_7，Linux 恒为 x86_64。
+ * 带具体系统版本或发行版名称的写法在真实 Chrome 里不存在。
+ */
+const CHROME_PLATFORM_TOKENS: Record<string, string> = {
+  Windows: 'Windows NT 10.0; Win64; x64',
+  macOS: 'Macintosh; Intel Mac OS X 10_15_7',
+  Linux: 'X11; Linux x86_64',
+};
+
+/**
+ * 生成 Chrome User-Agent：版本号写成 `主版本.0.0.0`，完整版本只在 Client Hints 里出现。
  * @param system 操作系统
- * @param versionString 可选的完整版本号字符串（如 "144.0.7559.118"），如果不提供则使用默认版本
+ * @param versionString 内核版本号（如 "159.0.8147.2"），只取主版本
  */
 function generateChromeUA(system: string, versionString?: string): string {
-  const os = getOSString(system);
-
-  // 如果提供了完整版本号，提取主版本号并随机生成 build 和 patch
-  let versionStr: string;
-
-  if (versionString) {
-    // 提取主版本号
-    const majorVersion = parseInt(versionString.split('.')[0]);
-
-    // 随机生成 build 和 patch
-    // build 范围：6000-7000（覆盖 Chrome 120-144+ 的范围）
-    const build = randomInt(6000, 7000);
-    const patch = randomInt(50, 200);
-
-    versionStr = `${majorVersion}.0.${build}.${patch}`;
-  } else {
-    // 如果没有提供版本号，使用默认值并随机化
-    const build = randomInt(6000, 7000);
-    const patch = randomInt(50, 200);
-    versionStr = `144.0.${build}.${patch}`;
-  }
-
-  // Chrome 系浏览器固定使用 AppleWebKit/537.36 和 Safari/537.36
-  // 这是标准格式，不应该随机化
-  return `Mozilla/5.0 (${os}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${versionStr} Safari/537.36`;
+  const parsed = versionString ? parseInt(versionString.split('.')[0], 10) : NaN;
+  const major = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CHROME_MAJOR;
+  const platform = CHROME_PLATFORM_TOKENS[system] ?? CHROME_PLATFORM_TOKENS.Windows;
+  return `Mozilla/5.0 (${platform}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`;
 }
 
 /** 生成 Firefox User-Agent */

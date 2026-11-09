@@ -59,6 +59,7 @@ export function AdvancedFingerprintForm({ value, onChange }: AdvancedFingerprint
 
   const webrtcOptions = [
     { value: 'real' as const, label: t('advancedFingerprint.webrtcMode.real') },
+    { value: 'replace' as const, label: t('advancedFingerprint.webrtcMode.replace') },
     { value: 'disable' as const, label: t('advancedFingerprint.webrtcMode.disable') },
   ];
 
@@ -171,6 +172,7 @@ export function AdvancedFingerprintForm({ value, onChange }: AdvancedFingerprint
             value={value.devicePixelRatio.toString()}
             options={[
               { value: '1', label: '1.0' },
+              { value: '1.25', label: '1.25' },
               { value: '1.5', label: '1.5' },
               { value: '2', label: '2.0' },
             ]}

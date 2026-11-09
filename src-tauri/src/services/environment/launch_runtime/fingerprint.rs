@@ -2,6 +2,7 @@ use serde_json::Value;
 
 use crate::infrastructure::runtime::FingerprintConfig;
 
+use super::gpu_ids::GPU_DEVICE_IDS;
 use super::kernel::get_window_info;
 
 pub(super) fn build_fingerprint_config(config: Option<&Value>) -> FingerprintConfig {
@@ -18,6 +19,7 @@ pub(super) fn build_fingerprint_config(config: Option<&Value>) -> FingerprintCon
         geolocation_prompt: get_string(&basic_settings, "geolocationPrompt"),
         geolocation: get_json_string(&basic_settings, "geolocation"),
         platform: get_string_from_map(&window_info, "system"),
+        platform_version: get_string_from_map(&window_info, "platformVersion"),
         user_agent: get_string_from_map(&window_info, "userAgent"),
         sound: get_bool(&basic_settings, "sound"),
         images: get_bool(&basic_settings, "images"),
@@ -29,14 +31,15 @@ pub(super) fn build_fingerprint_config(config: Option<&Value>) -> FingerprintCon
         window_x: get_i32(&basic_settings, "windowX"),
         window_y: get_i32(&basic_settings, "windowY"),
         resolution: get_value(&fingerprint_settings, "resolution"),
-        color_depth: get_i32(&fingerprint_settings, "colorDepth"),
+        // Windows 上的 Chrome 恒报 24；旧环境里随机出来的 32 在真机上不存在，启动时一律按 24 发给内核
+        color_depth: get_i32(&fingerprint_settings, "colorDepth").map(|depth| if depth == 32 { 24 } else { depth }),
         device_pixel_ratio: get_f64(&fingerprint_settings, "devicePixelRatio"),
         max_touch_points: get_i32(&fingerprint_settings, "maxTouchPoints"),
         canvas: get_string(&fingerprint_settings, "canvas"),
         webgl_image: get_string(&fingerprint_settings, "webglImage"),
         webgl_info: get_string(&fingerprint_settings, "webglInfo"),
         webgl_vendor: get_string(&fingerprint_settings, "webglVendor"),
-        webgl_renderer: get_string(&fingerprint_settings, "webglRenderer"),
+        webgl_renderer: get_string(&fingerprint_settings, "webglRenderer").map(|renderer| with_device_id(&renderer)),
         webgpu: get_string(&fingerprint_settings, "webgpu"),
         font_fingerprint: get_string(&fingerprint_settings, "fontFingerprint"),
         font_list: get_value(&fingerprint_settings, "fontList"),
@@ -109,4 +112,80 @@ fn get_f64(source: &Option<serde_json::Map<String, Value>>, key: &str) -> Option
 
 fn get_value(source: &Option<serde_json::Map<String, Value>>, key: &str) -> Option<Value> {
     source.as_ref().and_then(|obj| obj.get(key)).cloned()
+}
+
+/// 和 gen-gpu-ids.py 里的 norm() 保持一致：小写、去掉 (R)/(TM)、只留字母数字、去掉厂商名和 "series"。
+fn normalize_gpu_name(name: &str) -> String {
+    let lowered = name.to_lowercase().replace("(r)", "").replace("(tm)", "");
+    let mut key: String = lowered.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+    for word in ["nvidia", "amd", "intel", "series"] {
+        key = key.replace(word, "");
+    }
+    key
+}
+
+/// 新版 Chrome 的 ANGLE 显卡串带 PCI 设备号，如 "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 (0x00002504) Direct3D11 ...)"。
+/// 旧环境里的串没有设备号，这里按型号名补上；型号查不到、串格式不认识或已经带设备号时原样返回。
+pub(super) fn with_device_id(renderer: &str) -> String {
+    if renderer.contains("(0x") {
+        return renderer.to_string();
+    }
+    let Some(d3d) = renderer.find(" Direct3D11") else {
+        return renderer.to_string();
+    };
+    let Some(comma) = renderer[..d3d].find(", ") else {
+        return renderer.to_string();
+    };
+    let key = normalize_gpu_name(&renderer[comma + 2..d3d]);
+    match GPU_DEVICE_IDS.binary_search_by(|(name, _)| (*name).cmp(key.as_str())) {
+        Ok(index) => format!("{} (0x{:08X}){}", &renderer[..d3d], GPU_DEVICE_IDS[index].1, &renderer[d3d..]),
+        Err(_) => renderer.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod device_id_tests {
+    use super::{normalize_gpu_name, with_device_id, GPU_DEVICE_IDS};
+
+    #[test]
+    fn table_is_sorted_for_binary_search() {
+        assert!(GPU_DEVICE_IDS.windows(2).all(|pair| pair[0].0 < pair[1].0));
+    }
+
+    #[test]
+    fn old_renderer_strings_get_their_device_id() {
+        assert_eq!(
+            with_device_id("ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)"),
+            "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 (0x00002504) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+        );
+        assert_eq!(
+            with_device_id("ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)"),
+            "ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00003E92) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+        );
+        assert_eq!(
+            with_device_id("ANGLE (AMD, AMD Radeon RX 580 Series Direct3D11 vs_5_0 ps_5_0, D3D11)"),
+            "ANGLE (AMD, AMD Radeon RX 580 Series (0x000067DF) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+        );
+        assert_eq!(
+            with_device_id("ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)"),
+            "ANGLE (AMD, AMD Radeon(TM) Graphics (0x00001638) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+        );
+    }
+
+    #[test]
+    fn unknown_or_already_complete_strings_are_left_alone() {
+        let complete = "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti (0x00002C05) Direct3D11 vs_5_0 ps_5_0, D3D11)";
+        assert_eq!(with_device_id(complete), complete);
+        let unknown = "ANGLE (NVIDIA, NVIDIA Made Up 9000 Direct3D11 vs_5_0 ps_5_0, D3D11)";
+        assert_eq!(with_device_id(unknown), unknown);
+        assert_eq!(with_device_id("Apple M1"), "Apple M1");
+        assert_eq!(with_device_id(""), "");
+    }
+
+    #[test]
+    fn normalisation_matches_the_generator() {
+        assert_eq!(normalize_gpu_name("NVIDIA GeForce RTX 3060"), "geforcertx3060");
+        assert_eq!(normalize_gpu_name("Intel(R) UHD Graphics 630"), "uhdgraphics630");
+        assert_eq!(normalize_gpu_name("AMD Radeon RX 580 Series"), "radeonrx580");
+    }
 }

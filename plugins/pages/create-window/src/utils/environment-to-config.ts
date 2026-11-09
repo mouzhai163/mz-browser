@@ -49,6 +49,7 @@ export function transformEnvironmentConfigToWindowConfig(
       kernel: (windowInfo.kernel as string) || 'Chrome',
       kernelId: (windowInfo.kernel_id as string) || '',
       userAgent: (windowInfo.userAgent as string) || '',
+      platformVersion: (windowInfo.platformVersion as string) || undefined,
       searchEngine: (windowInfo.searchEngine as string) || 'Google',
       proxySourceMode: 'remote',
       proxyUuids, // 代理 UUID 从 detail.proxy 中获取，转换为数组
@@ -86,7 +87,10 @@ export function transformEnvironmentConfigToWindowConfig(
         (fingerprintSettings.fontFingerprint as 'random' | 'real' | 'custom' | 'system') ||
         'system',
       fontList,
-      webrtc: fingerprintSettings.webrtc === 'real' ? 'real' : 'disable',
+      webrtc:
+        fingerprintSettings.webrtc === 'real' || fingerprintSettings.webrtc === 'replace'
+          ? fingerprintSettings.webrtc
+          : 'disable',
       webglImage:
         (fingerprintSettings.webglImage as 'random' | 'real' | 'custom' | 'system') || 'random',
       webglInfo:

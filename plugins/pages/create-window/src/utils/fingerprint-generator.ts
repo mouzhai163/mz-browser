@@ -4,6 +4,7 @@
  */
 
 import type { AdvancedFingerprintSettings, DeviceSettings, FingerprintMode, FontListConfig } from '../types';
+import { pickDeviceSample, pickWindowsRelease, weightedChoice } from './device-samples';
 import { CREEPJS_FONT_LIST } from './creepjs-font-list';
 
 // ==================== 工具函数 ====================
@@ -136,91 +137,10 @@ const WEBGL_RENDERERS: WebGLRendererTemplate[] = [
 const DEVICE_NAME_PREFIXES = ['DESKTOP', 'LAPTOP', 'PC', 'WORKSTATION', 'WIN'];
 
 /** 常见 CPU 核心数（与 UI 保持一致）*/
-const HARDWARE_CONCURRENCY_OPTIONS = [2, 4, 8, 16];
+const HARDWARE_CONCURRENCY_OPTIONS = [4, 6, 8, 12, 16];
 
 /** 常见内存大小 (GB)（与 UI 保持一致）*/
 const DEVICE_MEMORY_OPTIONS = [4, 8];
-
-// ==================== 硬件配置组合 ====================
-
-/**
- * 显示器配置。screen.width/height 是 CSS 像素（物理分辨率 ÷ 系统缩放），devicePixelRatio 就是缩放比例，
- * 所以 3840x2160 的 4K 显示器在 200% 缩放下报告 1920x1080 @ 2。只列真实存在的组合；
- * 像素比只用界面支持的 1 / 1.5 / 2。
- */
-interface DisplayProfile {
-  width: number;
-  height: number;
-  dpr: 1 | 1.5 | 2;
-}
-
-type HardwareTier = 'low' | 'mid' | 'high';
-
-/** 各档位可用的显示器：低端配低分辨率，高端才会有 2K/4K 和高缩放 */
-const TIER_DISPLAYS: Record<HardwareTier, DisplayProfile[]> = {
-  low: [
-    { width: 1366, height: 768, dpr: 1 },
-    { width: 1600, height: 900, dpr: 1 },
-    { width: 1920, height: 1080, dpr: 1 },
-  ],
-  mid: [
-    { width: 1920, height: 1080, dpr: 1 },
-    { width: 1920, height: 1200, dpr: 1 },
-    { width: 2560, height: 1440, dpr: 1 },
-  ],
-  high: [
-    { width: 1920, height: 1080, dpr: 1 },
-    { width: 2560, height: 1440, dpr: 1 },
-    { width: 3440, height: 1440, dpr: 1 },
-    { width: 3840, height: 2160, dpr: 1 },
-    { width: 2560, height: 1440, dpr: 1.5 }, // 4K 屏 150% 缩放
-    { width: 1920, height: 1080, dpr: 2 }, // 4K 屏 200% 缩放
-  ],
-};
-
-/**
- * 各档位的 CPU 逻辑核心数与内存（GB）。
- * navigator.deviceMemory 真实 Chrome 最大只报 8，所以内存最多填 8；
- * 核心数只用界面支持的 2 / 4 / 8 / 16。
- */
-const TIER_CORES: Record<HardwareTier, number[]> = {
-  low: [4, 8],
-  mid: [8],
-  high: [8, 16],
-};
-const TIER_MEMORY: Record<HardwareTier, number[]> = {
-  low: [4, 8],
-  mid: [8],
-  high: [8],
-};
-
-/** 硬件配置模板：GPU 决定档位，档位决定核心数 / 内存 / 显示器 */
-interface HardwareProfile {
-  gpuVendor: string;
-  gpuRenderer: string;
-  tier: HardwareTier;
-}
-
-const HARDWARE_PROFILES: HardwareProfile[] = [
-  // 低端：集成显卡
-  { gpuVendor: 'Google Inc. (Intel)', gpuRenderer: 'ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'low' },
-  { gpuVendor: 'Google Inc. (Intel)', gpuRenderer: 'ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'low' },
-  { gpuVendor: 'Google Inc. (Intel)', gpuRenderer: 'ANGLE (Intel, Intel(R) HD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'low' },
-  // 中端：新集成显卡 / 入门到中端独立显卡
-  { gpuVendor: 'Google Inc. (Intel)', gpuRenderer: 'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'mid' },
-  { gpuVendor: 'Google Inc. (AMD)', gpuRenderer: 'ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'mid' },
-  { gpuVendor: 'Google Inc. (AMD)', gpuRenderer: 'ANGLE (AMD, AMD Radeon RX 580 Series Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'mid' },
-  { gpuVendor: 'Google Inc. (NVIDIA)', gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Ti Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'mid' },
-  { gpuVendor: 'Google Inc. (NVIDIA)', gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1070 Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'mid' },
-  { gpuVendor: 'Google Inc. (NVIDIA)', gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'mid' },
-  // 高端独立显卡
-  { gpuVendor: 'Google Inc. (NVIDIA)', gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'high' },
-  { gpuVendor: 'Google Inc. (NVIDIA)', gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'high' },
-  { gpuVendor: 'Google Inc. (NVIDIA)', gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'high' },
-  { gpuVendor: 'Google Inc. (NVIDIA)', gpuRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'high' },
-  { gpuVendor: 'Google Inc. (AMD)', gpuRenderer: 'ANGLE (AMD, AMD Radeon RX 6800 XT Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'high' },
-  { gpuVendor: 'Google Inc. (AMD)', gpuRenderer: 'ANGLE (AMD, AMD Radeon RX 7900 XTX Direct3D11 vs_5_0 ps_5_0, D3D11)', tier: 'high' },
-];
 
 /** 常见屏幕分辨率 */
 const SCREEN_RESOLUTIONS = [
@@ -238,10 +158,9 @@ const SCREEN_RESOLUTIONS = [
 ];
 
 /** 像素密度选项（与 UI 保持一致）*/
-const DEVICE_PIXEL_RATIO_OPTIONS = [1, 1.5, 2];
+const DEVICE_PIXEL_RATIO_OPTIONS = [1, 1.25, 1.5, 2];
 
 /** 颜色深度选项 */
-const COLOR_DEPTH_OPTIONS: (24 | 32)[] = [24, 32];
 
 
 // ==================== 生成函数 ====================
@@ -262,17 +181,16 @@ export function generateDeviceName(): string {
   return `${prefix}-${suffix}`;
 }
 
-/** 生成随机 WebGL 配置 */
+/** 生成随机 WebGL 配置（从设备样本库按权重抽一款显卡） */
 export function generateWebGL(): { vendor: string; renderer: string } {
-  // 从硬件配置模板中随机选择一个
-  const profile = randomChoice(HARDWARE_PROFILES);
+  const sample = pickDeviceSample(hostLogicalCores());
   return {
-    vendor: profile.gpuVendor,
-    renderer: profile.gpuRenderer,
+    vendor: sample.gpuVendor,
+    renderer: sample.gpuRenderer,
   };
 }
 
-/** 一套自洽的设备画像：GPU、核心数、内存、屏幕分辨率和缩放比例互相匹配 */
+/** 一台整机的画像：显卡、核心数、内存、显示器、系统版本来自设备样本库里的同一条样本 */
 export interface DeviceProfile {
   vendor: string;
   renderer: string;
@@ -280,6 +198,8 @@ export interface DeviceProfile {
   deviceMemory: number;
   resolution: { width: number; height: number };
   devicePixelRatio: number;
+  /** Sec-CH-UA-Platform-Version，如 Windows 10 为 "10.0.0"，Windows 11 24H2 为 "19.0.0" */
+  platformVersion: string;
 }
 
 /** 宿主机的逻辑核心数。声明的核心数不超过它，否则多线程跑分一测就露馅 */
@@ -291,23 +211,22 @@ function hostLogicalCores(): number {
 }
 
 /**
- * 生成一套自洽的设备画像。GPU 决定档位，档位再决定核心数、内存和显示器，
- * 避免出现"4 核 + 旗舰显卡"、"低端核显 + 4K"、"内存 16G"（Chrome 最大只报 8）这类矛盾组合。
+ * 从设备样本库按权重抽一台整机。显卡决定能配什么核心数、显示器（笔记本配笔记本屏），
+ * 系统版本按 Windows 10 / 11 的大致占比抽。
  */
 export function generateDeviceProfile(): DeviceProfile {
-  const gpu = randomChoice(HARDWARE_PROFILES);
   const cap = hostLogicalCores();
-  const coreChoices = TIER_CORES[gpu.tier].filter((cores) => cores <= cap);
-  const display = randomChoice(TIER_DISPLAYS[gpu.tier]);
+  const sample = pickDeviceSample(cap);
+  const coreChoices = sample.cores.filter((cores) => cores <= cap);
+  const display = weightedChoice(sample.displays, (item) => item.weight);
   return {
-    vendor: gpu.gpuVendor,
-    renderer: gpu.gpuRenderer,
-    hardwareConcurrency: randomChoice(
-      coreChoices.length > 0 ? coreChoices : [Math.min(...TIER_CORES[gpu.tier])],
-    ),
-    deviceMemory: randomChoice(TIER_MEMORY[gpu.tier]),
+    vendor: sample.gpuVendor,
+    renderer: sample.gpuRenderer,
+    hardwareConcurrency: randomChoice(coreChoices.length > 0 ? coreChoices : [Math.min(...sample.cores)]),
+    deviceMemory: randomChoice(sample.memory),
     resolution: { width: display.width, height: display.height },
     devicePixelRatio: display.dpr,
+    platformVersion: pickWindowsRelease().platformVersion,
   };
 }
 
@@ -316,9 +235,11 @@ function generateFingerprintMode(): FingerprintMode {
   return randomChoice<FingerprintMode>(['random', 'system']);
 }
 
-/** 生成随机颜色深度 */
+/**
+ * 颜色深度。Windows 上的 Chrome 恒报 24（HDR 屏才可能是 30），32 在真机上不存在，随机出来反而是特征。
+ */
 export function generateRandomColorDepth(): 24 | 32 {
-  return randomChoice(COLOR_DEPTH_OPTIONS);
+  return 24;
 }
 
 /** 生成随机像素比 */
@@ -358,7 +279,6 @@ export function generateRandomFingerprintSettings(
     maxTouchPoints: generateRandomMaxTouchPoints(),
     fontFingerprint: generateFingerprintMode(),
     fontList: generateFontListConfig('random', 'Windows'),
-    // 内核尚未实现 'replace'（选了等于没有防护），所以只生成 'disable'
     webrtc: 'disable',
     webglImage: generateFingerprintMode(),
     webglInfo: generateFingerprintMode(),

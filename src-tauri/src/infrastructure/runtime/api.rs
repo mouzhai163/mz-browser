@@ -12,6 +12,8 @@ pub struct FingerprintConfig {
     pub geolocation_prompt: Option<String>,
     pub geolocation: Option<String>,
     pub platform: Option<String>,
+    /// Sec-CH-UA-Platform-Version（Windows 10 为 "10.0.0"，Windows 11 为 "13.0.0" 及以上）
+    pub platform_version: Option<String>,
     pub user_agent: Option<String>,
     pub sound: Option<bool>,
     pub images: Option<bool>,

@@ -184,6 +184,7 @@ export function ScreenHardwareForm({
             value={advancedSettings.devicePixelRatio.toString()}
             options={[
               { value: '1', label: '1.0' },
+              { value: '1.25', label: '1.25' },
               { value: '1.5', label: '1.5' },
               { value: '2', label: '2.0' },
             ]}
@@ -216,7 +217,7 @@ export function ScreenHardwareForm({
             <Label className="text-xs shrink-0">{t('deviceSettings.hardwareConcurrency')}</Label>
             <NumberSelector
               value={deviceSettings.hardwareConcurrency}
-              options={[2, 4, 8, 16]}
+              options={[2, 4, 6, 8, 12, 16, 20, 24]}
               onChange={(v) =>
                 onDeviceSettingsChange({ ...deviceSettings, hardwareConcurrency: v })
               }

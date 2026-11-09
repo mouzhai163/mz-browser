@@ -22,8 +22,10 @@ fn kernel_major_from_dir_name(name: &str) -> Option<u32> {
     digits.parse().ok().filter(|major| (50..1000).contains(major))
 }
 
-/// 环境创建时写入的 UA 带着当时内核的版本号；之后换了内核，UA 里的 Chrome/NNN 会和真实内核对不上，
-/// 这里把主版本号改成当前内核的，其余部分（系统、Safari/537.36 等）原样保留。
+/// 把 UA 整理成真实 Chrome 现在发出的样子：
+/// - 版本号固定为 `主版本.0.0.0`（Chrome 的 UA 精简策略，完整版本只出现在 Client Hints 里）；
+/// - 主版本号取当前内核的，环境创建之后换了内核也不会对不上；
+/// - 系统部分只会是三种固定写法：Windows 恒为 NT 10.0，macOS 恒为 10_15_7，Linux 恒为 x86_64。
 pub(super) fn align_user_agent_major(user_agent: &str, kernel_major: u32) -> String {
     let marker = "Chrome/";
     let Some(start) = user_agent.find(marker) else {
@@ -35,7 +37,29 @@ pub(super) fn align_user_agent_major(user_agent: &str, kernel_major: u32) -> Str
     if digits_len == 0 || rest.as_bytes().get(digits_len) != Some(&b'.') {
         return user_agent.to_string();
     }
-    format!("{}{}{}", &user_agent[..digits_start], kernel_major, &rest[digits_len..])
+    let token_end = rest.find(' ').unwrap_or(rest.len());
+    let aligned = format!("{}{}.0.0.0{}", &user_agent[..digits_start], kernel_major, &rest[token_end..]);
+    canonical_platform_token(&aligned)
+}
+
+fn canonical_platform_token(user_agent: &str) -> String {
+    let (Some(open), Some(close)) = (user_agent.find('('), user_agent.find(')')) else {
+        return user_agent.to_string();
+    };
+    if close < open {
+        return user_agent.to_string();
+    }
+    let inner = &user_agent[open + 1..close];
+    let canonical = if inner.starts_with("Windows") {
+        "Windows NT 10.0; Win64; x64"
+    } else if inner.starts_with("Macintosh") {
+        "Macintosh; Intel Mac OS X 10_15_7"
+    } else if inner.starts_with("X11") {
+        "X11; Linux x86_64"
+    } else {
+        return user_agent.to_string();
+    };
+    format!("{}{}{}", &user_agent[..open + 1], canonical, &user_agent[close..])
 }
 
 #[cfg(test)]
@@ -51,14 +75,24 @@ mod ua_tests {
     }
 
     #[test]
-    fn only_the_chrome_major_is_replaced() {
-        let ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36";
+    fn version_is_reduced_to_the_kernel_major() {
+        let ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.6543.118 Safari/537.36";
         assert_eq!(
             align_user_agent_major(ua, 159),
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/159.0.0.0 Safari/537.36"
         );
         assert_eq!(align_user_agent_major("custom agent", 159), "custom agent");
         assert_eq!(align_user_agent_major("Chrome/x.0", 159), "Chrome/x.0");
+    }
+
+    #[test]
+    fn platform_part_is_one_of_the_three_real_chrome_strings() {
+        let mac = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.6000.1 Safari/537.36";
+        assert!(align_user_agent_major(mac, 158).contains("(Macintosh; Intel Mac OS X 10_15_7)"));
+        let linux = "Mozilla/5.0 (X11; Fedora; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.6000.1 Safari/537.36";
+        assert!(align_user_agent_major(linux, 158).contains("(X11; Linux x86_64)"));
+        let old_win = "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36";
+        assert!(align_user_agent_major(old_win, 158).contains("(Windows NT 10.0; Win64; x64)"));
     }
 }
 

@@ -186,7 +186,7 @@ export const createWindowResources = {
         custom: '自定义',
       },
       webrtcMode: {
-        replace: '替换',
+        replace: '替换（走代理）',
         real: '真实',
         disable: '禁止',
       },
@@ -681,7 +681,7 @@ export const createWindowResources = {
         custom: 'Custom',
       },
       webrtcMode: {
-        replace: 'Replace',
+        replace: 'Replace (via proxy)',
         real: 'Real',
         disable: 'Disable',
       },

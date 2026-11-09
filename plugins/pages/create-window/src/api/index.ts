@@ -73,6 +73,7 @@ function buildWindowInfoPayload(config: WindowConfig['windowInfo']) {
     kernel: config.kernel,
     kernel_id: config.kernelId || undefined,
     userAgent: config.userAgent,
+    platformVersion: config.platformVersion || undefined,
     searchEngine: config.searchEngine,
     description: config.description,
   };

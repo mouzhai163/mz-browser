@@ -9,7 +9,7 @@ export type MatchMode = 'ip' | 'custom';
 export type GeolocationPrompt = 'ask' | 'allow' | 'forbid';
 
 // 'replace'（替换为代理出口 IP）内核未实现，已移除；旧配置里的 'replace' 一律按 'disable' 处理。
-export type WebRTCMode = 'real' | 'disable';
+export type WebRTCMode = 'real' | 'replace' | 'disable';
 
 export type FingerprintMode = 'random' | 'real' | 'custom' | 'system';
 
@@ -53,6 +53,8 @@ export interface WindowInfo {
   kernel: string; // 浏览器内核显示名称
   kernelId: string; // 数据库中不可变的内核制品标识
   userAgent: string;
+  /** Sec-CH-UA-Platform-Version（仅 Windows）：Windows 10 为 10.0.0，Windows 11 为 13/15/19.0.0 */
+  platformVersion?: string;
   searchEngine: string;
   proxySourceMode: ProxySourceMode;
   proxyUuids: string[]; // 代理 UUID 列表（用于批量创建）

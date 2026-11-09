@@ -180,7 +180,7 @@ export function DeviceSettingsForm({ value, onChange }: DeviceSettingsFormProps)
           <Label className="text-xs shrink-0">{t('deviceSettings.hardwareConcurrency')}</Label>
           <NumberSelector
             value={value.hardwareConcurrency}
-            options={[2, 4, 8, 16]}
+            options={[2, 4, 6, 8, 12, 16, 20, 24]}
             onChange={(v) => onChange({ ...value, hardwareConcurrency: v })}
             unit={t('deviceSettings.cores')}
           />

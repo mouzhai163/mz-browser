@@ -102,6 +102,7 @@ export function transformTemplateToWindowConfig(
       kernel: (windowInfo.kernel as string) || template.kernel_info || 'Chrome',
       kernelId: (windowInfo.kernel_id as string) || '',
       userAgent: (windowInfo.userAgent as string) || '',
+      platformVersion: (windowInfo.platformVersion as string) || undefined,
       searchEngine: (windowInfo.searchEngine as string) || 'Google',
       proxySourceMode: 'remote',
       proxyUuids,
@@ -139,7 +140,10 @@ export function transformTemplateToWindowConfig(
         (fingerprintSettings.fontFingerprint as 'random' | 'real' | 'custom' | 'system') ||
         'system',
       fontList,
-      webrtc: fingerprintSettings.webrtc === 'real' ? 'real' : 'disable',
+      webrtc:
+        fingerprintSettings.webrtc === 'real' || fingerprintSettings.webrtc === 'replace'
+          ? fingerprintSettings.webrtc
+          : 'disable',
       webglImage:
         (fingerprintSettings.webglImage as 'random' | 'real' | 'custom' | 'system') || 'random',
       webglInfo:

@@ -1,5 +1,6 @@
 mod detail;
 mod fingerprint;
+mod gpu_ids;
 mod kernel;
 mod paths;
 mod proxy;
