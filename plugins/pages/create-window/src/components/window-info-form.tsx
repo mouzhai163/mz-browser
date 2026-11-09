@@ -288,12 +288,13 @@ export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
               />
             </SelectTrigger>
             <SelectContent>
-              {kernelVersions.map((v, index) => (
-                <SelectItem key={v.kernel_id} value={v.kernel_id}>
-                  {v.resource_name}
-                  {index === 0 ? ` · ${t('windowInfo.kernelLatest', { defaultValue: '推荐' })}` : ''}
-                </SelectItem>
-              ))}
+              {[...kernelVersions]
+                .sort((a, b) => a.version.localeCompare(b.version, undefined, { numeric: true }))
+                .map((v) => (
+                  <SelectItem key={v.kernel_id} value={v.kernel_id}>
+                    {v.resource_name}
+                  </SelectItem>
+                ))}
               <SelectItem value="__firefox" disabled>
                 Firefox · {t('windowInfo.kernelPlanned', { defaultValue: '规划中' })}
               </SelectItem>
