@@ -636,7 +636,7 @@ mod tests {
             .await
             .unwrap();
         let kernels = &groups["MZ_KERNEL_CHROMIUM"];
-        assert_eq!(kernels.len(), 1, "catalog import must be idempotent");
+        assert_eq!(kernels.len(), 3, "catalog import must be idempotent");
         assert_eq!(kernels[0].resource_name, "Chrome 156");
         assert_eq!(kernels[0].install_dir_name, "Chrome 156");
         assert_eq!(kernels[0].kernel_id.len(), 64);
@@ -666,7 +666,11 @@ mod tests {
             .iter()
             .map(|kernel| kernel.resource_name.as_str())
             .collect();
-        assert_eq!(names, ["Chrome 156"], "the dropped kernel must not be offered any more");
+        assert_eq!(
+            names,
+            ["Chrome 156", "Chrome 159", "Chrome 158"],
+            "the dropped kernel must not be offered any more"
+        );
         let still_there = get_browser_kernel(&pool, &old_id).await.unwrap().unwrap();
         assert_eq!(still_there.status, "retired");
 
@@ -681,6 +685,7 @@ mod tests {
         let pool = test_pool().await;
         let mut catalog = parse_default_catalog().unwrap();
         catalog.source_id = "test-user-source".to_string();
+        catalog.kernels.truncate(1);
         catalog.kernels[0].priority = 10;
         catalog.kernels[0].url = "https://example.invalid/first.zip".to_string();
         import_catalog(&pool, &catalog).await.unwrap();
