@@ -122,7 +122,9 @@ pub struct CookieGroup {
 
 /// 常量定义
 pub const EVENT_KERNEL_PREPARE_STATUS: &str = "kernel-prepare-status";
-pub const SIGNATURE_HASH_SIZE: u64 = 10 * 1024 * 1024;
+/// 核心 DLL 签名覆盖的字节数。这里取整个文件：只哈希开头 10 MiB 时，只改了 Blink 等后面部分代码的重编译
+/// 会得到同一个签名，已安装的旧内核会被当成最新版而不重新下载。
+pub const SIGNATURE_HASH_SIZE: u64 = u64::MAX;
 pub const TIMEZONE_DETECTION_TIMEOUT_SECS: u64 = 10;
 
 /// 批量启动请求

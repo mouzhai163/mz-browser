@@ -100,7 +100,7 @@ pub fn core_dll_name() -> &'static str {
 pub fn calculate_file_hash_head(file_path: &Path, size: u64) -> Result<String> {
     let mut file = fs::File::open(file_path)?;
     let mut hasher = Sha256::new();
-    let mut buffer = vec![0u8; 8192];
+    let mut buffer = vec![0u8; 1024 * 1024];
     let mut total_read = 0u64;
 
     while total_read < size {
@@ -214,5 +214,27 @@ mod tests {
 
         assert!(validate_kernel_package_layout(&dir).is_ok());
         let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+#[cfg(test)]
+mod head_hash_tests {
+    use super::calculate_file_hash_head;
+    use crate::services::environment::kernel::types::SIGNATURE_HASH_SIZE;
+
+    #[test]
+    fn a_change_late_in_the_file_changes_the_signature() {
+        let dir = std::env::temp_dir().join(format!("mz-sig-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (a, b) = (dir.join("a.dll"), dir.join("b.dll"));
+        let mut data = vec![7u8; 12 * 1024 * 1024];
+        std::fs::write(&a, &data).unwrap();
+        *data.last_mut().unwrap() = 8; // 只改最后一个字节，远在开头 10 MiB 之外
+        std::fs::write(&b, &data).unwrap();
+        assert_ne!(
+            calculate_file_hash_head(&a, SIGNATURE_HASH_SIZE).unwrap(),
+            calculate_file_hash_head(&b, SIGNATURE_HASH_SIZE).unwrap()
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
