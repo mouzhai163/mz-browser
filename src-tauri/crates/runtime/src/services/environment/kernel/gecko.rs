@@ -33,6 +33,25 @@ const STARTUP_TIMEOUT: Duration = Duration::from_secs(45);
 const ENV_CHUNK: usize = 2047;
 const PROFILE_DIR: &str = "firefox-profile";
 const LOG_FILE: &str = "mz-firefox.log";
+/// Firefox 被远程控制时会在地址栏画红色斜纹、加一个机器人图标（:root[remotecontrol]）。
+/// 只有自动化测试模式能关掉，所以在环境自己的配置目录里用 userChrome.css 盖掉；网页看不到这些界面。
+const USER_CHROME_CSS: &str = "/* MZ 指纹浏览器生成，每次启动会覆盖 */
+:root[remotecontrol] .urlbar-background {
+  background-image: none !important;
+}
+:root[remotecontrol] #remote-control-box {
+  visibility: collapse !important;
+  width: 0 !important;
+}
+";
+
+/// 地址栏可选的搜索引擎（名称、搜索地址、关键字），第一个是默认，和 Chromium 内核一致
+const SEARCH_ENGINES: [(&str, &str, &str); 4] = [
+    ("Google", "https://www.google.com/search?q={searchTerms}", "@google"),
+    ("Bing", "https://www.bing.com/search?q={searchTerms}", "@bing"),
+    ("DuckDuckGo", "https://duckduckgo.com/?q={searchTerms}", "@ddg"),
+    ("百度", "https://www.baidu.com/s?wd={searchTerms}", "@baidu"),
+];
 
 pub struct GeckoInstance {
     pub port: u16,
@@ -143,6 +162,7 @@ pub async fn launch_browser(
             status_manager.set_status(&env_id, EnvironmentStatus::Running).await;
             log_info("kernel", format!("Firefox ready for environment {env_id} on port {port}"));
             let _ = events.emit("environment.launch_ready", &json!({ "env_uuid": env_id, "cdp_port": port }));
+            emit_connection_status(&events, &env_id, "connected");
             Ok(CdpEndpointResponse {
                 env_uuid: env_id,
                 host: "127.0.0.1".into(),
@@ -186,9 +206,19 @@ async fn start(
     let upstream = Upstream::from_proxy(request.proxy.as_ref()).map_err(internal("proxy"))?;
     let forwarder = Forwarder::start(upstream).await.map_err(internal("proxy"))?;
 
+    if let Some(kernel_dir) = exe.parent() {
+        if let Err(error) = ensure_search_policy(kernel_dir) {
+            // 只影响地址栏搜索，浏览器照常启动
+            log_warn("kernel", format!("Could not set the Firefox search engine policy: {error}"));
+        }
+    }
+
     let profile = Path::new(&request.user_data_dir).join(PROFILE_DIR);
     std::fs::create_dir_all(&profile)
         .map_err(|error| ("profile", RuntimeError::Internal(format!("无法创建 Firefox 配置目录：{error}"))))?;
+    if let Err(error) = write_user_chrome(&profile) {
+        log_warn("kernel", format!("Could not write the Firefox UI stylesheet for {env_id}: {error}"));
+    }
 
     let mut child = spawn(exe, &profile, &request.user_data_dir, port, &spec, forwarder.port)
         .map_err(|error| ("process_spawn", error))?;
@@ -222,6 +252,68 @@ async fn start(
     Ok((child, Arc::new(GeckoInstance { port, bidi, forwarder, relay })))
 }
 
+/// Camoufox 去掉了 Firefox 的内置搜索引擎：代码里写死只有一个叫 "None" 的引擎（搜索地址是
+/// 127.0.0.1），企业策略也把它设成默认，地址栏没法搜索。内置引擎回不来，所以这里用企业策略
+/// 加上常用引擎、默认 Google，并隐藏 "None"；只替换策略里的搜索部分，其余防护策略不动。
+/// 策略文件在内核目录里、所有环境共用，内容没变时不写。
+fn ensure_search_policy(kernel_dir: &Path) -> std::result::Result<(), String> {
+    let path = kernel_dir.join("distribution").join("policies.json");
+    let mut document: Value = match std::fs::read_to_string(&path) {
+        Ok(text) => serde_json::from_str(&text).map_err(|error| format!("{}: {error}", path.display()))?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => json!({ "policies": {} }),
+        Err(error) => return Err(format!("{}: {error}", path.display())),
+    };
+    if !with_search_policy(&mut document) {
+        return Ok(());
+    }
+    let text = serde_json::to_string_pretty(&document).map_err(|error| error.to_string())?;
+    std::fs::create_dir_all(path.parent().unwrap_or(kernel_dir)).map_err(|error| error.to_string())?;
+    // 几个环境同时启动时写的是同一份内容，先写临时文件再替换，避免读到写了一半的文件
+    let temp = path.with_extension(format!("json.{}.tmp", std::process::id()));
+    std::fs::write(&temp, text).map_err(|error| format!("{}: {error}", temp.display()))?;
+    std::fs::rename(&temp, &path).map_err(|error| {
+        let _ = std::fs::remove_file(&temp);
+        format!("{}: {error}", path.display())
+    })
+}
+
+fn write_user_chrome(profile: &Path) -> std::io::Result<()> {
+    let dir = profile.join("chrome");
+    std::fs::create_dir_all(&dir)?;
+    let path = dir.join("userChrome.css");
+    if std::fs::read_to_string(&path).is_ok_and(|text| text == USER_CHROME_CSS) {
+        return Ok(());
+    }
+    std::fs::write(path, USER_CHROME_CSS)
+}
+
+fn search_policy() -> Value {
+    let engines: Vec<Value> = SEARCH_ENGINES
+        .iter()
+        .map(|(name, url, alias)| json!({ "Name": name, "URLTemplate": url, "Method": "GET", "Alias": alias }))
+        .collect();
+    json!({ "Add": engines, "Default": SEARCH_ENGINES[0].0, "Remove": ["None"] })
+}
+
+/// 改成我们要的搜索策略，返回内容是否有变化
+fn with_search_policy(document: &mut Value) -> bool {
+    if !document.is_object() {
+        *document = json!({});
+    }
+    let root = document.as_object_mut().expect("object");
+    let policies = root.entry("policies").or_insert_with(|| json!({}));
+    if !policies.is_object() {
+        *policies = json!({});
+    }
+    let wanted = search_policy();
+    let policies = policies.as_object_mut().expect("object");
+    if policies.get("SearchEngines") == Some(&wanted) {
+        return false;
+    }
+    policies.insert("SearchEngines".into(), wanted);
+    true
+}
+
 fn spawn(
     exe: &Path,
     profile: &Path,
@@ -232,6 +324,8 @@ fn spawn(
 ) -> Result<tokio::process::Child> {
     let mut prefs = spec.prefs.clone();
     prefs.extend(proxy_prefs(forwarder_port));
+    // 让 Firefox 读配置目录里的 userChrome.css（见 USER_CHROME_CSS）
+    prefs.insert("toolkit.legacyUserProfileCustomizations.stylesheets".into(), json!(true));
 
     let mut command = tokio::process::Command::new(exe);
     command
@@ -439,7 +533,14 @@ fn watch_exit(
         cdp_endpoint_manager.remove(&env_id).await;
         status_manager.set_stopped_unless_error(&env_id).await;
         let _ = events.emit("environment.browser_disconnected", &json!({ "env_uuid": env_id }));
+        emit_connection_status(&events, &env_id, "disconnected");
     });
+}
+
+/// 界面上的环境列表、RPA 编辑器、同步器都靠连接状态事件刷新。Chromium 环境由内核里的扩展
+/// 连上事件总线时发出；Firefox 没有这条连接，所以在浏览器就绪和退出时由这里补发同样的事件。
+fn emit_connection_status(events: &EventPublisher, env_id: &str, status: &str) {
+    let _ = events.emit("eventbus.connection_status", &json!({ "env_id": env_id, "status": status }));
 }
 
 pub async fn stop_environment(
@@ -471,6 +572,7 @@ pub async fn stop_environment(
     cdp_endpoint_manager.remove(env_id).await;
     status_manager.set_status(env_id, EnvironmentStatus::Stopped).await;
     let _ = events.emit("environment.stopped", &json!({ "env_uuid": env_id, "forced": forced }));
+    emit_connection_status(&events, env_id, "disconnected");
     Ok(())
 }
 
@@ -590,6 +692,59 @@ mod tests {
         assert_eq!(prefs["network.proxy.socks_port"], 40123);
         assert_eq!(prefs["network.proxy.socks_remote_dns"], true);
         assert_eq!(prefs["network.proxy.failover_direct"], false);
+    }
+
+    #[test]
+    fn search_policy_keeps_the_other_policies_and_restores_the_engines() {
+        let mut document = json!({
+            "policies": {
+                "DisableTelemetry": true,
+                "SearchEngines": {
+                    "Remove": ["Google", "Bing"],
+                    "Default": "None",
+                    "Add": [{ "Name": "None", "URLTemplate": "http://127.0.0.1" }]
+                }
+            }
+        });
+        assert!(with_search_policy(&mut document));
+        assert_eq!(document["policies"]["DisableTelemetry"], true);
+        let search = &document["policies"]["SearchEngines"];
+        assert_eq!(search["Default"], "Google");
+        assert_eq!(search["Remove"], json!(["None"]));
+        let names: Vec<&str> = search["Add"].as_array().unwrap().iter().map(|e| e["Name"].as_str().unwrap()).collect();
+        assert_eq!(names, ["Google", "Bing", "DuckDuckGo", "百度"]);
+        assert!(search["Add"].as_array().unwrap().iter().all(|e| e["URLTemplate"].as_str().unwrap().contains("{searchTerms}")));
+        assert!(!with_search_policy(&mut document), "second pass must not rewrite the file");
+
+        let mut empty = json!({});
+        assert!(with_search_policy(&mut empty));
+        assert_eq!(empty["policies"]["SearchEngines"]["Default"], "Google");
+    }
+
+    #[test]
+    fn search_policy_file_is_rewritten_in_place() {
+        let dir = std::env::temp_dir().join(format!("mz-gecko-policy-{}", std::process::id()));
+        let distribution = dir.join("distribution");
+        std::fs::create_dir_all(&distribution).unwrap();
+        let file = distribution.join("policies.json");
+        std::fs::write(&file, r#"{"policies":{"DisableAppUpdate":true,"SearchEngines":{"Default":"None"}}}"#).unwrap();
+        ensure_search_policy(&dir).unwrap();
+        let written: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!(written["policies"]["DisableAppUpdate"], true);
+        assert_eq!(written["policies"]["SearchEngines"]["Default"], "Google");
+        assert_eq!(std::fs::read_dir(&distribution).unwrap().count(), 1, "no temp file left behind");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn user_chrome_hides_the_remote_control_cue() {
+        let profile = std::env::temp_dir().join(format!("mz-gecko-chrome-{}", std::process::id()));
+        write_user_chrome(&profile).unwrap();
+        write_user_chrome(&profile).unwrap();
+        let css = std::fs::read_to_string(profile.join("chrome").join("userChrome.css")).unwrap();
+        assert!(css.contains(":root[remotecontrol] .urlbar-background"));
+        assert!(css.contains("#remote-control-box"));
+        let _ = std::fs::remove_dir_all(&profile);
     }
 
     #[test]
