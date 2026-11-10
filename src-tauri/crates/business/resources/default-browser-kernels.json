@@ -67,6 +67,28 @@
       "requires_extract": true,
       "entrypoint_template": null,
       "extract_root": null
+    },
+    {
+      "type_code": "MZ_KERNEL_FIREFOX",
+      "resource_name": "Firefox 158",
+      "install_dir_name": "Firefox 158",
+      "version": "158.0.1",
+      "name": "camoufox-158.0.1-beta.41-win.x86_64.zip",
+      "notes": "Camoufox 158.0.1-beta.41 (Firefox 158.0.1, MPL-2.0)",
+      "platform": "windows",
+      "url": "https://github.com/daijro/camoufox/releases/download/v158.0.1-beta.41/camoufox-158.0.1-beta.41-win.x86_64.zip",
+      "priority": 50,
+      "hash": "2644bd14f1cc345c768f6a70b576bcc87eb3d0bf0df54856d6fe0bbc3027515f",
+      "signature": "9300d7aedd09855626c64baa6daaa5d574ffb310dd044b91e2ca2800a75d8648",
+      "compatible_signatures": [],
+      "file_size": 1320075455,
+      "is_latest": true,
+      "status": "active",
+      "arch": "x86_64",
+      "package_format": "zip",
+      "requires_extract": true,
+      "entrypoint_template": "camoufox.exe",
+      "extract_root": null
     }
   ]
 }

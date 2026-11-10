@@ -9,6 +9,8 @@ import { generateWebGL, generateFontListConfig } from '../utils/fingerprint-gene
 interface FingerprintFormProps {
   value: AdvancedFingerprintSettings;
   onChange: (value: AdvancedFingerprintSettings) => void;
+  /** Firefox 内核和真实 Firefox 一样不加噪声，也没有 WebGPU 选项，这些项不显示 */
+  firefox?: boolean;
 }
 
 // 生成关联的 WebGL vendor 和 renderer
@@ -48,7 +50,7 @@ function SegmentedControl<T extends string>({
   );
 }
 
-export function FingerprintForm({ value, onChange }: FingerprintFormProps) {
+export function FingerprintForm({ value, onChange, firefox = false }: FingerprintFormProps) {
   const { t } = useTranslation('create-window');
 
   const randomRealOptions = [
@@ -78,6 +80,7 @@ export function FingerprintForm({ value, onChange }: FingerprintFormProps) {
       <h3 className="text-sm font-semibold">{t('sections.fingerprint')}</h3>
 
       {/* Canvas & AudioContext */}
+      {!firefox && (
       <div className="grid grid-cols-2 gap-x-12 gap-y-4">
         <div className="flex items-center justify-between gap-4">
           <Label className="text-xs shrink-0">{t('advancedFingerprint.canvas')}</Label>
@@ -96,8 +99,10 @@ export function FingerprintForm({ value, onChange }: FingerprintFormProps) {
           />
         </div>
       </div>
+      )}
 
       {/* 字体指纹 & 媒体设备 */}
+      {!firefox && (
       <div className="grid grid-cols-2 gap-x-12 gap-y-4">
         <div className="flex items-center justify-between gap-4">
           <Label className="text-xs shrink-0">{t('advancedFingerprint.fontFingerprint')}</Label>
@@ -116,6 +121,7 @@ export function FingerprintForm({ value, onChange }: FingerprintFormProps) {
           />
         </div>
       </div>
+      )}
 
       {/* 字体列表 */}
       <div className="space-y-1">
@@ -171,6 +177,7 @@ export function FingerprintForm({ value, onChange }: FingerprintFormProps) {
 
       {/* Client Rects & Speech Voices */}
       <div className="grid grid-cols-2 gap-x-12 gap-y-4">
+        {!firefox && (
         <div className="flex items-center justify-between gap-4">
           <Label className="text-xs shrink-0">{t('advancedFingerprint.clientRects')}</Label>
           <SegmentedControl
@@ -179,6 +186,7 @@ export function FingerprintForm({ value, onChange }: FingerprintFormProps) {
             onChange={(v) => onChange({ ...value, clientRects: v })}
           />
         </div>
+        )}
         <div className="flex items-center justify-between gap-4">
           <Label className="text-xs shrink-0">{t('advancedFingerprint.speechVoices')}</Label>
           <SegmentedControl
@@ -193,6 +201,7 @@ export function FingerprintForm({ value, onChange }: FingerprintFormProps) {
       <div className="pt-2 border-t border-border space-y-4">
         {/* WebGL 图像 & WebGL Info */}
         <div className="grid grid-cols-2 gap-x-12 gap-y-4">
+          {!firefox && (
           <div className="flex items-center justify-between gap-4">
             <Label className="text-xs shrink-0">{t('advancedFingerprint.webglImage')}</Label>
             <SegmentedControl
@@ -201,6 +210,7 @@ export function FingerprintForm({ value, onChange }: FingerprintFormProps) {
               onChange={(v) => onChange({ ...value, webglImage: v })}
             />
           </div>
+          )}
           <div className="flex items-center justify-between gap-4">
             <Label className="text-xs shrink-0">{t('advancedFingerprint.webglInfo')}</Label>
             <SegmentedControl
@@ -256,6 +266,7 @@ export function FingerprintForm({ value, onChange }: FingerprintFormProps) {
         </div>
 
         {/* WebGPU */}
+        {!firefox && (
         <div className="flex items-center justify-between gap-4">
           <Label className="text-xs shrink-0">{t('advancedFingerprint.webgpu')}</Label>
           <SegmentedControl
@@ -264,6 +275,7 @@ export function FingerprintForm({ value, onChange }: FingerprintFormProps) {
             onChange={(v) => onChange({ ...value, webgpu: v })}
           />
         </div>
+        )}
       </div>
     </div>
   );

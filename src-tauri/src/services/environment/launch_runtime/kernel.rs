@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::{
     core::error::Result,
-    domain::environment::KernelDetail,
+    domain::environment::{KernelDetail, KernelEngine},
     services::environment::{KernelService, KernelStatusEmitter},
 };
 
@@ -12,11 +12,12 @@ use super::types::EnvironmentLaunchDetail;
 
 pub(super) struct ResolvedKernelLaunch {
     pub exe_path: String,
+    pub engine: KernelEngine,
     /// 内核主版本号（来自安装目录名 "Chrome 159"），用来让 UA 的版本号和实际内核一致
     pub major_version: Option<u32>,
 }
 
-/// "Chrome 159" -> Some(159)
+/// "Chrome 159" / "Firefox 158" -> Some(159) / Some(158)
 fn kernel_major_from_dir_name(name: &str) -> Option<u32> {
     let digits: String = name.chars().skip_while(|c| !c.is_ascii_digit()).take_while(|c| c.is_ascii_digit()).collect();
     digits.parse().ok().filter(|major| (50..1000).contains(major))
@@ -43,6 +44,19 @@ pub(super) fn align_user_agent_major(user_agent: &str, kernel_major: u32) -> Str
     let aligned = align_brand_version(&aligned, "Edg/", kernel_major);
     let aligned = align_brand_version(&aligned, "OPR/", kernel_major.saturating_sub(14));
     canonical_platform_token(&aligned)
+}
+
+/// Firefox 内核的 UA：只保留系统（Windows / macOS / Linux），其余按真实 Firefox 的固定格式重写。
+/// 环境原来是 Chrome 的 UA（比如后来换成了 Firefox 内核）也照样换成 Firefox 的。
+pub(super) fn firefox_user_agent(user_agent: &str, kernel_major: u32) -> String {
+    let platform = if user_agent.contains("Macintosh") || user_agent.contains("Mac OS X") {
+        "Macintosh; Intel Mac OS X 10.15"
+    } else if user_agent.contains("X11") || user_agent.contains("Linux") {
+        "X11; Linux x86_64"
+    } else {
+        "Windows NT 10.0; Win64; x64"
+    };
+    format!("Mozilla/5.0 ({platform}; rv:{kernel_major}.0) Gecko/20100101 Firefox/{kernel_major}.0")
 }
 
 fn align_brand_version(user_agent: &str, marker: &str, major: u32) -> String {
@@ -112,6 +126,23 @@ mod ua_tests {
     }
 
     #[test]
+    fn firefox_kernels_get_a_firefox_user_agent_for_the_same_system() {
+        let chrome_win = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36";
+        assert_eq!(
+            super::firefox_user_agent(chrome_win, 158),
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:158.0) Gecko/20100101 Firefox/158.0"
+        );
+        let old_firefox_mac = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14.4; rv:133.0) Gecko/20100101 Firefox/133.0";
+        assert_eq!(
+            super::firefox_user_agent(old_firefox_mac, 158),
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:158.0) Gecko/20100101 Firefox/158.0"
+        );
+        assert!(super::firefox_user_agent("Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:120.0)", 158)
+            .starts_with("Mozilla/5.0 (X11; Linux x86_64; rv:158.0)"));
+        assert_eq!(kernel_major_from_dir_name("Firefox 158"), Some(158));
+    }
+
+    #[test]
     fn platform_part_is_one_of_the_three_real_chrome_strings() {
         let mac = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.6000.1 Safari/537.36";
         assert!(align_user_agent_major(mac, 158).contains("(Macintosh; Intel Mac OS X 10_15_7)"));
@@ -140,6 +171,7 @@ pub(super) async fn resolve_kernel_launch(
             .await?
             .ok_or("This environment has no browser kernel binding.")?;
     let kernel_id = kernel_detail.kernel_id.clone();
+    let engine = KernelEngine::from_type_code(&kernel_detail.type_code);
     let install_dir_name = kernel_detail.install_dir_name.clone();
     let major_version = kernel_major_from_dir_name(&install_dir_name);
 
@@ -158,6 +190,7 @@ pub(super) async fn resolve_kernel_launch(
         install_dir_name,
         profiles_path.to_string(),
         KernelDetail {
+            engine,
             url,
             hash,
             signature: Some(signature),
@@ -168,7 +201,7 @@ pub(super) async fn resolve_kernel_launch(
     )
     .await?;
 
-    Ok(ResolvedKernelLaunch { exe_path, major_version })
+    Ok(ResolvedKernelLaunch { exe_path, engine, major_version })
 }
 
 pub(super) fn get_window_info(config: Option<&Value>) -> serde_json::Map<String, Value> {

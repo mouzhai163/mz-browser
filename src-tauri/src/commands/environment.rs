@@ -51,10 +51,12 @@ pub async fn launch_environment(
     fingerprint_config: Option<FingerprintConfig>,
     accounts: Option<Vec<AccountInfo>>,
     extensions: Option<Vec<crate::services::environment::ExtensionInfo>>,
+    engine: Option<crate::domain::environment::KernelEngine>,
 ) -> Result<()> {
     KernelService::launch_environment(
         app.clone(),
         exe_path,
+        engine.unwrap_or_default(),
         env_uuid,
         cache_path,
         cookies,

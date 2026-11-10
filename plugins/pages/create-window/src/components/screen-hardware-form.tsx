@@ -12,6 +12,8 @@ interface ScreenHardwareFormProps {
   deviceSettings: DeviceSettings;
   onAdvancedSettingsChange: (value: AdvancedFingerprintSettings) => void;
   onDeviceSettingsChange: (value: DeviceSettings) => void;
+  /** Firefox 内核不支持的 Chromium 专有项（设备内存、设备名、MAC 地址等）不显示 */
+  firefox?: boolean;
 }
 
 // 生成随机设备名称
@@ -110,6 +112,7 @@ export function ScreenHardwareForm({
   deviceSettings,
   onAdvancedSettingsChange,
   onDeviceSettingsChange,
+  firefox = false,
 }: ScreenHardwareFormProps) {
   const { t } = useTranslation('create-window');
 
@@ -211,6 +214,7 @@ export function ScreenHardwareForm({
               unit={t('deviceSettings.cores')}
             />
           </div>
+          {!firefox && (
           <div className="flex items-center justify-between gap-4">
             <Label className="text-xs shrink-0">{t('deviceSettings.deviceMemory')}</Label>
             <NumberSelector
@@ -225,8 +229,10 @@ export function ScreenHardwareForm({
               unit="G"
             />
           </div>
+          )}
         </div>
 
+        {!firefox && (<>
         {/* 设备名称 */}
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-4">
@@ -290,6 +296,7 @@ export function ScreenHardwareForm({
             </Button>
           </div>
         </div>
+        </>)}
       </div>
     </div>
   );

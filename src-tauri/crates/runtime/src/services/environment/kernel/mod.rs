@@ -1,6 +1,9 @@
+mod bidi;
 pub mod cdp;
+mod gecko;
 pub mod job;
 pub mod launcher;
+mod socks_forward;
 pub mod types;
 
 use super::status_manager::EnvironmentStatusManager;

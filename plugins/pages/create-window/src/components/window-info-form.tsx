@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Label } from '@/components/ui/label';
 import {
@@ -15,7 +15,6 @@ import { RefreshCw, X, Globe, Facebook, Youtube, Instagram, Linkedin, Twitter } 
 import { FiChrome } from 'react-icons/fi';
 import { FaFirefoxBrowser, FaWindows, FaApple, FaLinux, FaGoogle, FaAmazon } from 'react-icons/fa';
 import { SiGooglechrome } from 'react-icons/si';
-import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { CookieGroup, WindowInfo } from '../types';
 import { CreateWindowSelectAccountDialog } from './create-window-select-account-dialog';
@@ -96,6 +95,10 @@ const systemOptions = [
 const KERNEL_TYPE_CHROME = 'chrome';
 const KERNEL_TYPE_FIREFOX = 'firefox';
 const MZ_KERNEL_CHROMIUM = 'MZ_KERNEL_CHROMIUM';
+const MZ_KERNEL_FIREFOX = 'MZ_KERNEL_FIREFOX';
+
+/** Firefox 内核目前只做 Windows 身份（指纹样本和字体都是 Windows 的） */
+const FIREFOX_SYSTEMS = ['Windows'];
 
 export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
   const { t } = useTranslation('create-window');
@@ -104,51 +107,46 @@ export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
   const [allAccounts, setAllAccounts] = useState<AccountItem[]>([]);
 
-  // 浏览器内核：chrome | firefox，默认 chrome
-  const [kernelType] = useState<'chrome' | 'firefox'>(KERNEL_TYPE_CHROME);
+  // 浏览器内核：chrome | firefox，编辑已有环境时按它绑定的内核决定
+  const [kernelType, setKernelType] = useState<'chrome' | 'firefox'>(
+    value.kernel?.startsWith('Firefox') ? KERNEL_TYPE_FIREFOX : KERNEL_TYPE_CHROME
+  );
   const [kernelVersions, setKernelVersions] = useState<BrowserKernelVersion[]>([]);
   const [kernelLoading, setKernelLoading] = useState(false);
+  const uaBrowser = kernelType === KERNEL_TYPE_FIREFOX ? 'Firefox' : 'Chrome';
 
-  const hasSetDefaultKernel = useRef<Record<string, boolean>>({});
-
-  // 加载内核版本列表（仅 Chrome 支持）
-  // 注意：所有系统都使用 Windows 平台的内核版本，系统选择只影响 UA 格式
-  const handleFirefoxClick = () => {
-    // 火狐内核还没有，点击只提示
-    toast.info(t('windowInfo.firefoxNotSupported'));
+  const switchKernelType = (next: 'chrome' | 'firefox') => {
+    if (next === kernelType) return;
+    setKernelType(next);
+    if (next === KERNEL_TYPE_FIREFOX && !FIREFOX_SYSTEMS.includes(value.system)) {
+      onChange({ ...value, system: 'Windows' });
+    }
   };
 
-  // 只在 kernelType 变化时加载一次
+  // kernelType 变化时加载对应的内核列表；所有系统都用 Windows 平台的内核，系统只影响 UA
   useEffect(() => {
-    if (kernelType !== KERNEL_TYPE_CHROME) {
-      setKernelVersions([]);
-      return;
-    }
-    // 始终使用 Windows 平台的内核版本列表
     const platform = 'windows';
+    const typeCode = kernelType === KERNEL_TYPE_FIREFOX ? MZ_KERNEL_FIREFOX : MZ_KERNEL_CHROMIUM;
     setKernelLoading(true);
-    listBrowserKernels(platform, MZ_KERNEL_CHROMIUM)
+    listBrowserKernels(platform, typeCode)
       .then((data) => {
-        const versions = data[MZ_KERNEL_CHROMIUM] || [];
+        const versions = data[typeCode] || [];
         setKernelVersions(versions);
-        // 首次加载且 kernel 不在列表中时，设为第一个版本
+        // 当前内核不在这个列表里（新建环境，或刚切换了内核类型）时选第一个版本
         if (versions.length > 0) {
           const currentInList = versions.some(
             (v) => v.kernel_id === value.kernelId || (!value.kernelId && v.resource_name === value.kernel)
           );
-          const needDefault =
-            !hasSetDefaultKernel.current[platform] &&
-            (!currentInList || value.kernel === 'Chrome');
-          if (needDefault) {
-            hasSetDefaultKernel.current[platform] = true;
-            const firstResourceName = versions[0].resource_name;
-            const kernelVersion = versions[0].version;
-            const newUA = generateUserAgentByKernel(value.system, 'Chrome', kernelVersion);
+          if (!currentInList || value.kernel === 'Chrome') {
+            const system = kernelType === KERNEL_TYPE_FIREFOX && !FIREFOX_SYSTEMS.includes(value.system)
+              ? 'Windows'
+              : value.system;
             onChange({
               ...value,
-              kernel: firstResourceName,
+              system,
+              kernel: versions[0].resource_name,
               kernelId: versions[0].kernel_id,
-              userAgent: newUA,
+              userAgent: generateUserAgentByKernel(system, uaBrowser, versions[0].version),
             });
           }
         }
@@ -161,7 +159,7 @@ export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
     const selected = kernelVersions.find((kernel) => kernel.kernel_id === kernelId);
     if (!selected) return;
     const kernelVersion = getCurrentKernelVersion(kernelVersions, kernelId);
-    const newUA = generateUserAgentByKernel(value.system, 'Chrome', kernelVersion);
+    const newUA = generateUserAgentByKernel(value.system, uaBrowser, kernelVersion);
     onChange({
       ...value,
       kernel: selected.resource_name,
@@ -208,9 +206,13 @@ export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
 
   return (
     <div className="relative space-y-4 p-4 border border-border rounded-lg overflow-hidden min-w-0">
-      {/* 右上角 Chrome 背景装饰图标 */}
+      {/* 右上角背景装饰图标 */}
       <div className="absolute -top-28 -right-28 pointer-events-none">
-        <SiGooglechrome className="w-96 h-96 text-muted-foreground/10" />
+        {kernelType === KERNEL_TYPE_FIREFOX ? (
+          <FaFirefoxBrowser className="w-96 h-96 text-muted-foreground/10" />
+        ) : (
+          <SiGooglechrome className="w-96 h-96 text-muted-foreground/10" />
+        )}
       </div>
 
       <h3 className="text-sm font-semibold">{t('sections.basicInfo')}</h3>
@@ -249,23 +251,27 @@ export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
           <div className="flex gap-1">
             {systemOptions.map((option) => {
               const IconComponent = option.icon;
+              const unavailable =
+                kernelType === KERNEL_TYPE_FIREFOX && !FIREFOX_SYSTEMS.includes(option.value);
               return (
                 <button
                   key={option.value}
                   type="button"
+                  disabled={unavailable}
                   onClick={() => {
                     const kernelVersion = getCurrentKernelVersion(
                       kernelVersions,
                       value.kernelId || value.kernel
                     );
-                    const newUA = generateUserAgentByKernel(option.value, 'Chrome', kernelVersion);
+                    const newUA = generateUserAgentByKernel(option.value, uaBrowser, kernelVersion);
                     onChange({ ...value, system: option.value, userAgent: newUA });
                   }}
                   className={cn(
                     'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded transition-all',
                     value.system === option.value
                       ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80',
+                    unavailable && 'cursor-not-allowed opacity-40 hover:bg-muted'
                   )}
                 >
                   <IconComponent />
@@ -282,6 +288,7 @@ export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
               <TooltipTrigger asChild>
                 <button
                   type="button"
+                  onClick={() => switchKernelType(KERNEL_TYPE_CHROME)}
                   className={cn(
                     'flex h-9 w-9 shrink-0 items-center justify-center rounded transition-all',
                     kernelType === KERNEL_TYPE_CHROME
@@ -298,18 +305,18 @@ export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  onClick={handleFirefoxClick}
+                  onClick={() => switchKernelType(KERNEL_TYPE_FIREFOX)}
                   className={cn(
                     'flex h-9 w-9 shrink-0 items-center justify-center rounded transition-all',
                     kernelType === KERNEL_TYPE_FIREFOX
                       ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground opacity-60 hover:bg-muted/80'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
                   )}
                 >
                   <FaFirefoxBrowser className="h-4 w-4" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent>{t('windowInfo.firefoxNotSupported')}</TooltipContent>
+              <TooltipContent>Firefox</TooltipContent>
             </Tooltip>
           <Select
             value={
@@ -381,12 +388,11 @@ export function WindowInfoForm({ value, onChange }: WindowInfoFormProps) {
             size="icon"
             className="h-9 w-9 shrink-0"
             onClick={() => {
-              const uaKernel = kernelType === KERNEL_TYPE_CHROME ? 'Chrome' : 'Firefox';
               const kernelVersion = getCurrentKernelVersion(
                 kernelVersions,
                 value.kernelId || value.kernel
               );
-              const newUA = generateUserAgentByKernel(value.system, uaKernel, kernelVersion);
+              const newUA = generateUserAgentByKernel(value.system, uaBrowser, kernelVersion);
               onChange({ ...value, userAgent: newUA });
             }}
           >

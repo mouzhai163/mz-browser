@@ -117,17 +117,6 @@ export const BrowserPanel: React.FC = () => {
               </div>
             ))
           )}
-          <div className="flex items-center justify-between rounded-md border border-dashed border-border bg-muted/40 px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                <Cpu className="h-[18px] w-[18px]" />
-              </div>
-              <div className="text-sm font-semibold text-muted-foreground">Firefox</div>
-            </div>
-            <span className="rounded border border-border bg-muted px-1.5 text-xs leading-5 text-muted-foreground">
-              {t('kernelPlanned', { defaultValue: '规划中' })}
-            </span>
-          </div>
         </div>
       </SettingCard>
 

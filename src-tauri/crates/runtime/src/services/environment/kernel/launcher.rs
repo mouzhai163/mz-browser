@@ -1,8 +1,9 @@
 use super::cdp::CdpEndpointManager;
+use super::gecko;
 use super::job::JobManager;
 use super::types::{
-    BatchLaunchResult, CdpEndpointResponse, EnvironmentStartRequest, RpaTabCloseResult,
-    RpaTabSelection, RpaTabsSnapshot, WindowBoundsRequest,
+    BatchLaunchResult, CdpEndpointResponse, EnvironmentStartRequest, KernelEngine,
+    RpaTabCloseResult, RpaTabSelection, RpaTabsSnapshot, WindowBoundsRequest,
 };
 use crate::app::{EventPublisher, Result, RuntimeError};
 use crate::infrastructure::diagnostics::{log_info, log_warn};
@@ -33,6 +34,10 @@ pub async fn launch_browser(
     status_manager: Arc<EnvironmentStatusManager>,
     events: EventPublisher,
 ) -> Result<CdpEndpointResponse> {
+    if request.engine == KernelEngine::Gecko {
+        return gecko::launch_browser(request, cdp_endpoint_manager, job_manager, status_manager, events)
+            .await;
+    }
     let env_id = request.env_uuid.trim().to_string();
     if matches!(
         status_manager.get_status(&env_id).await,
@@ -679,6 +684,10 @@ pub async fn stop_environment(
     events: EventPublisher,
 ) -> Result<()> {
     let env_id = env_uuid.trim().to_string();
+    if gecko::instance(&env_id).await.is_some() {
+        return gecko::stop_environment(&env_id, cdp_endpoint_manager, job_manager, status_manager, events)
+            .await;
+    }
     let manager = eventbus_manager();
 
     if !manager.is_connected(&env_id).await {
@@ -716,6 +725,11 @@ pub async fn refresh_proxy(
     events: EventPublisher,
 ) -> Result<()> {
     let env_id = env_uuid.trim().to_string();
+    if gecko::instance(&env_id).await.is_some() {
+        gecko::refresh_proxy(&env_id, proxy.as_ref()).await?;
+        let _ = events.emit("environment.proxy_refreshed", &serde_json::json!({ "env_uuid": env_id }));
+        return Ok(());
+    }
     let manager = eventbus_manager();
 
     if !manager.is_connected(&env_id).await {
@@ -738,16 +752,18 @@ pub async fn refresh_proxy(
 
 pub async fn set_window_bounds(request: WindowBoundsRequest, events: EventPublisher) -> Result<()> {
     let env_id = request.env_uuid.trim().to_string();
-    let manager = eventbus_manager();
-
-    if !manager.is_connected(&env_id).await {
-        return Err(RuntimeError::Internal(format!("环境 {} 未连接", env_id)));
+    if gecko::instance(&env_id).await.is_some() {
+        gecko::set_window_bounds(&env_id, request.x, request.y, request.width, request.height).await?;
+    } else {
+        let manager = eventbus_manager();
+        if !manager.is_connected(&env_id).await {
+            return Err(RuntimeError::Internal(format!("环境 {} 未连接", env_id)));
+        }
+        let payload =
+            encode_window_bounds_payload(request.x, request.y, request.width, request.height)?;
+        let message = Message::event(Topic::WindowSetBounds, payload);
+        manager.send(&env_id, &message).await?;
     }
-
-    let payload =
-        encode_window_bounds_payload(request.x, request.y, request.width, request.height)?;
-    let message = Message::event(Topic::WindowSetBounds, payload);
-    manager.send(&env_id, &message).await?;
 
     let _ = events.emit(
         "environment.window_bounds_updated",
@@ -763,11 +779,12 @@ pub async fn set_window_bounds(request: WindowBoundsRequest, events: EventPublis
 }
 
 pub async fn get_connected_environments() -> Result<Vec<String>> {
-    if let Some(manager) = get_eventbus_manager() {
-        Ok(manager.connected_envs().await)
-    } else {
-        Ok(vec![])
-    }
+    let mut envs = match get_eventbus_manager() {
+        Some(manager) => manager.connected_envs().await,
+        None => vec![],
+    };
+    envs.extend(gecko::running_envs().await);
+    Ok(envs)
 }
 
 pub async fn get_cdp_endpoint(
@@ -775,6 +792,16 @@ pub async fn get_cdp_endpoint(
     cdp_endpoint_manager: Arc<CdpEndpointManager>,
 ) -> Result<Option<CdpEndpointResponse>> {
     let env_id = env_uuid.trim().to_string();
+    if let Some(instance) = gecko::instance(&env_id).await {
+        return Ok(Some(CdpEndpointResponse {
+            env_uuid: env_id,
+            host: "127.0.0.1".into(),
+            port: instance.port,
+            version_url: String::new(),
+            list_url: String::new(),
+            browser_ws_url: Some(gecko::session_url(instance.port)),
+        }));
+    }
     Ok(cdp_endpoint_manager
         .get_endpoint(&env_id)
         .await
@@ -790,6 +817,9 @@ pub async fn get_cdp_endpoint(
 
 pub async fn list_rpa_tabs(env_uuid: String) -> Result<RpaTabsSnapshot> {
     let env_id = env_uuid.trim().to_string();
+    if gecko::instance(&env_id).await.is_some() {
+        return gecko::list_rpa_tabs(&env_id).await;
+    }
     let manager = eventbus_manager();
 
     if !manager.is_connected(&env_id).await {
@@ -809,6 +839,9 @@ pub async fn list_rpa_tabs(env_uuid: String) -> Result<RpaTabsSnapshot> {
 
 pub async fn select_rpa_tab(env_uuid: String, position: u32) -> Result<RpaTabSelection> {
     let env_id = env_uuid.trim().to_string();
+    if gecko::instance(&env_id).await.is_some() {
+        return gecko::select_rpa_tab(&env_id, position).await;
+    }
     let manager = eventbus_manager();
 
     if !manager.is_connected(&env_id).await {
@@ -828,6 +861,9 @@ pub async fn select_rpa_tab(env_uuid: String, position: u32) -> Result<RpaTabSel
 
 pub async fn close_rpa_tab(env_uuid: String, position: u32) -> Result<RpaTabCloseResult> {
     let env_id = env_uuid.trim().to_string();
+    if gecko::instance(&env_id).await.is_some() {
+        return gecko::close_rpa_tab(&env_id, position).await;
+    }
     let manager = eventbus_manager();
 
     if !manager.is_connected(&env_id).await {

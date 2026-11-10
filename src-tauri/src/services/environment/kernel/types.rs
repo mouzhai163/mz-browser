@@ -134,6 +134,8 @@ pub const TIMEZONE_DETECTION_TIMEOUT_SECS: u64 = 10;
 #[derive(Debug, Deserialize)]
 pub struct BatchLaunchRequest {
     pub exe_path: String,
+    #[serde(default)]
+    pub engine: crate::domain::environment::KernelEngine,
     pub env_uuid: String,
     pub cache_path: String,
     pub cookies: Option<Vec<CookieGroup>>,

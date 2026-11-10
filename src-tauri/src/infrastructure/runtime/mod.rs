@@ -8,7 +8,7 @@ pub use api::{
     AccountConfig, AuthCommandRequest, AuthCommandResponse, AuthInfo, AuthResponse,
     BatchLaunchResult, CdpEndpointResponse, CookieGroup, DestroyContextRequest, EmptyPayload,
     EnvConnectionPayload, EnvironmentCommandRequest, EnvironmentCommandResponse,
-    EnvironmentResponse, EnvironmentStartRequest, ErrorResponse, FingerprintConfig,
+    EnvironmentResponse, EnvironmentStartRequest, ErrorResponse, FingerprintConfig, GeckoLaunchSpec,
     HandshakeRequest, HandshakeResponse, InitializeContextRequest, RpaTabCloseResult, RpaTabInfo,
     RpaTabSelection, RpaTabsSnapshot, RunningEnvironment, RuntimeContextInput,
     RuntimeEventEnvelope, RuntimePhase, RuntimeStateSnapshot, StateResponse, SyncCommandRequest,

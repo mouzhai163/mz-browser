@@ -708,6 +708,19 @@ mod tests {
             .as_deref()
             .unwrap()
             .starts_with("https://github.com/mouzhai163/browser-kernel/releases/download/"));
+
+        // Firefox 内核单独成组，不会混进 Chromium 的列表，也不会成为默认内核
+        let firefox = list_browser_kernels(&pool, Some("windows"), Some("MZ_KERNEL_FIREFOX"))
+            .await
+            .unwrap();
+        let firefox = &firefox["MZ_KERNEL_FIREFOX"];
+        assert_eq!(firefox.len(), 1);
+        assert_eq!(firefox[0].install_dir_name, "Firefox 158");
+        assert_eq!(firefox[0].signature.len(), 64);
+        assert_eq!(
+            default_browser_kernel(&pool).await.unwrap().unwrap().type_code,
+            "MZ_KERNEL_CHROMIUM"
+        );
     }
 
     #[tokio::test]

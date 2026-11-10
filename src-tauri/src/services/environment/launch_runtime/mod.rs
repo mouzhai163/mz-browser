@@ -12,6 +12,7 @@ use tauri::AppHandle;
 use crate::{
     app::handle::get_app_handle,
     core::error::Result,
+    domain::environment::KernelEngine,
     infrastructure::persistence::tauri_store,
     services::environment::{
         AccountInfo, BatchLaunchRequest, BatchLaunchResult, CookieGroup, ExtensionInfo,
@@ -57,6 +58,7 @@ impl EnvironmentLaunchRuntimeService {
         KernelService::launch_environment(
             app,
             request.exe_path,
+            request.engine,
             request.env_uuid,
             request.cache_path,
             request.cookies,
@@ -91,6 +93,7 @@ impl EnvironmentLaunchRuntimeService {
         KernelService::launch_environment(
             app,
             request.exe_path,
+            request.engine,
             request.env_uuid,
             request.cache_path,
             request.cookies,
@@ -159,7 +162,10 @@ impl EnvironmentLaunchRuntimeService {
         if let (Some(user_agent), Some(major)) =
             (fingerprint_config.user_agent.as_mut(), resolved_kernel.major_version)
         {
-            *user_agent = kernel::align_user_agent_major(user_agent, major);
+            *user_agent = match resolved_kernel.engine {
+                KernelEngine::Chromium => kernel::align_user_agent_major(user_agent, major),
+                KernelEngine::Gecko => kernel::firefox_user_agent(user_agent, major),
+            };
         }
         fingerprint_config.env_id = display_id;
         fingerprint_config.env_name = Some(
@@ -171,6 +177,7 @@ impl EnvironmentLaunchRuntimeService {
 
         Ok(BatchLaunchRequest {
             exe_path: resolved_kernel.exe_path,
+            engine: resolved_kernel.engine,
             env_uuid: env.uuid.clone(),
             cache_path: launch_paths.cache_path.clone(),
             cookies: normalize_cookies(detail.cookies),

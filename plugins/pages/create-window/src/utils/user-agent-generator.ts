@@ -21,26 +21,6 @@ function randomChoice<T>(arr: T[]): T {
 // ==================== 版本号生成规则 ====================
 
 /**
- * Firefox 真实版本数据 (2024-2025)
- * 格式: major.minor
- */
-const FIREFOX_VERSIONS = [
-  { major: 115, minor: 0 }, // ESR
-  { major: 122, minor: 0 },
-  { major: 123, minor: 0 },
-  { major: 124, minor: 0 },
-  { major: 125, minor: 0 },
-  { major: 126, minor: 0 },
-  { major: 127, minor: 0 },
-  { major: 128, minor: 0 }, // ESR
-  { major: 129, minor: 0 },
-  { major: 130, minor: 0 },
-  { major: 131, minor: 0 },
-  { major: 132, minor: 0 },
-  { major: 133, minor: 0 },
-];
-
-/**
  * Safari 真实版本数据 (2023-2025)
  * 格式: major.minor.patch
  */
@@ -58,30 +38,7 @@ const SAFARI_VERSIONS = [
   { major: 18, minor: 1, patch: 0, webkit: '605.1.15' },
 ];
 
-// 删除旧的 EDGE_VERSIONS 和 OPERA_VERSIONS 常量，改用动态生成
-
 // ==================== 操作系统配置 ====================
-
-/** Windows 版本配置 */
-interface WindowsConfig {
-  platform: string;
-  architecture: 'Win64; x64' | 'WOW64';
-}
-
-const WINDOWS_CONFIGS: WindowsConfig[] = [
-  // Windows 10/11 (现代 Chrome 144 只使用 NT 10.0)
-  // Windows 11 也报告为 NT 10.0
-  { platform: 'Windows NT 10.0', architecture: 'Win64; x64' },
-  { platform: 'Windows NT 10.0', architecture: 'Win64; x64' },
-  { platform: 'Windows NT 10.0', architecture: 'Win64; x64' },
-  { platform: 'Windows NT 10.0', architecture: 'Win64; x64' },
-  { platform: 'Windows NT 10.0', architecture: 'Win64; x64' },
-  { platform: 'Windows NT 10.0', architecture: 'Win64; x64' },
-  { platform: 'Windows NT 10.0', architecture: 'Win64; x64' },
-  { platform: 'Windows NT 10.0', architecture: 'Win64; x64' },
-  { platform: 'Windows NT 10.0', architecture: 'Win64; x64' },
-  { platform: 'Windows NT 10.0', architecture: 'Win64; x64' },
-];
 
 /** macOS 版本配置 (10.15 - 14.x) */
 interface MacOSConfig {
@@ -114,50 +71,6 @@ const MACOS_CONFIGS: MacOSConfig[] = [
   { version: '15_0', chip: 'M3' },
   { version: '15_1', chip: 'M3' },
 ];
-
-/** Linux 发行版配置 */
-const LINUX_CONFIGS = [
-  'X11; Linux x86_64',
-  'X11; Linux i686',
-  'X11; Ubuntu; Linux x86_64',
-  'X11; Fedora; Linux x86_64',
-  'X11; Debian; Linux x86_64',
-  'X11; CentOS; Linux x86_64',
-  'X11; Arch Linux; Linux x86_64',
-];
-
-// ==================== 操作系统字符串生成 ====================
-
-function getWindowsOSString(): string {
-  const config = randomChoice(WINDOWS_CONFIGS);
-  return `${config.platform}; ${config.architecture}`;
-}
-
-function getMacOSString(): string {
-  const config = randomChoice(MACOS_CONFIGS);
-  if (config.chip === 'Intel') {
-    return `Macintosh; Intel Mac OS X ${config.version}`;
-  }
-  // Apple Silicon 使用不同的格式
-  return `Macintosh; Intel Mac OS X ${config.version}`;
-}
-
-function getLinuxOSString(): string {
-  return randomChoice(LINUX_CONFIGS);
-}
-
-function getOSString(system: string): string {
-  switch (system) {
-    case 'Windows':
-      return getWindowsOSString();
-    case 'macOS':
-      return getMacOSString();
-    case 'Linux':
-      return getLinuxOSString();
-    default:
-      return getWindowsOSString();
-  }
-}
 
 // ==================== User Agent 生成函数 ====================
 
@@ -192,12 +105,25 @@ function generateChromeUA(system: string, versionString?: string): string {
   return `Mozilla/5.0 (${platform}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`;
 }
 
-/** 生成 Firefox User-Agent */
-function generateFirefoxUA(system: string): string {
-  const os = getOSString(system);
-  const version = randomChoice(FIREFOX_VERSIONS);
-  const versionStr = version.minor > 0 ? `${version.major}.${version.minor}` : `${version.major}.0`;
-  return `Mozilla/5.0 (${os}; rv:${versionStr}) Gecko/20100101 Firefox/${versionStr}`;
+/** 没有选中 Firefox 内核时的兜底主版本号；真正启动时会按实际内核再校正一次 */
+const DEFAULT_FIREFOX_MAJOR = 158;
+
+/** 真实 Firefox 的 UA 系统部分同样是固定写法（macOS 恒为 10.15） */
+const FIREFOX_PLATFORM_TOKENS: Record<string, string> = {
+  Windows: 'Windows NT 10.0; Win64; x64',
+  macOS: 'Macintosh; Intel Mac OS X 10.15',
+  Linux: 'X11; Linux x86_64',
+};
+
+/**
+ * 生成 Firefox User-Agent：rv 和 Firefox 版本都写成 `主版本.0`，主版本取内核版本。
+ * @param versionString Firefox 内核版本号（如 "158.0.1"）；不传时用兜底值
+ */
+function generateFirefoxUA(system: string, versionString?: string): string {
+  const platform = FIREFOX_PLATFORM_TOKENS[system] ?? FIREFOX_PLATFORM_TOKENS.Windows;
+  const parsed = versionString ? parseInt(versionString.split('.')[0], 10) : NaN;
+  const major = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_FIREFOX_MAJOR;
+  return `Mozilla/5.0 (${platform}; rv:${major}.0) Gecko/20100101 Firefox/${major}.0`;
 }
 
 /** 生成 Edge User-Agent：Edge 和 Chrome 主版本相同，同样做了 UA 精简 */
@@ -312,7 +238,8 @@ export function generateUserAgent(
     case 'Chrome':
       return generateChromeUA(system, chromeVersionString);
     case 'Firefox':
-      return generateFirefoxUA(system);
+      // 随机挑中 Firefox 时传进来的是 Chrome 内核版本，不能拿来当 Firefox 版本
+      return generateFirefoxUA(system, browser === 'Firefox' ? chromeVersionString : undefined);
     case 'Edge':
       return generateEdgeUA(system, chromeVersionString);
     case 'Safari':

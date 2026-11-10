@@ -21,10 +21,11 @@ fn automatic_geolocation(config: &FingerprintConfig) -> bool {
         .is_some_and(|value| value.trim().eq_ignore_ascii_case("ip"))
 }
 
+/// 按需解析语言、时区和定位；做了出口检测时返回检测到的出口 IP。
 pub(super) async fn resolve_network_fingerprint(
     config: &mut FingerprintConfig,
     proxy: Option<&ProxyConfig>,
-) -> Result<(), String> {
+) -> Result<Option<String>, String> {
     if !automatic(&config.language)
         && !config
             .interface_language
@@ -36,9 +37,23 @@ pub(super) async fn resolve_network_fingerprint(
         if config.interface_language.is_none() {
             config.interface_language = config.language.clone();
         }
-        return Ok(());
+        return Ok(None);
     }
 
+    let info = detect_exit(proxy).await?;
+    apply_network_info(config, &info)?;
+    Ok(Some(info.ip.trim().to_string()).filter(|ip| !ip.is_empty()))
+}
+
+/// 出口 IP（WebRTC 选“替换”时要写进候选地址）。
+pub(super) async fn detect_exit_ip(proxy: Option<&ProxyConfig>) -> Result<String, String> {
+    let info = detect_exit(proxy).await?;
+    Some(info.ip.trim().to_string())
+        .filter(|ip| !ip.is_empty())
+        .ok_or_else(|| "出口检测缺少 IP，已阻止启动".to_string())
+}
+
+async fn detect_exit(proxy: Option<&ProxyConfig>) -> Result<IpInfo, String> {
     // One GeoIP response supplies all automatic fields. A configured proxy is
     // mandatory for this request; no fallback to another network exit is allowed.
     let detected = if let Some(proxy) = proxy {
@@ -56,8 +71,7 @@ pub(super) async fn resolve_network_fingerprint(
             "出口地区检测失败，已阻止启动；请检查代理或明确设置语言、时区和定位".to_string(),
         );
     }
-    let info = detected.ip_info.ok_or("出口地区检测缺少结果，已阻止启动")?;
-    apply_network_info(config, &info)
+    detected.ip_info.ok_or_else(|| "出口地区检测缺少结果，已阻止启动".to_string())
 }
 
 fn apply_network_info(config: &mut FingerprintConfig, info: &IpInfo) -> Result<(), String> {

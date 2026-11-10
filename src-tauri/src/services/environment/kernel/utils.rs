@@ -1,7 +1,7 @@
 //! 内核服务工具函数
 
 use crate::core::error::Result;
-use crate::domain::environment::EnvironmentStatus;
+use crate::domain::environment::{EnvironmentStatus, KernelEngine};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io;
@@ -67,12 +67,18 @@ pub fn extract_zip_to_dir(zip_path: &Path, target_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// 可执行文件名
-pub fn exe_name() -> &'static str {
-    #[cfg(target_os = "windows")]
-    return "mz.exe";
-    #[cfg(not(target_os = "windows"))]
-    return "mz";
+/// 可执行文件名。Firefox 内核目前用 Camoufox 的发布包，主程序是 camoufox.exe。
+pub fn exe_name(engine: KernelEngine) -> &'static str {
+    match engine {
+        #[cfg(target_os = "windows")]
+        KernelEngine::Chromium => "mz.exe",
+        #[cfg(not(target_os = "windows"))]
+        KernelEngine::Chromium => "mz",
+        #[cfg(target_os = "windows")]
+        KernelEngine::Gecko => "camoufox.exe",
+        #[cfg(not(target_os = "windows"))]
+        KernelEngine::Gecko => "camoufox",
+    }
 }
 
 /// 校验内核目录是否包含启动所需的文件。
@@ -80,9 +86,13 @@ pub fn exe_name() -> &'static str {
 /// Windows 版本的 MZ指纹浏览器 Chromium 会在主进程启动时拉起 Crashpad
 /// handler；只校验 chrome.dll 的哈希无法发现缺少该子进程的残缺安装包。
 /// 当前内核可将 Crashpad handler 集成在主程序中，因此这里只要求主程序存在。
-pub fn validate_kernel_package_layout(kernel_dir: &Path) -> Result<()> {
-    let required_files = [exe_name()];
-    for file_name in required_files {
+pub fn validate_kernel_package_layout(kernel_dir: &Path, engine: KernelEngine) -> Result<()> {
+    // Firefox 的核心库直接放在根目录，没有 Chromium 那样的版本子目录
+    let required_files: &[&str] = match engine {
+        KernelEngine::Chromium => &[exe_name(engine)],
+        KernelEngine::Gecko => &[exe_name(engine), core_dll_name(engine)],
+    };
+    for &file_name in required_files {
         let path = kernel_dir.join(file_name);
         if !path.is_file() {
             return Err(format!("内核包不完整：缺少 {}", path.display()).into());
@@ -92,14 +102,22 @@ pub fn validate_kernel_package_layout(kernel_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// 核心 DLL 文件名
-pub fn core_dll_name() -> &'static str {
-    #[cfg(target_os = "windows")]
-    return "chrome.dll";
-    #[cfg(target_os = "macos")]
-    return "Chromium Framework";
-    #[cfg(target_os = "linux")]
-    return "libchrome.so";
+/// 核心 DLL 文件名，内核签名就是它的整文件 SHA-256
+pub fn core_dll_name(engine: KernelEngine) -> &'static str {
+    match engine {
+        #[cfg(target_os = "windows")]
+        KernelEngine::Chromium => "chrome.dll",
+        #[cfg(target_os = "macos")]
+        KernelEngine::Chromium => "Chromium Framework",
+        #[cfg(target_os = "linux")]
+        KernelEngine::Chromium => "libchrome.so",
+        #[cfg(target_os = "windows")]
+        KernelEngine::Gecko => "xul.dll",
+        #[cfg(target_os = "macos")]
+        KernelEngine::Gecko => "XUL",
+        #[cfg(target_os = "linux")]
+        KernelEngine::Gecko => "libxul.so",
+    }
 }
 
 /// 计算文件前 N 字节的 SHA256 哈希
@@ -212,7 +230,8 @@ pub fn emit_status(
 
 #[cfg(test)]
 mod tests {
-    use super::{exe_name, resolve_kernel_install_dir, validate_kernel_package_layout};
+    use super::{core_dll_name, exe_name, resolve_kernel_install_dir, validate_kernel_package_layout};
+    use crate::domain::environment::KernelEngine;
     use std::path::Path;
 
     #[test]
@@ -239,7 +258,7 @@ mod tests {
         ));
         std::fs::create_dir_all(&dir).unwrap();
 
-        let result = validate_kernel_package_layout(&dir);
+        let result = validate_kernel_package_layout(&dir, KernelEngine::Chromium);
         assert!(result.is_err());
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -255,9 +274,23 @@ mod tests {
                 .as_nanos()
         ));
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join(exe_name()), b"test").unwrap();
+        std::fs::write(dir.join(exe_name(KernelEngine::Chromium)), b"test").unwrap();
 
-        assert!(validate_kernel_package_layout(&dir).is_ok());
+        assert!(validate_kernel_package_layout(&dir, KernelEngine::Chromium).is_ok());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn firefox_kernel_needs_its_executable_and_xul_at_the_top_level() {
+        let dir = std::env::temp_dir().join(format!("mz-gecko-layout-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(exe_name(KernelEngine::Gecko)), b"exe").unwrap();
+        assert!(validate_kernel_package_layout(&dir, KernelEngine::Gecko).is_err());
+
+        std::fs::write(dir.join(core_dll_name(KernelEngine::Gecko)), b"xul").unwrap();
+        assert!(validate_kernel_package_layout(&dir, KernelEngine::Gecko).is_ok());
+        // Chromium 的主程序名不一样，同一个目录不能当 Chromium 内核用
+        assert!(validate_kernel_package_layout(&dir, KernelEngine::Chromium).is_err());
         let _ = std::fs::remove_dir_all(dir);
     }
 }

@@ -192,6 +192,20 @@ pub struct EnvironmentStartRequest {
     pub window_position: Option<String>,
     pub window_size: Option<String>,
     pub extension_dirs: Option<Vec<String>>,
+    #[serde(default)]
+    pub engine: crate::domain::environment::KernelEngine,
+    #[serde(default)]
+    pub gecko: Option<GeckoLaunchSpec>,
+}
+
+/// Firefox（Camoufox）内核的启动数据：`config` 进 `CAMOU_CONFIG`，`prefs` 进 `CAMOU_PREFS`。
+/// 代理相关的偏好项由运行时按它起的本地转发端口补上。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct GeckoLaunchSpec {
+    pub config: serde_json::Map<String, Value>,
+    pub prefs: serde_json::Map<String, Value>,
+    /// 窗口位置和大小 (x, y, width, height)
+    pub window: Option<(i32, i32, i32, i32)>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -15,7 +15,7 @@ use super::types::KernelStatusEmitter;
 use super::utils::{
     core_dll_name, emit_status, exe_name, extract_zip_to_dir, matched_core_dll_signature,
 };
-use super::verifier::find_version_subdir;
+use super::verifier::find_core_dll_dir;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(45);
@@ -95,10 +95,11 @@ pub async fn download_and_install_kernel(
         &zip_path,
         kernel_dir,
         kernel_detail.requires_extract,
+        kernel_detail.engine,
         status_emitter.clone(),
     )?;
 
-    let exe_path = kernel_dir.join(exe_name());
+    let exe_path = kernel_dir.join(exe_name(kernel_detail.engine));
     if !exe_path.exists() {
         emit_status(
             status_emitter.as_ref(),
@@ -113,7 +114,7 @@ pub async fn download_and_install_kernel(
         return Err("解压后未找到可执行文件".into());
     }
 
-    super::utils::validate_kernel_package_layout(kernel_dir).map_err(|error| {
+    super::utils::validate_kernel_package_layout(kernel_dir, kernel_detail.engine).map_err(|error| {
         emit_status(
             status_emitter.as_ref(),
             env_uuid,
@@ -133,6 +134,7 @@ pub async fn download_and_install_kernel(
             env_uuid,
             kernel_value,
             kernel_dir,
+            kernel_detail.engine,
             sig,
             status_emitter.clone(),
         )?;
@@ -465,6 +467,7 @@ fn extract_or_move_kernel(
     zip_path: &Path,
     kernel_dir: &Path,
     requires_extract: bool,
+    engine: crate::domain::environment::KernelEngine,
     status_emitter: Option<KernelStatusEmitter>,
 ) -> Result<()> {
     if requires_extract {
@@ -495,7 +498,7 @@ fn extract_or_move_kernel(
         fs::remove_file(zip_path)?;
     } else {
         fs::create_dir_all(kernel_dir)?;
-        let dest = kernel_dir.join(exe_name());
+        let dest = kernel_dir.join(exe_name(engine));
         if fs::rename(zip_path, &dest).is_err() {
             fs::copy(zip_path, &dest)?;
             fs::remove_file(zip_path)?;
@@ -510,6 +513,7 @@ fn verify_core_dll_signature(
     env_uuid: &Option<String>,
     kernel_value: &str,
     kernel_dir: &Path,
+    engine: crate::domain::environment::KernelEngine,
     signature: &str,
     status_emitter: Option<KernelStatusEmitter>,
 ) -> Result<()> {
@@ -518,7 +522,7 @@ fn verify_core_dll_signature(
         return Ok(());
     }
 
-    let version_dir = find_version_subdir(kernel_dir).map_err(|e| {
+    let version_dir = find_core_dll_dir(kernel_dir, engine).map_err(|e| {
         emit_status(
             status_emitter.as_ref(),
             env_uuid,
@@ -531,7 +535,7 @@ fn verify_core_dll_signature(
         );
         e
     })?;
-    let dll_path = version_dir.join(core_dll_name());
+    let dll_path = version_dir.join(core_dll_name(engine));
 
     if !dll_path.exists() {
         emit_status(

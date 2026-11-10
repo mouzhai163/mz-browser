@@ -1,6 +1,6 @@
 //! 浏览器内核准备与启动服务
 //!
-//! 负责：检查/下载/解压内核、校验 chrome.dll 哈希、启动环境进程
+//! 负责：检查/下载/解压内核、校验核心库（Chromium 的 chrome.dll、Firefox 的 xul.dll）哈希、启动环境进程
 
 use crate::core::error::Result;
 use crate::domain::environment::{EnvironmentStatus, KernelDetail};
@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 pub mod downloader;
 pub mod extension;
+mod gecko_profile;
 pub mod language;
 mod network_fingerprint;
 mod runtime_bridge;
@@ -50,7 +51,7 @@ async fn record_ready_installation(
 }
 
 impl KernelService {
-    /// 确保内核已就绪：目录不存在则下载并解压，存在则校验 chrome.dll 哈希
+    /// 确保内核已就绪：目录不存在则下载并解压，存在则校验核心库哈希
     pub async fn ensure_kernel_ready(
         app: tauri::AppHandle,
         env_uuid: Option<String>,
@@ -94,7 +95,7 @@ impl KernelService {
         let _prepare_guard = state::acquire_kernel_prepare_lock(&kernel_id).await;
         let base = utils::resolve_profiles_base(&app, &profiles_path)?;
         let kernel_dir = utils::resolve_kernel_install_dir(&base, &install_dir_name)?;
-        let exe_path = kernel_dir.join(utils::exe_name());
+        let exe_path = kernel_dir.join(utils::exe_name(kernel_detail.engine));
 
         // 目录已存在：校验内核
         if kernel_dir.exists() {
@@ -102,7 +103,7 @@ impl KernelService {
                 return Err(format!("内核安装路径不是目录: {}", kernel_dir.display()).into());
             }
             // 检查内核包是否包含启动所需的完整运行时文件。
-            if let Err(error) = utils::validate_kernel_package_layout(&kernel_dir) {
+            if let Err(error) = utils::validate_kernel_package_layout(&kernel_dir, kernel_detail.engine) {
                 crate::log_warn!(
                     crate::core::logger::modules::KERNEL,
                     "内核目录不完整，将下载当前包替换: {} - {}",
@@ -152,11 +153,13 @@ impl KernelService {
                     let install_dir_name = install_dir_name.clone();
                     let kernel_dir = kernel_dir.clone();
                     let status_emitter = status_emitter.clone();
+                    let engine = kernel_detail.engine;
                     tokio::task::spawn_blocking(move || {
                         verifier::verify_kernel(
                             &env_uuid,
                             &install_dir_name,
                             &kernel_dir,
+                            engine,
                             &accepted_signatures,
                             status_emitter,
                         )
@@ -302,6 +305,7 @@ impl KernelService {
     pub async fn launch_environment(
         app: tauri::AppHandle,
         exe_path: String,
+        engine: crate::domain::environment::KernelEngine,
         env_uuid: String,
         cache_path: String,
         cookies: Option<Vec<types::CookieGroup>>,
@@ -315,6 +319,7 @@ impl KernelService {
         runtime_bridge::launch_environment(
             app,
             exe_path,
+            engine,
             env_uuid,
             cache_path,
             cookies,
@@ -449,7 +454,7 @@ async fn download_and_replace_kernel(
         }
     }
 
-    Ok(kernel_dir.join(utils::exe_name()))
+    Ok(kernel_dir.join(utils::exe_name(kernel_detail.engine)))
 }
 
 fn kernel_prepare_error(

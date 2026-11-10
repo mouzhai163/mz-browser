@@ -4730,7 +4730,9 @@ name = "runtime"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "base64 0.22.1",
  "bytes",
+ "futures-util",
  "log",
  "rand 0.8.5",
  "reqwest",
@@ -4739,6 +4741,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.17",
  "tokio",
+ "tokio-tungstenite",
  "windows 0.61.3",
 ]
 

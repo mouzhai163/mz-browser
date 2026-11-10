@@ -7,14 +7,14 @@ use tauri::AppHandle;
 
 use crate::app::context::AppContext;
 use crate::core::error::Result;
-use crate::domain::environment::EnvironmentStatus;
+use crate::domain::environment::{EnvironmentStatus, KernelEngine};
 use crate::infrastructure::runtime::{
     AccountConfig, CookieGroup, EnvironmentCommandRequest, EnvironmentCommandResponse,
     EnvironmentStartRequest, FingerprintConfig, WindowBoundsRequest,
 };
 
 use super::extension;
-use super::network_fingerprint::resolve_network_fingerprint;
+use super::network_fingerprint::{detect_exit_ip, resolve_network_fingerprint};
 use super::types::{
     AccountInfo, BatchLaunchRequest, BatchLaunchResult, CdpEndpointResponse, KernelStatusEmitter,
     ProxyConfig, RpaTabCloseResult, RpaTabSelection, RpaTabsSnapshot,
@@ -24,6 +24,7 @@ use super::utils::emit_status;
 pub async fn launch_environment(
     app: AppHandle,
     exe_path: String,
+    engine: KernelEngine,
     env_uuid: String,
     cache_path: String,
     cookies: Option<Vec<super::types::CookieGroup>>,
@@ -38,6 +39,7 @@ pub async fn launch_environment(
     let request = match prepare_start_request(
         app,
         exe_path,
+        engine,
         env_uuid,
         cache_path,
         cookies,
@@ -88,6 +90,7 @@ pub async fn batch_launch_environments(
             match prepare_start_request(
                 app,
                 request.exe_path,
+                request.engine,
                 request.env_uuid,
                 request.cache_path,
                 request.cookies,
@@ -357,6 +360,7 @@ pub async fn set_window_bounds(
 async fn prepare_start_request(
     app: AppHandle,
     exe_path: String,
+    engine: KernelEngine,
     env_uuid: String,
     cache_path: String,
     cookies: Option<Vec<super::types::CookieGroup>>,
@@ -393,8 +397,16 @@ async fn prepare_start_request(
         None,
     );
 
+    let mut exit_ip = None;
     if let Some(ref mut config) = fingerprint_config {
-        resolve_network_fingerprint(config, proxy.as_ref()).await?;
+        exit_ip = resolve_network_fingerprint(config, proxy.as_ref()).await?;
+        // Firefox 的 WebRTC“替换”要把候选地址写成出口 IP（Chromium 内核自己处理）
+        if engine == KernelEngine::Gecko
+            && config.webrtc.as_deref() == Some("replace")
+            && exit_ip.is_none()
+        {
+            exit_ip = Some(detect_exit_ip(proxy.as_ref()).await?);
+        }
     }
 
     if let Some(ctx) = AppContext::try_get() {
@@ -438,7 +450,20 @@ async fn prepare_start_request(
         None => None,
     };
 
-    let extensions = merge_local_extensions(&app, extensions)?;
+    let extensions = match engine {
+        KernelEngine::Chromium => merge_local_extensions(&app, extensions)?,
+        KernelEngine::Gecko => {
+            // 现在的插件都是 Chrome 的 .crx，Firefox 装不了；先不带插件启动
+            if extensions.as_ref().is_some_and(|items| !items.is_empty()) {
+                crate::log_warn!(
+                    crate::core::logger::modules::KERNEL,
+                    "Firefox 内核暂不支持 Chrome 插件，环境 {} 不加载插件启动",
+                    env_id
+                );
+            }
+            None
+        }
+    };
 
     let extension_dirs = match extensions {
         Some(extensions) if !extensions.is_empty() => {
@@ -454,6 +479,17 @@ async fn prepare_start_request(
             if dirs.is_empty() { None } else { Some(dirs) }
         }
         _ => None,
+    };
+
+    let gecko = match (engine, fingerprint_config.as_ref()) {
+        (KernelEngine::Gecko, Some(config)) => {
+            let window = parse_pair(window_position.as_deref())
+                .zip(parse_pair(window_size.as_deref()))
+                .map(|((x, y), (width, height))| (x, y, width, height));
+            Some(super::gecko_profile::build_gecko_launch(config, window, exit_ip.as_deref()))
+        }
+        (KernelEngine::Gecko, None) => return Err("Firefox 内核启动缺少指纹配置".into()),
+        (KernelEngine::Chromium, _) => None,
     };
 
     Ok(EnvironmentStartRequest {
@@ -477,7 +513,15 @@ async fn prepare_start_request(
         window_position,
         window_size,
         extension_dirs,
+        engine,
+        gecko,
     })
+}
+
+/// "1280,720" -> (1280, 720)
+fn parse_pair(value: Option<&str>) -> Option<(i32, i32)> {
+    let (a, b) = value?.split_once(',')?;
+    Some((a.trim().parse().ok()?, b.trim().parse().ok()?))
 }
 
 fn ensure_browser_user_data_dir(path: &std::path::Path) -> Result<()> {

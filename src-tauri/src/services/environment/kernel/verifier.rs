@@ -1,7 +1,7 @@
 //! 内核校验模块
 
 use crate::core::error::Result;
-use crate::domain::environment::EnvironmentStatus;
+use crate::domain::environment::{EnvironmentStatus, KernelEngine};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -18,6 +18,7 @@ pub fn verify_kernel(
     env_uuid: &Option<String>,
     kernel_value: &str,
     kernel_dir: &Path,
+    engine: KernelEngine,
     expected_signatures: &[String],
     status_emitter: Option<KernelStatusEmitter>,
 ) -> Result<Option<String>> {
@@ -39,7 +40,7 @@ pub fn verify_kernel(
         kernel_dir.display()
     );
 
-    let version_dir = match find_version_subdir(kernel_dir) {
+    let version_dir = match find_core_dll_dir(kernel_dir, engine) {
         Ok(dir) => {
             crate::log_info!(
                 crate::core::logger::modules::KERNEL,
@@ -59,7 +60,7 @@ pub fn verify_kernel(
         }
     };
 
-    let dll_path = version_dir.join(core_dll_name());
+    let dll_path = version_dir.join(core_dll_name(engine));
     crate::log_info!(
         crate::core::logger::modules::KERNEL,
         "检查核心 DLL: {}",
@@ -116,10 +117,21 @@ pub fn verify_kernel(
     Ok(Some(local))
 }
 
+/// 核心 DLL 所在的目录：Chromium 在版本子目录里，Firefox 直接在内核根目录
+pub fn find_core_dll_dir(kernel_dir: &Path, engine: KernelEngine) -> Result<PathBuf> {
+    match engine {
+        KernelEngine::Chromium => find_version_subdir(kernel_dir),
+        KernelEngine::Gecko if kernel_dir.join(core_dll_name(engine)).is_file() => {
+            Ok(kernel_dir.to_path_buf())
+        }
+        KernelEngine::Gecko => Err(format!("内核目录里没有 {}", core_dll_name(engine)).into()),
+    }
+}
+
 /// 查找版本子目录
 ///
 /// 在内核目录中查找包含 .manifest 文件和核心 DLL 的版本子目录
-pub fn find_version_subdir(kernel_dir: &Path) -> Result<PathBuf> {
+fn find_version_subdir(kernel_dir: &Path) -> Result<PathBuf> {
     let entries = fs::read_dir(kernel_dir)?;
 
     for entry in entries.flatten() {
@@ -147,12 +159,12 @@ pub fn find_version_subdir(kernel_dir: &Path) -> Result<PathBuf> {
         let version_match = extract_xml_attribute(&content, "version");
 
         if let Some(ref name) = name_match {
-            if name == &dir_name && path.join(core_dll_name()).exists() {
+            if name == &dir_name && path.join(core_dll_name(KernelEngine::Chromium)).exists() {
                 return Ok(path);
             }
         }
         if let Some(ref version) = version_match {
-            if version == &dir_name && path.join(core_dll_name()).exists() {
+            if version == &dir_name && path.join(core_dll_name(KernelEngine::Chromium)).exists() {
                 return Ok(path);
             }
         }

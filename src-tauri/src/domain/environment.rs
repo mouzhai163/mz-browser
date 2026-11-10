@@ -62,9 +62,33 @@ impl EnvironmentStatus {
     }
 }
 
+/// 内核的浏览器引擎。目录里的 `type_code` 决定它：`MZ_KERNEL_FIREFOX` 是 Gecko，其余是 Chromium。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KernelEngine {
+    #[default]
+    Chromium,
+    Gecko,
+}
+
+impl KernelEngine {
+    pub const FIREFOX_TYPE_CODE: &'static str = "MZ_KERNEL_FIREFOX";
+
+    pub fn from_type_code(type_code: &str) -> Self {
+        if type_code.trim().eq_ignore_ascii_case(Self::FIREFOX_TYPE_CODE) {
+            Self::Gecko
+        } else {
+            Self::Chromium
+        }
+    }
+}
+
 /// 内核详情
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KernelDetail {
+    /// 浏览器引擎，决定可执行文件名、核心库和目录结构
+    #[serde(default)]
+    pub engine: KernelEngine,
     /// 下载 URL
     pub url: String,
     /// 文件哈希（用于下载验证）
@@ -83,6 +107,7 @@ impl KernelDetail {
     /// 创建内核详情
     pub fn new(url: String, hash: String, requires_extract: bool) -> Self {
         Self {
+            engine: KernelEngine::Chromium,
             url,
             hash,
             signature: None,

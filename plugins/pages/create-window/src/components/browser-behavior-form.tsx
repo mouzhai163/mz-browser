@@ -11,6 +11,8 @@ interface BrowserBehaviorFormProps {
   onBasicSettingsChange: (value: BasicSettings) => void;
   onDeviceSettingsChange: (value: DeviceSettings) => void;
   onAdvancedSettingsChange: (value: AdvancedFingerprintSettings) => void;
+  /** Firefox 内核不支持的 Chromium 专有项（SSL 指纹、端口扫描保护、沙箱、启动参数等）不显示 */
+  firefox?: boolean;
 }
 
 export function BrowserBehaviorForm({
@@ -20,6 +22,7 @@ export function BrowserBehaviorForm({
   onBasicSettingsChange,
   onDeviceSettingsChange,
   onAdvancedSettingsChange,
+  firefox = false,
 }: BrowserBehaviorFormProps) {
   const { t } = useTranslation('create-window');
 
@@ -70,6 +73,7 @@ export function BrowserBehaviorForm({
               }
             />
           </div>
+          {!firefox && (
           <div className="flex items-center justify-between gap-4">
             <Label className="text-xs shrink-0">{t('deviceSettings.sslFingerprint')}</Label>
             <Switch
@@ -79,7 +83,9 @@ export function BrowserBehaviorForm({
               }
             />
           </div>
+          )}
         </div>
+        {!firefox && (<>
         <div className="grid grid-cols-2 gap-x-12 gap-y-3">
           <div className="flex items-center justify-between gap-4">
             <Label className="text-xs shrink-0">{t('deviceSettings.portScanProtection')}</Label>
@@ -109,9 +115,11 @@ export function BrowserBehaviorForm({
             }
           />
         </div>
+        </>)}
       </div>
 
       {/* 启动参数 */}
+      {!firefox && (
       <div className="pt-2 border-t border-border">
         <div className="space-y-1">
           <Label htmlFor="startup-parameters" className="text-xs">
@@ -128,6 +136,7 @@ export function BrowserBehaviorForm({
           />
         </div>
       </div>
+      )}
     </div>
   );
 }

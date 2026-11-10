@@ -216,13 +216,16 @@ export function CreateWindowContent({
     [handleFullConfigUpdate, setSelectedGroupUuid, setSelectedTagUuids, t]
   );
 
+  const isFirefoxKernel = windowConfig.windowInfo.kernel?.startsWith('Firefox') ?? false;
+
   // 一键随机指纹
   const handleRandomizeFingerprint = useCallback(() => {
     const { fingerprintSettings, deviceSettings, platformVersion } = generateAllFingerprintSettings();
-    // 同时更新 User Agent。kernel 是 "Chrome 159" 这样的资源名，主版本号从里面取
+    // 同时更新 User Agent。kernel 是 "Chrome 159" / "Firefox 158" 这样的资源名，
+    // 浏览器类型看前缀，主版本号从里面取
     const newUserAgent = generateUserAgentByKernel(
       windowConfig.windowInfo.system,
-      windowConfig.windowInfo.kernel,
+      windowConfig.windowInfo.kernel.startsWith('Firefox') ? 'Firefox' : 'Chrome',
       windowConfig.windowInfo.kernel.match(/\d+/)?.[0]
     );
     // 一次性更新所有配置
@@ -452,6 +455,7 @@ export function CreateWindowContent({
               id="fingerprint"
             >
               <FingerprintForm
+                firefox={isFirefoxKernel}
                 value={windowConfig.advancedFingerprintSettings}
                 onChange={(value) => handleConfigUpdate('advancedFingerprintSettings', value)}
               />
@@ -465,6 +469,7 @@ export function CreateWindowContent({
               id="screen-hardware"
             >
               <ScreenHardwareForm
+                firefox={isFirefoxKernel}
                 advancedSettings={windowConfig.advancedFingerprintSettings}
                 deviceSettings={windowConfig.deviceSettings}
                 onAdvancedSettingsChange={(value) =>
@@ -482,6 +487,7 @@ export function CreateWindowContent({
               id="browser-behavior"
             >
               <BrowserBehaviorForm
+                firefox={isFirefoxKernel}
                 basicSettings={windowConfig.basicSettings}
                 deviceSettings={windowConfig.deviceSettings}
                 advancedSettings={windowConfig.advancedFingerprintSettings}
