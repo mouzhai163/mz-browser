@@ -14,7 +14,7 @@ use crate::infrastructure::runtime::{
 };
 
 use super::extension;
-use super::network_fingerprint::{detect_exit_ip, resolve_network_fingerprint};
+use super::network_fingerprint::{detect_exit_ip, resolve_network_fingerprint, ExitProbe};
 use super::types::{
     AccountInfo, BatchLaunchRequest, BatchLaunchResult, CdpEndpointResponse, KernelStatusEmitter,
     ProxyConfig, RpaTabCloseResult, RpaTabSelection, RpaTabsSnapshot,
@@ -33,6 +33,7 @@ pub async fn launch_environment(
     fingerprint_config: Option<FingerprintConfig>,
     accounts: Option<Vec<AccountInfo>>,
     extensions: Option<Vec<super::types::ExtensionInfo>>,
+    exit_probe: Option<ExitProbe>,
     status_emitter: Option<KernelStatusEmitter>,
 ) -> Result<()> {
     let env_id = env_uuid.trim().to_string();
@@ -48,6 +49,7 @@ pub async fn launch_environment(
         fingerprint_config,
         accounts,
         extensions,
+        exit_probe,
         status_emitter.clone(),
     )
     .await
@@ -99,6 +101,7 @@ pub async fn batch_launch_environments(
                 request.fingerprint_config,
                 request.accounts,
                 request.extensions,
+                request.exit_probe,
                 status_emitter.clone(),
             )
             .await
@@ -369,6 +372,7 @@ async fn prepare_start_request(
     mut fingerprint_config: Option<FingerprintConfig>,
     accounts: Option<Vec<AccountInfo>>,
     extensions: Option<Vec<super::types::ExtensionInfo>>,
+    mut exit_probe: Option<ExitProbe>,
     status_emitter: Option<KernelStatusEmitter>,
 ) -> Result<EnvironmentStartRequest> {
     let env_id = env_uuid.trim().to_string();
@@ -399,15 +403,20 @@ async fn prepare_start_request(
 
     let mut exit_ip = None;
     if let Some(ref mut config) = fingerprint_config {
-        exit_ip = resolve_network_fingerprint(config, proxy.as_ref()).await?;
+        exit_ip = resolve_network_fingerprint(config, proxy.as_ref(), &mut exit_probe).await?;
         // Firefox 的 WebRTC“替换”要把候选地址写成出口 IP（Chromium 内核自己处理）
         if engine == KernelEngine::Gecko
             && config.webrtc.as_deref() == Some("replace")
             && exit_ip.is_none()
         {
-            exit_ip = Some(detect_exit_ip(proxy.as_ref()).await?);
+            exit_ip = Some(detect_exit_ip(proxy.as_ref(), &mut exit_probe).await?);
         }
     }
+
+    // Chromium 的 WebRTC“替换”+ SOCKS5 代理：让内核把 WebRTC 的 UDP 全部经代理的 UDP 转发发出
+    // （STUN 看到的就是代理出口 IP）。启动前不检测代理是否支持 UDP：内核转发建不起来就关掉 UDP，
+    // 绝不直连，所以不支持 UDP 的代理也不会泄露真实 IP，只是没有 UDP 候选
+    let webrtc_udp_relay = webrtc_udp_relay_enabled(engine, fingerprint_config.as_ref(), proxy.as_ref());
 
     if let Some(ctx) = AppContext::try_get() {
         ctx.env_status_manager.set_status(&env_id, EnvironmentStatus::Starting).await;
@@ -515,7 +524,19 @@ async fn prepare_start_request(
         extension_dirs,
         engine,
         gecko,
+        webrtc_udp_relay,
     })
+}
+
+/// WebRTC 选“替换”且代理是 SOCKS5 时，内核把 WebRTC 的 UDP 经代理转发（--mz-webrtc-udp-relay）
+fn webrtc_udp_relay_enabled(
+    engine: KernelEngine,
+    config: Option<&FingerprintConfig>,
+    proxy: Option<&ProxyConfig>,
+) -> bool {
+    engine == KernelEngine::Chromium
+        && config.is_some_and(|config| config.webrtc.as_deref() == Some("replace"))
+        && proxy.is_some_and(|proxy| proxy.proxy_type.eq_ignore_ascii_case("socks5"))
 }
 
 /// "1280,720" -> (1280, 720)
@@ -557,6 +578,30 @@ mod tests {
         assert!(path.is_dir());
         assert!(!path.join(".mz-write-probe").exists());
         let _ = std::fs::remove_dir_all(path);
+    }
+
+    #[test]
+    fn webrtc_udp_relay_only_for_chromium_replace_over_socks5() {
+        use super::{webrtc_udp_relay_enabled, FingerprintConfig, KernelEngine, ProxyConfig};
+        let config = |webrtc: &str| -> FingerprintConfig {
+            serde_json::from_value(serde_json::json!({ "webrtc": webrtc })).unwrap()
+        };
+        let proxy = |kind: &str| ProxyConfig {
+            host: "127.0.0.1".into(),
+            port: 1080,
+            proxy_type: kind.into(),
+            username: None,
+            password: None,
+        };
+        let replace = config("replace");
+        let socks5 = proxy("SOCKS5");
+        assert!(webrtc_udp_relay_enabled(KernelEngine::Chromium, Some(&replace), Some(&socks5)));
+        assert!(!webrtc_udp_relay_enabled(KernelEngine::Chromium, Some(&replace), Some(&proxy("http"))));
+        assert!(!webrtc_udp_relay_enabled(KernelEngine::Chromium, Some(&replace), None));
+        assert!(!webrtc_udp_relay_enabled(KernelEngine::Chromium, Some(&config("disable")), Some(&socks5)));
+        assert!(!webrtc_udp_relay_enabled(KernelEngine::Chromium, Some(&config("real")), Some(&socks5)));
+        assert!(!webrtc_udp_relay_enabled(KernelEngine::Chromium, None, Some(&socks5)));
+        assert!(!webrtc_udp_relay_enabled(KernelEngine::Gecko, Some(&replace), Some(&socks5)));
     }
 }
 

@@ -83,24 +83,25 @@ function NumberSelector({
   value: number;
   options: number[];
   onChange: (value: number) => void;
-  unit: string;
+  /** 每个选项后面的单位；选项多时不写，单位放到标题里，否则一行放不下 */
+  unit?: string;
 }) {
   return (
-    <div className="inline-flex rounded-full bg-muted p-0.5">
+    <div className="inline-flex shrink-0 rounded-full bg-muted p-0.5">
       {options.map((option) => (
         <button
           key={option}
           type="button"
           onClick={() => onChange(option)}
           className={cn(
-            'px-2 py-1 text-xs rounded-full transition-all duration-200 min-w-[36px]',
+            'px-2 py-1 text-xs rounded-full transition-all duration-200 min-w-[30px] whitespace-nowrap',
             value === option
               ? 'bg-background text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >
           {option}
-          {unit}
+          {unit ?? ''}
         </button>
       ))}
     </div>
@@ -204,14 +205,16 @@ export function ScreenHardwareForm({
         {/* CPU & 内存 */}
         <div className="grid grid-cols-2 gap-x-12 gap-y-4">
           <div className="flex items-center justify-between gap-4">
-            <Label className="text-xs shrink-0">{t('deviceSettings.hardwareConcurrency')}</Label>
+            <Label className="text-xs shrink-0">
+              {t('deviceSettings.hardwareConcurrency')}
+              <span className="ml-1 text-muted-foreground">({t('deviceSettings.cores').trim()})</span>
+            </Label>
             <NumberSelector
               value={deviceSettings.hardwareConcurrency}
               options={HARDWARE_CONCURRENCY_CHOICES}
               onChange={(v) =>
                 onDeviceSettingsChange({ ...deviceSettings, hardwareConcurrency: v })
               }
-              unit={t('deviceSettings.cores')}
             />
           </div>
           {!firefox && (

@@ -67,6 +67,7 @@ impl EnvironmentLaunchRuntimeService {
             request.fingerprint_config,
             request.accounts,
             request.extensions,
+            request.exit_probe,
             status_emitter,
         )
         .await
@@ -102,6 +103,7 @@ impl EnvironmentLaunchRuntimeService {
             request.fingerprint_config,
             request.accounts,
             request.extensions,
+            request.exit_probe,
             status_emitter,
         )
         .await
@@ -150,13 +152,28 @@ impl EnvironmentLaunchRuntimeService {
             return Err("环境绑定的代理已不存在或不可访问，已阻止无代理启动".into());
         }
 
-        let resolved_kernel = resolve_kernel_launch(
-            app.clone(),
-            &detail,
-            &launch_paths.profiles_path,
-            status_emitter.clone(),
-        )
-        .await?;
+        // 出口检测（语言/时区/定位“基于 IP”时要用）只依赖代理和指纹配置，和内核无关：
+        // 跟内核校验（算 chrome.dll 哈希，必要时下载）同时做，不再排在它后面
+        let probe_config = build_fingerprint_config(detail.config.as_ref());
+        let (resolved_kernel, exit_probe) = tokio::join!(
+            resolve_kernel_launch(
+                app.clone(),
+                &detail,
+                &launch_paths.profiles_path,
+                status_emitter.clone(),
+            ),
+            async {
+                if crate::services::environment::kernel::network_fingerprint::needs_exit_probe(&probe_config) {
+                    Some(
+                        crate::services::environment::kernel::network_fingerprint::prefetch_exit(proxy.as_ref())
+                            .await,
+                    )
+                } else {
+                    None
+                }
+            }
+        );
+        let resolved_kernel = resolved_kernel?;
 
         let mut fingerprint_config = build_fingerprint_config(detail.config.as_ref());
         if let (Some(user_agent), Some(major)) =
@@ -215,6 +232,7 @@ impl EnvironmentLaunchRuntimeService {
             fingerprint_config: Some(fingerprint_config),
             accounts: normalize_accounts(detail.accounts),
             extensions: normalize_extensions(detail.extensions),
+            exit_probe,
         })
     }
 }

@@ -37,6 +37,9 @@ pub struct EnvironmentStartRequest {
     pub engine: KernelEngine,
     #[serde(default)]
     pub gecko: Option<GeckoLaunchSpec>,
+    /// WebRTC UDP 经 SOCKS5 转发（应用启动前已确认代理支持 UDP），加 --mz-webrtc-udp-relay
+    #[serde(default)]
+    pub webrtc_udp_relay: bool,
 }
 
 /// 内核的浏览器引擎；和应用侧 `domain::environment::KernelEngine` 的序列化一致

@@ -135,6 +135,16 @@ export const settingsResources = {
 
     // Browser Panel
     browserEnvironment: '浏览器环境',
+    browserKernels: '浏览器内核',
+    kernelsLoading: '加载中…',
+    kernelsEmpty: '暂无可用内核',
+    kernelInstalled: '已安装',
+    kernelNotInstalled: '首次使用时下载',
+    kernelUpdateAvailable: '有新版本',
+    kernelUpdate: '更新',
+    kernelUpdating: '更新中…',
+    kernelUpdated: '{{name}} 已更新',
+    kernelUpdateFailed: '{{name}} 更新失败',
     defaultFingerprint: '新建环境默认指纹',
     fingerprintRandom: '随机生成',
     fingerprintRandomDesc: '每次随机生成指纹',
@@ -346,6 +356,16 @@ export const settingsResources = {
 
     // Browser Panel
     browserEnvironment: 'Browser Environment',
+    browserKernels: 'Browser kernels',
+    kernelsLoading: 'Loading…',
+    kernelsEmpty: 'No kernels available',
+    kernelInstalled: 'Installed',
+    kernelNotInstalled: 'Downloads on first use',
+    kernelUpdateAvailable: 'Update available',
+    kernelUpdate: 'Update',
+    kernelUpdating: 'Updating…',
+    kernelUpdated: '{{name}} updated',
+    kernelUpdateFailed: 'Could not update {{name}}',
     defaultFingerprint: 'Default Fingerprint for New Environment',
     fingerprintRandom: 'Random',
     fingerprintRandomDesc: 'Generate random fingerprint each time',

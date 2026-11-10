@@ -65,6 +65,20 @@ pub async fn launch_environment(
         fingerprint_config,
         accounts,
         extensions,
+        None,
+        Some(crate::services::environment::kernel::utils::build_tauri_status_emitter(app)),
+    )
+    .await
+}
+
+/// 手动更新内核（设置 → 浏览器内核里的“更新”按钮）。启动环境时不再自动更新内核
+#[tauri::command]
+pub async fn update_browser_kernel(app: AppHandle, kernel_id: String) -> Result<()> {
+    let paths = EnvironmentLaunchRuntimeService::resolve_launch_paths(&app)?;
+    KernelService::update_kernel(
+        app.clone(),
+        kernel_id,
+        paths.profiles_path,
         Some(crate::services::environment::kernel::utils::build_tauri_status_emitter(app)),
     )
     .await

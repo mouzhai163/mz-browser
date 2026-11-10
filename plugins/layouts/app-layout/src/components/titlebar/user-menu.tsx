@@ -1,10 +1,6 @@
 import { ChevronDown, Palette, Languages, Settings as SettingsIcon } from 'lucide-react';
-import {
-  useSettingsDialogStore,
-  setGeneralSettings,
-  type ThemeMode,
-  type SettingsDialogTab,
-} from '../../../../../services/store/src';
+import { useNavigate } from 'react-router';
+import { setGeneralSettings, type ThemeMode } from '../../../../../services/store/src';
 import { useTheme } from '@/components/theme-provider';
 import { useTranslation } from 'react-i18next';
 import {
@@ -26,11 +22,12 @@ export function UserMenu() {
   const { theme, setTheme } = useTheme();
   const { i18n, t: tCommon } = useTranslation('common');
   const { t } = useTranslation('appLayout');
-  const { open: openSettingsDialog } = useSettingsDialogStore();
+  const navigate = useNavigate();
   const { themeOptions, languageOptions, settingsOptions } = useUserMenuConfig(t, tCommon);
 
-  const handleSettingsOpen = (tabId: string) => {
-    openSettingsDialog(tabId as SettingsDialogTab);
+  // 打开设置页面（/settings?menu=…），和内核更新提醒里“去更新”打开的是同一个页面
+  const handleSettingsOpen = (path: string) => {
+    navigate(path);
   };
 
   const handleLanguageChange = (lng: 'zh-CN' | 'en-US') => {
@@ -63,7 +60,7 @@ export function UserMenu() {
             return (
               <DropdownMenuItem
                 key={option.id}
-                onClick={() => handleSettingsOpen(option.id)}
+                onClick={() => handleSettingsOpen(option.path)}
                 className="cursor-pointer"
               >
                 <Icon className="w-4 h-4" />

@@ -43,6 +43,7 @@ pub fn register_handles() -> impl Fn(Invoke<tauri::Wry>) -> bool + Send + Sync +
         environment::stop_sync,
         environment::export_proxies_to_csv,
         environment::ensure_kernel_ready,
+        environment::update_browser_kernel,
         environment::launch_environment,
         environment::start_environment_by_uuid,
         environment::batch_launch_environments,

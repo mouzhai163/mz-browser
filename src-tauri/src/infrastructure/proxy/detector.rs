@@ -76,6 +76,9 @@ const IP_APIS: &[IpApiConfig] = &[
 /// 默认请求超时（秒）
 const DEFAULT_TIMEOUT_SECS: u64 = 10;
 
+/// 第一个成功结果到了以后，再等优先级更高的服务多久
+const PREFERENCE_GRACE: std::time::Duration = std::time::Duration::from_millis(300);
+
 /// IP 检测器
 pub struct IpDetector {
     client: Client,
@@ -99,31 +102,65 @@ impl IpDetector {
         }
     }
 
-    /// 检测 IP 信息（自动故障切换）
+    /// 检测 IP 信息：所有 API 同时请求，不再一个失败了才试下一个（以前一个慢服务就能拖住 7 秒）。
+    /// 第一个成功结果到了以后再等 [`PREFERENCE_GRACE`]，在已成功的结果里按 [`IP_APIS`] 的顺序挑，
+    /// 这样速度接近最快的服务，同一个出口每次又尽量用同一个服务的数据（各家 IP 库的城市、坐标略有不同）
     pub async fn detect(&self) -> ProxyTestResult {
+        self.detect_from(IP_APIS).await
+    }
+
+    async fn detect_from(&self, apis: &[IpApiConfig]) -> ProxyTestResult {
+        use futures::stream::{FuturesUnordered, StreamExt};
+
         let start = Instant::now();
+        let mut pending: FuturesUnordered<_> = apis
+            .iter()
+            .enumerate()
+            .map(|(index, api)| async move {
+                log::debug!("请求 IP API #{}: {}", index + 1, api.url);
+                (index, self.try_api(api).await)
+            })
+            .collect();
 
-        for (index, api) in IP_APIS.iter().enumerate() {
-            log::debug!("尝试 IP API #{}: {}", index + 1, api.url);
-
-            match self.try_api(api).await {
+        let mut results: Vec<Option<IpInfo>> = vec![None; apis.len()];
+        let mut finished = vec![false; apis.len()];
+        let mut grace_deadline: Option<tokio::time::Instant> = None;
+        loop {
+            let next = match grace_deadline {
+                Some(deadline) => match tokio::time::timeout_at(deadline, pending.next()).await {
+                    Ok(next) => next,
+                    Err(_) => break,
+                },
+                None => pending.next().await,
+            };
+            let Some((index, result)) = next else { break };
+            finished[index] = true;
+            match result {
                 Ok(ip_info) => {
-                    let latency_ms = start.elapsed().as_millis() as u64;
-                    log::trace!(
-                        "IP detection successful: {}, API: #{}",
+                    log::debug!(
+                        "IP API #{} 成功: {}（{} ms）",
+                        index + 1,
                         ip_info.ip,
-                        index + 1
+                        start.elapsed().as_millis()
                     );
-                    return ProxyTestResult::success(ip_info, latency_ms);
+                    results[index] = Some(ip_info);
+                    grace_deadline
+                        .get_or_insert_with(|| tokio::time::Instant::now() + PREFERENCE_GRACE);
                 }
-                Err(e) => {
-                    log::trace!("IP detection failed for API #{}: {}", index + 1, e);
-                    continue;
+                Err(e) => log::debug!("IP API #{} 失败: {}", index + 1, e),
+            }
+            // 目前最优先的成功结果前面没有还在请求的服务了，就不用再等
+            if let Some(best) = results.iter().position(Option::is_some) {
+                if finished[..best].iter().all(|done| *done) {
+                    break;
                 }
             }
         }
 
-        ProxyTestResult::failure("所有 IP 检测服务均失败")
+        match results.into_iter().flatten().next() {
+            Some(ip_info) => ProxyTestResult::success(ip_info, start.elapsed().as_millis() as u64),
+            None => ProxyTestResult::failure("所有 IP 检测服务均失败"),
+        }
     }
 
     /// 尝试单个 API
@@ -252,6 +289,82 @@ mod tests {
         );
         assert!(detector.get_coordinate_field(object, "invalid").is_none());
         assert!(detector.get_coordinate_field(object, "missing").is_none());
+    }
+
+    /// 本地假 GeoIP 服务：延迟 `delay_ms` 后返回 `ip`（为 None 时返回 500）
+    async fn fake_api(delay_ms: u64, ip: Option<&'static str>) -> IpApiConfig {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            while let Ok((mut socket, _)) = listener.accept().await {
+                tokio::spawn(async move {
+                    let mut buffer = [0u8; 1024];
+                    let _ = socket.read(&mut buffer).await;
+                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                    let response = match ip {
+                        Some(ip) => {
+                            let body = format!(r#"{{"ip":"{ip}","timezone":"UTC"}}"#);
+                            format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len())
+                        }
+                        None => "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string(),
+                    };
+                    let _ = socket.write_all(response.as_bytes()).await;
+                });
+            }
+        });
+        IpApiConfig {
+            url: Box::leak(format!("http://127.0.0.1:{port}/").into_boxed_str()),
+            ip_field: "ip",
+            country_field: None,
+            country_code_field: None,
+            city_field: None,
+            region_field: None,
+            isp_field: None,
+            timezone_field: Some("timezone"),
+            latitude_field: None,
+            longitude_field: None,
+            status_field: None,
+            status_success_value: None,
+        }
+    }
+
+    async fn run(apis: Vec<IpApiConfig>) -> (Option<String>, u128) {
+        let detector = IpDetector::with_timeout(Client::builder().no_proxy().build().unwrap(), 5);
+        let start = Instant::now();
+        let result = detector.detect_from(&apis).await;
+        (result.ip_info.map(|info| info.ip), start.elapsed().as_millis())
+    }
+
+    #[tokio::test]
+    async fn a_slow_first_service_no_longer_delays_detection() {
+        let (ip, elapsed) = run(vec![fake_api(3000, Some("1.1.1.1")).await, fake_api(50, Some("2.2.2.2")).await]).await;
+        assert_eq!(ip.as_deref(), Some("2.2.2.2"));
+        assert!(elapsed < 1500, "took {elapsed} ms");
+    }
+
+    #[tokio::test]
+    async fn the_preferred_service_wins_when_it_answers_within_the_grace_window() {
+        let (ip, _) = run(vec![fake_api(150, Some("1.1.1.1")).await, fake_api(20, Some("2.2.2.2")).await]).await;
+        assert_eq!(ip.as_deref(), Some("1.1.1.1"));
+    }
+
+    #[tokio::test]
+    async fn failed_services_are_skipped_without_waiting() {
+        let (ip, elapsed) = run(vec![
+            fake_api(10, None).await,
+            fake_api(30, Some("2.2.2.2")).await,
+            fake_api(3000, Some("3.3.3.3")).await,
+        ])
+        .await;
+        assert_eq!(ip.as_deref(), Some("2.2.2.2"));
+        assert!(elapsed < 1000, "a lower-priority slow service must not hold the result: {elapsed} ms");
+    }
+
+    #[tokio::test]
+    async fn all_failures_report_failure() {
+        let (ip, _) = run(vec![fake_api(10, None).await, fake_api(10, None).await]).await;
+        assert!(ip.is_none());
     }
 }
 

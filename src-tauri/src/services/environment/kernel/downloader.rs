@@ -26,8 +26,6 @@ const MAX_RETRY_DELAY: Duration = Duration::from_secs(30);
 
 /// 没有可用内核时的尝试次数（连续失败才计数，有进展就重新计）
 pub const REQUIRED_DOWNLOAD_ATTEMPTS: u32 = 6;
-/// 已经有能用的旧版本、只是想升级时的尝试次数：下不来就先用旧版本，别让用户等太久
-pub const UPGRADE_DOWNLOAD_ATTEMPTS: u32 = 2;
 
 /// 下载并安装内核
 ///

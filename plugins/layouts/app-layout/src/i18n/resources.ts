@@ -84,6 +84,10 @@ export const appLayoutResources = {
       installing: '下载并安装中...',
       installFailed: '更新下载或安装失败，请稍后重试。',
     },
+    kernelUpdate: {
+      available: '{{count}} 个浏览器内核有新版本',
+      open: '去更新',
+    },
   },
   'en-US': {
     nav: {
@@ -170,6 +174,10 @@ export const appLayoutResources = {
       downloading: 'Downloading update',
       installing: 'Downloading and installing...',
       installFailed: 'The update could not be downloaded or installed. Please try again later.',
+    },
+    kernelUpdate: {
+      available: '{{count}} browser kernel update(s) available',
+      open: 'Update',
     },
   },
 } as const;

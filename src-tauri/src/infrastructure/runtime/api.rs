@@ -200,6 +200,9 @@ pub struct EnvironmentStartRequest {
     pub engine: crate::domain::environment::KernelEngine,
     #[serde(default)]
     pub gecko: Option<GeckoLaunchSpec>,
+    /// WebRTC UDP 经 SOCKS5 转发（启动前已确认代理支持 UDP）
+    #[serde(default)]
+    pub webrtc_udp_relay: bool,
 }
 
 /// Firefox（Camoufox）内核的启动数据：`config` 进 `CAMOU_CONFIG`，`prefs` 进 `CAMOU_PREFS`。

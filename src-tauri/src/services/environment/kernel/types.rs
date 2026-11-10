@@ -144,6 +144,9 @@ pub struct BatchLaunchRequest {
     pub fingerprint_config: Option<crate::infrastructure::runtime::FingerprintConfig>,
     pub accounts: Option<Vec<AccountInfo>>,
     pub extensions: Option<Vec<ExtensionInfo>>,
+    /// 解析内核的同时做好的出口检测结果（不需要检测时为 None）
+    #[serde(skip)]
+    pub exit_probe: Option<super::network_fingerprint::ExitProbe>,
 }
 
 /// 账号信息（来自后端，密码为明文）

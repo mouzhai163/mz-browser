@@ -1,12 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Cpu, Fingerprint, Globe, History } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { SettingCard } from './setting-card';
 import { SettingRow } from './setting-row';
 import { fingerprintModes, type FingerprintMode } from '../config';
 import { getBrowserSettings, setBrowserSettings } from '../../../../services/store/src';
-import { listBrowserKernels, type BrowserKernelVersion } from '../../../create-window/src/api';
+import {
+  listBrowserKernels,
+  updateBrowserKernel,
+  type BrowserKernelVersion,
+} from '../../../create-window/src/api';
 
 /**
  * 浏览器与自动化面板
@@ -18,23 +24,51 @@ export const BrowserPanel: React.FC = () => {
   const [autoRestoreSession, setAutoRestoreSession] = useState(false);
   const [browserSettingsLoaded, setBrowserSettingsLoaded] = useState(false);
   const [kernels, setKernels] = useState<BrowserKernelVersion[] | null>(null);
+  const [updatingKernels, setUpdatingKernels] = useState<Set<string>>(() => new Set());
+
+  const loadKernels = useCallback(async () => {
+    try {
+      const groups = await listBrowserKernels('windows');
+      const all = Object.values(groups).flat();
+      all.sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }));
+      return all;
+    } catch {
+      return [];
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    void listBrowserKernels('windows')
-      .then((groups) => {
-        if (cancelled) return;
-        const all = Object.values(groups).flat();
-        all.sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }));
-        setKernels(all);
-      })
-      .catch(() => {
-        if (!cancelled) setKernels([]);
-      });
+    void loadKernels().then((all) => {
+      if (!cancelled) setKernels(all);
+    });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadKernels]);
+
+  // 内核更新由用户手动触发：启动环境时不会自动更新，正在使用这个内核的环境要先关闭
+  const handleUpdateKernel = useCallback(
+    async (kernel: BrowserKernelVersion) => {
+      setUpdatingKernels((current) => new Set(current).add(kernel.kernel_id));
+      try {
+        await updateBrowserKernel(kernel.kernel_id);
+        toast.success(t('kernelUpdated', { name: kernel.resource_name }));
+        setKernels(await loadKernels());
+      } catch (error) {
+        toast.error(t('kernelUpdateFailed', { name: kernel.resource_name }), {
+          description: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        setUpdatingKernels((current) => {
+          const next = new Set(current);
+          next.delete(kernel.kernel_id);
+          return next;
+        });
+      }
+    },
+    [loadKernels, t]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -82,12 +116,12 @@ export const BrowserPanel: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* 浏览器内核 */}
-      <SettingCard title={t('browserKernels', { defaultValue: '浏览器内核' })} icon={Cpu}>
+      <SettingCard title={t('browserKernels')} icon={Cpu}>
         <div className="space-y-2" data-testid="settings-kernel-list">
           {kernels === null ? (
-            <p className="p-3 text-xs text-muted-foreground">{t('kernelsLoading', { defaultValue: '加载中…' })}</p>
+            <p className="p-3 text-xs text-muted-foreground">{t('kernelsLoading')}</p>
           ) : kernels.length === 0 ? (
-            <p className="p-3 text-xs text-muted-foreground">{t('kernelsEmpty', { defaultValue: '暂无可用内核' })}</p>
+            <p className="p-3 text-xs text-muted-foreground">{t('kernelsEmpty')}</p>
           ) : (
             kernels.map((kernel) => (
               <div
@@ -103,17 +137,34 @@ export const BrowserPanel: React.FC = () => {
                     <div className="text-xs text-muted-foreground">{kernel.version}</div>
                   </div>
                 </div>
-                <span
-                  className={
-                    kernel.installed
-                      ? 'rounded border border-success/30 bg-success/10 px-1.5 text-xs leading-5 text-success'
-                      : 'rounded border border-border bg-muted px-1.5 text-xs leading-5 text-muted-foreground'
-                  }
-                >
-                  {kernel.installed
-                    ? t('kernelInstalled', { defaultValue: '已安装' })
-                    : t('kernelNotInstalled', { defaultValue: '首次使用时下载' })}
-                </span>
+                <div className="flex items-center gap-2">
+                  {kernel.installed && kernel.update_available ? (
+                    <>
+                      <span className="rounded border border-warning/30 bg-warning/10 px-1.5 text-xs leading-5 text-warning">
+                        {t('kernelUpdateAvailable')}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2.5 text-xs"
+                        disabled={updatingKernels.has(kernel.kernel_id)}
+                        onClick={() => void handleUpdateKernel(kernel)}
+                      >
+                        {updatingKernels.has(kernel.kernel_id) ? t('kernelUpdating') : t('kernelUpdate')}
+                      </Button>
+                    </>
+                  ) : (
+                    <span
+                      className={
+                        kernel.installed
+                          ? 'rounded border border-success/30 bg-success/10 px-1.5 text-xs leading-5 text-success'
+                          : 'rounded border border-border bg-muted px-1.5 text-xs leading-5 text-muted-foreground'
+                      }
+                    >
+                      {kernel.installed ? t('kernelInstalled') : t('kernelNotInstalled')}
+                    </span>
+                  )}
+                </div>
               </div>
             ))
           )}

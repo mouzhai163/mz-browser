@@ -211,6 +211,24 @@ fn whole_file_signature(file_path: &Path) -> Result<String> {
     Ok(signature)
 }
 
+/// 核心 DLL 的签名（整文件 SHA-256，小写）；同一次运行里按文件大小和修改时间缓存
+pub fn core_dll_signature(dll_path: &Path) -> Result<String> {
+    whole_file_signature(dll_path)
+}
+
+/// 有没有进程正在从这个内核目录运行（更新内核前检查，避免替换正在用的文件）
+pub fn kernel_dir_in_use(kernel_dir: &Path) -> bool {
+    let Ok(kernel_dir) = kernel_dir.canonicalize() else { return false };
+    let mut system = sysinfo::System::new();
+    system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+    system.processes().values().any(|process| {
+        process
+            .exe()
+            .and_then(|exe| exe.canonicalize().ok())
+            .is_some_and(|exe| exe.starts_with(&kernel_dir))
+    })
+}
+
 /// 用 `expected`（小写）校验核心 DLL，返回实际匹配上的那个签名。
 /// 先按现行的整文件算法比对，比不上再按第一版的开头 10 MiB 算法比对。
 pub fn matched_core_dll_signature(dll_path: &Path, expected: &[String]) -> Result<Option<String>> {

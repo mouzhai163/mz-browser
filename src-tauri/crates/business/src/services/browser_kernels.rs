@@ -34,7 +34,12 @@ pub struct BrowserKernelVersion {
     pub requires_extract: bool,
     pub entrypoint_template: Option<String>,
     pub extract_root: Option<String>,
+    /// 这个内核的安装目录里装着内核（各版本共用一个目录，按目录判断，不按 kernel_id）
     pub installed: bool,
+    /// 目录里实际装着的内核签名（最近一次安装或校验时记下的）
+    pub installed_signature: Option<String>,
+    /// 目录里装的不是清单里的这个版本：有新版本可以更新（由用户在设置里手动更新，启动环境不强制）
+    pub update_available: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -436,8 +441,34 @@ const KERNEL_SELECT: &str = r#"
         a.extract_root,
         EXISTS (
             SELECT 1 FROM browser_kernel_installations installation
-            WHERE installation.kernel_id = a.kernel_id AND installation.status = 'ready'
-        ) AS installed
+            JOIN browser_kernel_artifacts installed_artifact
+                ON installed_artifact.kernel_id = installation.kernel_id
+            WHERE installation.status = 'ready'
+              AND COALESCE(installed_artifact.install_dir_name, installed_artifact.resource_name)
+                  = COALESCE(a.install_dir_name, a.resource_name)
+        ) AS installed,
+        (
+            SELECT installation.verified_signature FROM browser_kernel_installations installation
+            JOIN browser_kernel_artifacts installed_artifact
+                ON installed_artifact.kernel_id = installation.kernel_id
+            WHERE installation.status = 'ready'
+              AND COALESCE(installed_artifact.install_dir_name, installed_artifact.resource_name)
+                  = COALESCE(a.install_dir_name, a.resource_name)
+            ORDER BY installation.updated_at DESC, installation.verified_at DESC
+            LIMIT 1
+        ) AS installed_signature,
+        COALESCE((
+            SELECT lower(trim(installation.verified_signature)) <> lower(trim(a.executable_signature))
+            FROM browser_kernel_installations installation
+            JOIN browser_kernel_artifacts installed_artifact
+                ON installed_artifact.kernel_id = installation.kernel_id
+            WHERE installation.status = 'ready'
+              AND COALESCE(installed_artifact.install_dir_name, installed_artifact.resource_name)
+                  = COALESCE(a.install_dir_name, a.resource_name)
+              AND COALESCE(trim(installation.verified_signature), '') <> ''
+            ORDER BY installation.updated_at DESC, installation.verified_at DESC
+            LIMIT 1
+        ), 0) AS update_available
     FROM browser_kernel_artifacts a
 "#;
 
@@ -628,6 +659,30 @@ pub async fn migrate_legacy_environment_bindings(pool: &DbPool) -> Result<u64, S
     }
 
     Ok(migrated)
+}
+
+/// 安装目录里当前装着的内核签名（同一目录下最近一次的安装/校验记录）；没有记录时为 None
+pub async fn installed_signature_for_dir(
+    pool: &DbPool,
+    install_dir_name: &str,
+) -> Result<Option<String>, String> {
+    sqlx::query_scalar::<_, Option<String>>(
+        r#"
+        SELECT installation.verified_signature
+        FROM browser_kernel_installations installation
+        JOIN browser_kernel_artifacts a ON a.kernel_id = installation.kernel_id
+        WHERE installation.status = 'ready'
+          AND COALESCE(a.install_dir_name, a.resource_name) = $1
+        ORDER BY installation.updated_at DESC, installation.verified_at DESC
+        LIMIT 1
+        "#,
+    )
+    .bind(install_dir_name.trim())
+    .fetch_optional(pool)
+    .await
+    .map(Option::flatten)
+    .map(|signature| signature.filter(|value| !value.trim().is_empty()))
+    .map_err(|error| error.to_string())
 }
 
 pub async fn record_kernel_installation(
@@ -842,6 +897,55 @@ mod tests {
         assert_eq!(kept.kernel_id, dropped_id);
         assert_eq!(kept.status, "retired");
         assert!(kept.url.is_some());
+    }
+
+    #[tokio::test]
+    async fn an_update_is_offered_by_install_directory_until_the_user_installs_it() {
+        let pool = test_pool().await;
+        // 上一版（mz1）装在 Chrome 157 目录里，记下了它的签名
+        let mut previous = parse_default_catalog().unwrap();
+        previous.kernels[0].hash = "1".repeat(64);
+        previous.kernels[0].signature = "a".repeat(64);
+        import_catalog(&pool, &previous).await.unwrap();
+        let old_id = kernel_id(&previous.kernels[0]).unwrap();
+        record_kernel_installation(&pool, &old_id, "C:/kernels/Chrome 157/mz.exe", &"a".repeat(64))
+            .await
+            .unwrap();
+
+        // 清单换成新版本（mz2）：新的 kernel_id，同一个安装目录
+        let current = parse_default_catalog().unwrap();
+        import_catalog(&pool, &current).await.unwrap();
+        let new_id = kernel_id(&current.kernels[0]).unwrap();
+        let dir = current.kernels[0].install_dir_name.clone().unwrap();
+
+        let listed = get_browser_kernel(&pool, &new_id).await.unwrap().unwrap();
+        assert!(listed.installed, "the directory still holds the old build");
+        assert!(listed.update_available, "a different build is installed, so an update is offered");
+        assert_eq!(listed.installed_signature.as_deref(), Some("a".repeat(64).as_str()));
+        assert_eq!(installed_signature_for_dir(&pool, &dir).await.unwrap(), Some("a".repeat(64)));
+
+        // 用户点了更新：记下新签名后不再提示
+        record_kernel_installation(&pool, &new_id, "C:/kernels/Chrome 157/mz.exe", &current.kernels[0].signature)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE browser_kernel_installations SET updated_at = '2000-01-01' WHERE kernel_id = $1")
+            .bind(&old_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let listed = get_browser_kernel(&pool, &new_id).await.unwrap().unwrap();
+        assert!(listed.installed);
+        assert!(!listed.update_available);
+
+        // 从没装过的目录：不算已安装，也不提示更新
+        let other = parse_default_catalog()
+            .unwrap()
+            .kernels
+            .into_iter()
+            .find(|kernel| kernel.install_dir_name != Some(dir.clone()))
+            .unwrap();
+        let other = get_browser_kernel(&pool, &kernel_id(&other).unwrap()).await.unwrap().unwrap();
+        assert!(!other.installed && !other.update_available);
     }
 
     #[tokio::test]

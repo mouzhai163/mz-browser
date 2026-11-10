@@ -13,7 +13,7 @@ pub mod downloader;
 pub mod extension;
 mod gecko_profile;
 pub mod language;
-mod network_fingerprint;
+pub(crate) mod network_fingerprint;
 mod runtime_bridge;
 mod state;
 pub mod timezone;
@@ -70,6 +70,55 @@ impl KernelService {
             status_emitter,
         )
         .await
+    }
+
+    /// 手动更新内核（设置 → 浏览器内核）：下载清单里的当前版本，替换安装目录。
+    /// 有环境正在用这个内核时拒绝，不会关掉用户的环境
+    pub async fn update_kernel(
+        app: tauri::AppHandle,
+        kernel_id: String,
+        profiles_path: String,
+        status_emitter: Option<KernelStatusEmitter>,
+    ) -> Result<()> {
+        let kernel_id = kernel_id.trim().to_string();
+        let context = app.state::<business::svc_ctx::SvcCtx>();
+        let kernel = business::services::browser_kernels::get_browser_kernel(&context.db, &kernel_id)
+            .await?
+            .ok_or("内核不存在或已下线")?;
+        let engine = crate::domain::environment::KernelEngine::from_type_code(&kernel.type_code);
+        let url = kernel
+            .url
+            .clone()
+            .filter(|value| !value.trim().is_empty())
+            .ok_or("这个内核缺少下载地址")?;
+        let detail = KernelDetail {
+            engine,
+            url,
+            hash: kernel.hash.clone(),
+            signature: Some(kernel.signature.clone()),
+            compatible_signatures: kernel.compatible_signatures.0.clone(),
+            requires_extract: kernel.requires_extract,
+        };
+
+        let _prepare_guard = state::acquire_kernel_prepare_lock(&kernel_id).await;
+        let base = utils::resolve_profiles_base(&app, &profiles_path)?;
+        let kernel_dir = utils::resolve_kernel_install_dir(&base, &kernel.install_dir_name)?;
+        if utils::kernel_dir_in_use(&kernel_dir) {
+            return Err("有环境正在使用这个内核，请先关闭这些环境再更新".into());
+        }
+        let exe_path = download_and_replace_kernel(
+            &app,
+            &None,
+            &kernel.install_dir_name,
+            &base,
+            &kernel_dir,
+            &detail,
+            downloader::REQUIRED_DOWNLOAD_ATTEMPTS,
+            status_emitter,
+        )
+        .await?;
+        record_ready_installation(&app, &kernel_id, &exe_path, &kernel.signature).await;
+        Ok(())
     }
 
     /// Prepare a registry artifact while keeping its immutable identity
@@ -130,155 +179,50 @@ impl KernelService {
                 .await;
                 return Ok(exe_path.to_string_lossy().to_string());
             } else {
-                // 校验 signature
-                let primary_signature = kernel_detail
-                    .signature
-                    .as_deref()
-                    .filter(|s| !s.trim().is_empty())
-                    .ok_or("该内核版本缺少 signature，无法校验核心 DLL")?;
-                let mut accepted_signatures = vec![primary_signature.to_string()];
-                for signature in &kernel_detail.compatible_signatures {
-                    if !signature.trim().is_empty()
-                        && !accepted_signatures
-                            .iter()
-                            .any(|current| current.eq_ignore_ascii_case(signature.trim()))
-                    {
-                        accepted_signatures.push(signature.trim().to_string());
-                    }
-                }
-
-                // 哈希 300 多 MB 的 DLL 是阻塞操作，不能占着异步线程
-                let verification = {
-                    let env_uuid = env_uuid.clone();
-                    let install_dir_name = install_dir_name.clone();
-                    let kernel_dir = kernel_dir.clone();
-                    let status_emitter = status_emitter.clone();
-                    let engine = kernel_detail.engine;
-                    tokio::task::spawn_blocking(move || {
-                        verifier::verify_kernel(
-                            &env_uuid,
-                            &install_dir_name,
-                            &kernel_dir,
-                            engine,
-                            &accepted_signatures,
-                            status_emitter,
-                        )
-                    })
-                    .await
-                    .map_err(|error| format!("内核校验任务异常: {error}"))?
-                };
-
-                // 已安装的是目录里记录过的历史版本：能升级就升级，升级不了也不影响启动
-                let mut usable_older_version = false;
-                match verification {
-                    Ok(Some(verified_signature))
-                        if is_current_kernel_signature(&verified_signature, primary_signature) =>
-                    {
-                        // 校验通过
-                        // 只有当前包的主签名匹配时才复用已有目录。
-                        utils::emit_status(
-                            status_emitter.as_ref(),
-                            &env_uuid,
-                            &install_dir_name,
-                            EnvironmentStatus::Ready,
-                            Some("就绪"),
-                            None,
-                            None,
-                            None,
-                        );
-                        record_ready_installation(&app, &kernel_id, &exe_path, &verified_signature)
-                            .await;
-                        return Ok(exe_path.to_string_lossy().to_string());
-                    }
-                    Ok(Some(verified_signature)) => {
-                        crate::log_warn!(
-                            crate::core::logger::modules::KERNEL,
-                            "内核目录命中历史兼容签名，将下载当前包替换: {} - {}",
-                            kernel_dir.display(),
-                            verified_signature
-                        );
-                        usable_older_version = true;
-                    }
-                    Ok(None) => {
-                        crate::log_warn!(
-                            crate::core::logger::modules::KERNEL,
-                            "内核校验失败，保留目录并停止启动: {}",
-                            kernel_dir.display()
-                        );
-                    }
-                    Err(e) => {
-                        crate::log_warn!(
-                            crate::core::logger::modules::KERNEL,
-                            "内核校验出错，保留目录并停止启动: {} - {}",
-                            kernel_dir.display(),
-                            e
-                        );
-                    }
-                }
-
-                if usable_older_version && state::upgrade_recently_failed(&kernel_id) {
-                    utils::emit_status(
-                        status_emitter.as_ref(),
-                        &env_uuid,
-                        &install_dir_name,
-                        EnvironmentStatus::Ready,
-                        Some("就绪"),
-                        None,
-                        None,
-                        None,
-                    );
-                    return Ok(exe_path.to_string_lossy().to_string());
-                }
-
-                let attempts = if usable_older_version {
-                    downloader::UPGRADE_DOWNLOAD_ATTEMPTS
-                } else {
-                    downloader::REQUIRED_DOWNLOAD_ATTEMPTS
-                };
-                match download_and_replace_kernel(
-                    &app,
-                    &env_uuid,
+                // 已经装好的内核直接用：启动环境时不算哈希、不强制更新。环境要的是稳定，清单里有新版本时
+                // 只在 设置 → 浏览器内核 里提醒，由用户自己点更新（update_kernel）。
+                // 只有第一次见到这个目录（旧版本软件装的、手动拷进来的，没有安装记录）时算一次哈希，
+                // 记下装的是哪个版本，用来判断有没有更新
+                let context = app.state::<business::svc_ctx::SvcCtx>();
+                let recorded = business::services::browser_kernels::installed_signature_for_dir(
+                    &context.db,
                     &install_dir_name,
-                    &base,
-                    &kernel_dir,
-                    &kernel_detail,
-                    attempts,
-                    status_emitter.clone(),
                 )
                 .await
-                {
-                    Ok(exe_path) => {
-                        record_ready_installation(
-                            &app,
-                            &kernel_id,
-                            &exe_path,
-                            kernel_detail.signature.as_deref().unwrap_or_default(),
-                        )
-                        .await;
-                        return Ok(exe_path.to_string_lossy().to_string());
-                    }
-                    Err(error) if usable_older_version => {
-                        crate::log_warn!(
+                .unwrap_or_else(|error| {
+                    log::warn!("could not read the installation record of {install_dir_name}: {error}");
+                    None
+                });
+                if recorded.is_none() {
+                    let engine = kernel_detail.engine;
+                    let dir = kernel_dir.clone();
+                    let signature = tokio::task::spawn_blocking(move || {
+                        let dll = verifier::find_core_dll_dir(&dir, engine)?.join(utils::core_dll_name(engine));
+                        utils::core_dll_signature(&dll)
+                    })
+                    .await
+                    .map_err(|error| format!("内核签名计算任务异常: {error}"))?;
+                    match signature {
+                        Ok(signature) => record_ready_installation(&app, &kernel_id, &exe_path, &signature).await,
+                        Err(error) => crate::log_warn!(
                             crate::core::logger::modules::KERNEL,
-                            "新内核下载失败，本次继续使用已安装的版本: {} - {}",
+                            "无法计算已安装内核的签名（不影响启动）: {} - {}",
                             kernel_dir.display(),
                             error
-                        );
-                        state::remember_upgrade_failure(&kernel_id);
-                        utils::emit_status(
-                            status_emitter.as_ref(),
-                            &env_uuid,
-                            &install_dir_name,
-                            EnvironmentStatus::Ready,
-                            Some("新内核下载失败，继续使用已安装版本"),
-                            None,
-                            None,
-                            None,
-                        );
-                        return Ok(exe_path.to_string_lossy().to_string());
+                        ),
                     }
-                    Err(error) => return Err(error),
                 }
+                utils::emit_status(
+                    status_emitter.as_ref(),
+                    &env_uuid,
+                    &install_dir_name,
+                    EnvironmentStatus::Ready,
+                    Some("就绪"),
+                    None,
+                    None,
+                    None,
+                );
+                return Ok(exe_path.to_string_lossy().to_string());
             }
         }
 
@@ -314,6 +258,7 @@ impl KernelService {
         fingerprint_config: Option<crate::infrastructure::runtime::FingerprintConfig>,
         accounts: Option<Vec<types::AccountInfo>>,
         extensions: Option<Vec<types::ExtensionInfo>>,
+        exit_probe: Option<network_fingerprint::ExitProbe>,
         status_emitter: Option<KernelStatusEmitter>,
     ) -> Result<()> {
         runtime_bridge::launch_environment(
@@ -328,6 +273,7 @@ impl KernelService {
             fingerprint_config,
             accounts,
             extensions,
+            exit_probe,
             status_emitter,
         )
         .await
@@ -480,19 +426,9 @@ fn kernel_prepare_error(
     crate::core::error::Error::KernelPrepareFailed(detail)
 }
 
-fn is_current_kernel_signature(verified_signature: &str, primary_signature: &str) -> bool {
-    verified_signature.eq_ignore_ascii_case(primary_signature)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{is_current_kernel_signature, kernel_prepare_error};
-
-    #[test]
-    fn only_the_current_signature_reuses_an_existing_kernel() {
-        assert!(is_current_kernel_signature("ABC123", "abc123"));
-        assert!(!is_current_kernel_signature("old-compatible", "current"));
-    }
+    use super::kernel_prepare_error;
 
     #[test]
     fn staging_failure_reports_install_path_and_removes_temporary_directory() {

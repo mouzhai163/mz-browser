@@ -3,6 +3,7 @@ import { AppSidebar } from './components/app-sidebar';
 import AppTitlebar from './components/titlebar';
 import { AppBackground } from './components/app-background';
 import { DownloadEventSubscriber } from './components/download-event-subscriber';
+import { KernelUpdateNotifier } from './components/kernel-update-notifier';
 import { MihomoRuntimeSubscriber } from '../../../services/store/src';
 import './styles.css';
 import { extensionRegistry } from '@slotkitjs/core';
@@ -12,6 +13,7 @@ const AppLayoutPlugin: React.FC = () => {
   return (
     <div className="relative flex flex-col h-screen w-full min-w-0 overflow-hidden">
       <DownloadEventSubscriber />
+      <KernelUpdateNotifier />
       <MihomoRuntimeSubscriber />
       {/* 背景层 */}
       <AppBackground />

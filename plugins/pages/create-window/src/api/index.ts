@@ -1,6 +1,7 @@
 /**
  * 创建窗口 API 服务
  */
+import { invoke } from '@tauri-apps/api/core';
 import { post, isSuccess } from '@/lib/request';
 import type { CookieGroup, WindowConfig } from '../types';
 import type {
@@ -44,7 +45,12 @@ export interface BrowserKernelVersion {
   requires_extract?: boolean;
   entrypoint_template?: string;
   extract_root?: string;
+  /** 安装目录里装着内核 */
   installed?: boolean;
+  /** 目录里实际装着的内核签名 */
+  installed_signature?: string | null;
+  /** 装着的不是清单里的这个版本：可以在设置里手动更新（启动环境时不会自动更新） */
+  update_available?: boolean;
 }
 
 function buildEnvironmentUrls(urls: string[]) {
@@ -232,6 +238,13 @@ export async function listBrowserKernels(
     return {};
   }
   return result.data;
+}
+
+/**
+ * 手动更新内核：下载清单里的当前版本替换已安装的。有环境正在用这个内核时会失败（提示先关闭环境）
+ */
+export async function updateBrowserKernel(kernelId: string): Promise<void> {
+  await invoke('update_browser_kernel', { kernelId });
 }
 
 /**

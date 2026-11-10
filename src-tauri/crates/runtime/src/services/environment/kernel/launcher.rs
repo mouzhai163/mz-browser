@@ -19,6 +19,8 @@ use tokio::process::Child;
 
 const BROWSER_STARTUP_TIMEOUT: Duration = Duration::from_secs(30);
 const CDP_STARTUP_TIMEOUT: Duration = Duration::from_secs(10);
+/// WebRTC UDP 经 SOCKS5 UDP ASSOCIATE 转发（内核补丁里同名；应用确认代理支持 UDP 后才加）
+const WEBRTC_UDP_RELAY_SWITCH: &str = "--mz-webrtc-udp-relay";
 
 #[derive(serde::Serialize)]
 struct RpaCommandPayload<'a> {
@@ -137,6 +139,7 @@ pub async fn launch_browser(
             .fingerprint_config
             .as_ref()
             .and_then(|config| config.interface_language.as_deref().or(config.language.as_deref())),
+        request.webrtc_udp_relay,
         job_manager.clone(),
     )
     .await;
@@ -373,6 +376,7 @@ async fn spawn_browser_process(
     window_size: Option<&str>,
     extension_dirs: Option<&Vec<String>>,
     ui_language: Option<&str>,
+    webrtc_udp_relay: bool,
     job_manager: Arc<JobManager>,
 ) -> Result<Child> {
     validate_browser_runtime_layout(exe_path)?;
@@ -391,6 +395,10 @@ async fn spawn_browser_process(
 
     if let Some(id) = display_id {
         args.push(format!("--mz-display-id={}", id));
+    }
+    if webrtc_udp_relay {
+        // 内核把 WebRTC 的 UDP 全部经 SOCKS5 UDP ASSOCIATE 转发（浏览器复制给网络服务和渲染进程）
+        args.push(WEBRTC_UDP_RELAY_SWITCH.to_string());
     }
     if let Some(position) = window_position {
         args.push(format!("--window-position={}", position));
