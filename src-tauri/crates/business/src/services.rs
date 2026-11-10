@@ -5,7 +5,6 @@ pub mod accounts;
 pub mod browser_kernels;
 pub mod environments;
 pub mod groups;
-pub mod local_api;
 pub mod proxies;
 pub mod rpa;
 pub mod tags;

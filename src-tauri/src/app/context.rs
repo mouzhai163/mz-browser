@@ -9,7 +9,6 @@ use std::sync::Arc;
 use tokio::sync::OnceCell;
 
 use crate::app::runtime::MzRuntimeManager;
-use crate::local_api::LocalApiManager;
 use crate::mcp::McpManager;
 use crate::services::environment::{EnvironmentPositionManager, EnvironmentStatusManager};
 use crate::services::mihomo::MihomoManager;
@@ -23,9 +22,6 @@ pub struct AppContext {
 
     /// 环境位置管理器
     pub env_position_manager: Arc<EnvironmentPositionManager>,
-
-    /// 本地 API 服务管理器
-    pub local_api_manager: Arc<LocalApiManager>,
 
     /// MCP 服务管理器
     pub mcp_manager: Arc<McpManager>,
@@ -49,9 +45,6 @@ impl AppContext {
         // 初始化环境位置管理器
         let env_position_manager = Arc::new(EnvironmentPositionManager::new());
 
-        // 初始化本地 API 管理器
-        let local_api_manager = Arc::new(LocalApiManager::new());
-
         // 初始化 MCP 管理器
         let mcp_manager = Arc::new(McpManager::new());
 
@@ -64,7 +57,6 @@ impl AppContext {
         Ok(Self {
             env_status_manager,
             env_position_manager,
-            local_api_manager,
             mcp_manager,
             mihomo_manager,
             mz_runtime_manager,

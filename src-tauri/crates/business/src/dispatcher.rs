@@ -39,41 +39,6 @@ pub async fn dispatch_post(
             }
             .await
         }
-        "local-api/get" => {
-            async {
-                value(
-                    services::local_api::get_local_api_config_service(
-                        context,
-                    )
-                    .await?,
-                )
-            }
-            .await
-        }
-        "local-api/update" => {
-            async {
-                let request: UpdateLocalApiConfigRequest = payload(data)?;
-                value(
-                    services::local_api::update_local_api_config_service(
-                        context,
-                        &request,
-                    )
-                    .await?,
-                )
-            }
-            .await
-        }
-        "local-api/reset-api-key" => {
-            async {
-                value(
-                    services::local_api::reset_local_api_key_service(
-                        context,
-                    )
-                    .await?,
-                )
-            }
-            .await
-        }
         "groups/list" => {
             async {
                 value(
@@ -877,29 +842,6 @@ mod tests {
         .expect("proxy list should succeed");
         assert_eq!(proxies["total"], 1);
 
-        let local_api = dispatch_post(&context, "local-api/get", &json!({}))
-            .await
-            .unwrap()
-            .expect("local API config should be stored locally");
-        let api_key = local_api["apiKey"].as_str().unwrap().to_string();
-        assert!(api_key.starts_with("sk_local_"));
-        dispatch_post(
-            &context,
-            "local-api/update",
-            &json!({ "enabled": true, "port": 18080, "remoteAccess": false }),
-        )
-        .await
-        .unwrap()
-        .expect("local API config update should succeed");
-        services::local_api::validate_local_api_key_service(
-            &context,
-            &ValidateLocalApiKeyRequest {
-                api_key,
-                permission_code: "environments.list".to_string(),
-            },
-        )
-        .await
-        .expect("local API key should validate without a remote cache");
 
         assert!(dispatch_post(&context, "auth/login", &json!({})).await.is_none());
         // 用户、团队、工作空间已经不存在，对应的路由也不再属于本地业务服务

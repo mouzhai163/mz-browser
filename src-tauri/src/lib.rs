@@ -4,7 +4,7 @@ compile_error!("desktop-e2e is only permitted in non-production debug builds");
 pub mod core; // 核心模块（配置、错误、日志、工具）
 pub mod domain; // 领域层（业务模型）
 pub mod infrastructure; // 基础设施层（缓存、事件总线、网络、存储等）
-pub mod local_api; // 本地 API 子域
+pub mod local_api; // 进程内调用业务路由，供 MCP 使用
 pub mod mcp; // MCP 子域
 pub mod services; // 服务层（业务逻辑）
 

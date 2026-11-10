@@ -1,15 +1,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use tauri::Manager;
 use tokio::{sync::Mutex, time::sleep};
 
-use crate::{
-    local_api::types::LocalApiRuntimeConfig,
-    mcp::{
-        config::{McpConfig, McpManagerStatus, McpServerRuntimeConfig, load_config},
-        server::McpServerHandle,
-    },
+use crate::mcp::{
+    config::{McpConfig, McpManagerStatus, McpServerRuntimeConfig, load_config},
+    server::McpServerHandle,
 };
 
 struct ManagedMcpRuntime {
@@ -76,15 +72,9 @@ impl McpManager {
             return Err("请先启用 MCP 服务开关".to_string());
         }
 
-        let local_api_config = fetch_local_api_runtime_config().await?;
-        if local_api_config.api_key.trim().is_empty() {
-            return Err("Local API 凭证无效，请稍后重试".to_string());
-        }
-
         let runtime = config.runtime()?;
         let server_config = McpServerRuntimeConfig {
             port: runtime.port,
-            local_api_api_key: local_api_config.api_key,
             access: config,
             read_slots: Arc::new(tokio::sync::Semaphore::new(2)),
         };
@@ -105,17 +95,6 @@ impl McpManager {
 
         Ok(())
     }
-}
-
-async fn fetch_local_api_runtime_config() -> Result<LocalApiRuntimeConfig, String> {
-    let app = crate::app::handle::get_app_handle().map_err(|error| error.to_string())?;
-    let context = app.state::<business::svc_ctx::SvcCtx>();
-    let config = business::services::local_api::get_local_api_config_service(&context)
-        .await
-        .map_err(|error| error.to_string())?;
-    serde_json::to_value(config)
-        .and_then(serde_json::from_value::<LocalApiRuntimeConfig>)
-        .map_err(|error| error.to_string())
 }
 
 async fn wait_for_mcp_server_ready(health_url: &str) -> Result<(), String> {

@@ -275,7 +275,7 @@ export function McpAccessSettings({ config, onUpdate, onRefresh }: Props) {
                   });
               }}
             >
-              {token ? t('service.hideKey') : t('service.showKey')}
+              {token ? t('mcp.hideToken') : t('mcp.showToken')}
             </Button>
             <Button
               type="button"

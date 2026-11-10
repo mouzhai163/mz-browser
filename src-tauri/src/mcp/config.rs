@@ -133,7 +133,6 @@ pub struct McpManagerStatus {
 #[derive(Clone)]
 pub struct McpServerRuntimeConfig {
     pub port: u16,
-    pub local_api_api_key: String,
     pub access: McpConfig,
     pub read_slots: std::sync::Arc<tokio::sync::Semaphore>,
 }

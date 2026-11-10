@@ -4,7 +4,6 @@ pub mod app;
 pub mod default_browser;
 pub mod environment;
 pub mod file_system;
-pub mod local_api;
 pub mod local_extensions;
 pub mod logging;
 pub mod mcp;
@@ -78,10 +77,6 @@ pub fn register_handles() -> impl Fn(Invoke<tauri::Wry>) -> bool + Send + Sync +
         // Logging commands
         logging::log_info,
         logging::log_error,
-        local_api::get_local_api_runtime_running,
-        local_api::start_local_api_runtime,
-        local_api::reload_local_api_runtime,
-        local_api::stop_local_api_runtime,
         local_extensions::import_local_extension_crx,
         local_extensions::import_local_extension_store_url,
         local_extensions::list_local_extensions,

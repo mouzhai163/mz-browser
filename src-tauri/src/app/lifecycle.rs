@@ -27,7 +27,6 @@ pub fn init_tauri_dependent(_app_handle: &AppHandle) -> Result<()> {
 pub async fn shutdown() -> Result<()> {
     if let Some(ctx) = AppContext::try_get() {
         ctx.mcp_manager.stop().await;
-        ctx.local_api_manager.stop().await;
         ctx.mz_runtime_manager.stop().await;
     }
     Ok(())

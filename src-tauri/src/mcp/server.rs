@@ -24,7 +24,7 @@ pub struct McpServer {
 impl McpServer {
     pub fn new(config: &McpServerRuntimeConfig) -> Self {
         Self {
-            bridge: Arc::new(LocalApiBridge::new(config.local_api_api_key.clone())),
+            bridge: Arc::new(LocalApiBridge::new()),
             config: Arc::new(config.clone()),
         }
     }
@@ -222,7 +222,6 @@ mod tests {
         access.enabled = true;
         McpServerRuntimeConfig {
             port,
-            local_api_api_key: "test-local-key".into(),
             access,
             read_slots: Arc::new(tokio::sync::Semaphore::new(2)),
         }

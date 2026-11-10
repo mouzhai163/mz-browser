@@ -89,7 +89,7 @@ pub fn init_mz_runtime_background(app_handle: AppHandle) {
         let ctx = AppContext::get();
         ctx.mz_runtime_manager.set_app_handle(app_handle.clone()).await;
 
-        // 没有用户和登录：启动时直接把依赖数据库的服务（运行时、本地 API）拉起来。
+        // 没有用户和登录：启动时直接把依赖数据库的服务（运行时、MCP）拉起来。
         if let Err(error) = crate::app::local_session::ensure_ready().await {
             log::error!("failed to start the local services: {error}");
         }
