@@ -8,7 +8,7 @@ import {
 } from '../api';
 import type { RpaTask, RpaWorkflowStep } from '../types';
 import { RpaRunner } from '../runtime/runner';
-import { CdpBrowserAdapter } from '../runtime/cdp-browser-adapter';
+import { createBrowserAdapter } from '../runtime/create-browser-adapter';
 import { waitForCdpEndpoint } from '../runtime/bound-environment';
 import { getEnvironmentStatus } from '../runtime/tauri';
 import {
@@ -296,7 +296,7 @@ export function useRpaExecution(params: UseRpaExecutionParams): UseRpaExecutionR
           }
 
           const endpoint = await waitForCdpEndpoint(envUuid);
-          const runner = new RpaRunner(new CdpBrowserAdapter());
+          const runner = new RpaRunner(createBrowserAdapter(endpoint.browser_ws_url!));
           const stepNameMap = new Map(
             workflowWithOverrides.steps.map((step) => [step.id, step.name])
           );

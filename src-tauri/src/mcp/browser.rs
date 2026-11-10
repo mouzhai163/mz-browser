@@ -1,7 +1,7 @@
 use serde_json::Value;
 use std::time::Duration;
 
-use super::{cdp, cdp_act, error::McpToolError, server::McpServer};
+use super::{bidi_page, cdp, cdp_act, error::McpToolError, server::McpServer};
 
 /// No per-site list: every http(s) page of an authorized environment is in scope.
 const ANY_SITE: &[String] = &[];
@@ -30,10 +30,16 @@ pub(crate) async fn read_page(
         .and_then(|endpoint| endpoint.browser_ws_url)
         .ok_or_else(|| McpToolError::invalid_params("Environment is not running"))?;
     let action = if page_id.is_some() { "snapshot" } else { "tabs" };
-    let result = tokio::time::timeout(
-        Duration::from_secs(20),
-        cdp::read(&endpoint, origins, page_id, service.config().access.full_page_access_enabled),
-    )
+    let full_access = service.config().access.full_page_access_enabled;
+    // Firefox 环境给的是共用 BiDi 会话的地址，Chromium 环境是 CDP 地址
+    let read = async {
+        if bidi_page::is_gecko_endpoint(&endpoint) {
+            bidi_page::read(&endpoint, origins, page_id, full_access).await
+        } else {
+            cdp::read(&endpoint, origins, page_id, full_access).await
+        }
+    };
+    let result = tokio::time::timeout(Duration::from_secs(20), read)
     .await
     .map_err(|_| McpToolError::upstream("Browser read timed out"))
     .and_then(|result| result);
@@ -98,6 +104,32 @@ pub(crate) async fn act(
         .and_then(|endpoint| endpoint.browser_ws_url)
         .ok_or_else(|| McpToolError::invalid_params("Environment is not running"))?;
     let name = op.name();
+    let full_access = service.config().access.full_page_access_enabled;
+    if bidi_page::is_gecko_endpoint(&endpoint) {
+        let run_gecko = async {
+            let mut page = bidi_page::BidiPage::connect(&endpoint, full_access).await?;
+            let result = match op {
+                ActOp::Navigate { page_id, url } => bidi_page::navigate(&mut page, origins, page_id, url).await,
+                ActOp::OpenTab { url } => bidi_page::open_tab(&mut page, origins, url).await,
+                ActOp::Click { page_id, node_id } => bidi_page::click(&mut page, origins, page_id, node_id).await,
+                ActOp::Type { page_id, node_id, text, clear, submit } => {
+                    bidi_page::type_text(&mut page, origins, page_id, node_id, text, clear, submit).await
+                }
+                ActOp::PressKey { page_id, key } => bidi_page::press_key(&mut page, origins, page_id, key).await,
+                ActOp::ReadField { page_id, node_id } => bidi_page::read_field(&mut page, origins, page_id, node_id).await,
+            };
+            page.close().await;
+            result
+        };
+        let result = tokio::time::timeout(Duration::from_secs(20), run_gecko)
+            .await
+            .map_err(|_| McpToolError::upstream("Browser action timed out"))
+            .and_then(|result| result);
+        log::info!("MCP browser act env={} action={} success={}", env_uuid, name, result.is_ok());
+        let data = result?;
+        service.require_environment(env_uuid).await?;
+        return Ok(data);
+    }
     let run = async {
         let mut conn = cdp::CdpConnection::connect(&endpoint)
             .await?

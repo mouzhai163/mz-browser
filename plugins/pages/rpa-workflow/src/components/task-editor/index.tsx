@@ -23,7 +23,8 @@ import {
   stopAnonymousRpaEnvironment,
 } from '../../runtime/anonymous-environment';
 import { connectBoundRpaEnvironment } from '../../runtime/bound-environment';
-import { CdpBrowserAdapter } from '../../runtime/cdp-browser-adapter';
+import type { BrowserAdapter } from '../../runtime/browser-adapter';
+import { createBrowserAdapter } from '../../runtime/create-browser-adapter';
 import {
   ENV_CONNECTION_STATUS_EVENT,
   getEnvironmentStatus,
@@ -228,7 +229,7 @@ export function TaskEditor() {
     useState<AnonymousProxyCandidate | null>(null);
   const stopRequestedRef = useRef(false);
   // 用绑定环境运行时，“停止”只断开自动化连接，不关闭用户的环境
-  const boundRunAdapterRef = useRef<CdpBrowserAdapter | null>(null);
+  const boundRunAdapterRef = useRef<BrowserAdapter | null>(null);
   const editorSnapshotRef = useRef<EditorHistorySnapshot>({
     steps: [],
     specialPositions: DEFAULT_SPECIAL_NODE_POSITIONS,
@@ -1084,7 +1085,7 @@ export function TaskEditor() {
           : await startAnonymousRpaEnvironment(anonymousProxyConfig);
         setActiveRunEnvUuid(endpoint.env_uuid);
 
-        const adapter = new CdpBrowserAdapter();
+        const adapter = createBrowserAdapter(endpoint.browser_ws_url || '');
         boundRunAdapterRef.current = boundEnvUuid ? adapter : null;
         const runner = new RpaRunner(adapter);
         await runner.run(

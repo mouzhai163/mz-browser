@@ -1,6 +1,7 @@
 mod bidi;
 pub mod cdp;
 mod gecko;
+mod gecko_relay;
 pub mod job;
 pub mod launcher;
 mod socks_forward;

@@ -16,6 +16,7 @@ use tokio::sync::RwLock;
 
 use super::bidi::BidiConnection;
 use super::cdp::CdpEndpointManager;
+use super::gecko_relay::{self, Relay};
 use super::job::JobManager;
 use super::socks_forward::{Forwarder, Upstream};
 use super::types::{
@@ -37,6 +38,14 @@ pub struct GeckoInstance {
     pub port: u16,
     bidi: Arc<BidiConnection>,
     forwarder: Forwarder,
+    relay: Relay,
+}
+
+impl GeckoInstance {
+    /// 给 MCP / RPA 用的 BiDi 地址（共用会话的转发端口，不是浏览器自己的端口）
+    pub fn ws_url(&self) -> String {
+        gecko_relay::relay_url(self.relay.port)
+    }
 }
 
 fn registry() -> &'static RwLock<HashMap<String, Arc<GeckoInstance>>> {
@@ -52,8 +61,8 @@ pub async fn running_envs() -> Vec<String> {
     registry().read().await.keys().cloned().collect()
 }
 
-/// 浏览器给自动化客户端用的 BiDi 地址
-pub fn session_url(port: u16) -> String {
+/// 浏览器自己的 BiDi 地址，只有运行时连它
+fn session_url(port: u16) -> String {
     format!("ws://127.0.0.1:{port}/session")
 }
 
@@ -128,6 +137,7 @@ pub async fn launch_browser(
     match start(&env_id, &request, &cdp_endpoint_manager, &job_manager).await {
         Ok((child, instance)) => {
             let port = instance.port;
+            let ws_url = instance.ws_url();
             registry().write().await.insert(env_id.clone(), instance);
             watch_exit(env_id.clone(), child, cdp_endpoint_manager.clone(), job_manager, status_manager.clone(), events.clone());
             status_manager.set_status(&env_id, EnvironmentStatus::Running).await;
@@ -139,7 +149,7 @@ pub async fn launch_browser(
                 port,
                 version_url: String::new(),
                 list_url: String::new(),
-                browser_ws_url: Some(session_url(port)),
+                browser_ws_url: Some(ws_url),
             })
         }
         Err((stage, error)) => {
@@ -189,11 +199,18 @@ async fn start(
     }
     log_info("kernel", format!("Firefox spawned for environment {env_id} with pid {pid}"));
 
-    let bidi = match wait_for_session(&mut child, port, &request.user_data_dir).await {
-        Ok(bidi) => bidi,
+    let (bidi, capabilities) = match wait_for_session(&mut child, port, &request.user_data_dir).await {
+        Ok(ready) => ready,
         Err(error) => {
             let _ = child.kill().await;
             return Err(("bidi_ready", error));
+        }
+    };
+    let relay = match gecko_relay::start(bidi.clone(), capabilities).await {
+        Ok(relay) => relay,
+        Err(error) => {
+            let _ = child.kill().await;
+            return Err(("bidi_ready", RuntimeError::Internal(error)));
         }
     };
 
@@ -202,7 +219,7 @@ async fn start(
         log_warn("kernel", format!("Firefox post-launch setup for {env_id} was incomplete: {error}"));
     }
 
-    Ok((child, Arc::new(GeckoInstance { port, bidi, forwarder })))
+    Ok((child, Arc::new(GeckoInstance { port, bidi, forwarder, relay })))
 }
 
 fn spawn(
@@ -266,7 +283,7 @@ async fn wait_for_session(
     child: &mut tokio::process::Child,
     port: u16,
     user_data_dir: &str,
-) -> Result<Arc<BidiConnection>> {
+) -> Result<(Arc<BidiConnection>, Value)> {
     let deadline = tokio::time::Instant::now() + STARTUP_TIMEOUT;
     loop {
         if let Ok(Some(status)) = child.try_wait() {
@@ -278,10 +295,12 @@ async fn wait_for_session(
         if let Ok(bidi) = BidiConnection::connect(&session_url(port)).await {
             // 页面弹出的 alert/confirm 留给用户处理，不由会话自动关掉
             let capabilities = json!({ "alwaysMatch": { "unhandledPromptBehavior": { "default": "ignore" } } });
-            bidi.call("session.new", json!({ "capabilities": capabilities }))
+            let session = bidi
+                .call("session.new", json!({ "capabilities": capabilities }))
                 .await
                 .map_err(RuntimeError::Internal)?;
-            return Ok(bidi);
+            let capabilities = session.get("capabilities").cloned().unwrap_or_else(|| json!({}));
+            return Ok((bidi, capabilities));
         }
         if tokio::time::Instant::now() >= deadline {
             return Err(RuntimeError::Internal(format!(

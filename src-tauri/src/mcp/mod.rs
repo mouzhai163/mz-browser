@@ -1,4 +1,5 @@
 pub mod bridge;
+mod bidi_page;
 pub(crate) mod browser;
 pub mod cdp;
 mod cdp_act;

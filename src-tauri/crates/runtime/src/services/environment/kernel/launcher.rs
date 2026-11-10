@@ -799,7 +799,7 @@ pub async fn get_cdp_endpoint(
             port: instance.port,
             version_url: String::new(),
             list_url: String::new(),
-            browser_ws_url: Some(gecko::session_url(instance.port)),
+            browser_ws_url: Some(instance.ws_url()),
         }));
     }
     Ok(cdp_endpoint_manager
