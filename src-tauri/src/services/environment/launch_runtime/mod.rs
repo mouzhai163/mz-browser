@@ -7,7 +7,7 @@ mod proxy;
 mod types;
 
 use futures::future::try_join_all;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use crate::{
     app::handle::get_app_handle,
@@ -165,6 +165,35 @@ impl EnvironmentLaunchRuntimeService {
             *user_agent = match resolved_kernel.engine {
                 KernelEngine::Chromium => kernel::align_user_agent_major(user_agent, major),
                 KernelEngine::Gecko => kernel::firefox_user_agent(user_agent, major),
+            };
+        }
+        // Client Hints 的完整版本号：环境创建时定下的那个（business::services::chrome_releases）。
+        // 这个功能之前建的环境、或者内核换成了别的主版本时还没有合适的，这里挑一个存回去，以后不再变。
+        if let (KernelEngine::Chromium, Some(major)) = (resolved_kernel.engine, resolved_kernel.major_version) {
+            use business::services::chrome_releases;
+            let stored = fingerprint_config
+                .original_chrome_version
+                .take()
+                .filter(|version| chrome_releases::is_full_release_of(version, major));
+            fingerprint_config.original_chrome_version = match stored {
+                Some(version) => Some(version),
+                None => {
+                    let picked = chrome_releases::pick_random(major);
+                    if let (Some(version), Ok(uuid)) = (&picked, uuid::Uuid::parse_str(&env_uuid)) {
+                        let context = app.state::<business::svc_ctx::SvcCtx>();
+                        if let Err(error) = business::models::set_window_info_string(
+                            &context.db,
+                            uuid,
+                            chrome_releases::FULL_VERSION_KEY,
+                            version,
+                        )
+                        .await
+                        {
+                            log::warn!("failed to save the Client Hints version for {env_uuid}: {error}");
+                        }
+                    }
+                    picked
+                }
             };
         }
         fingerprint_config.env_id = display_id;

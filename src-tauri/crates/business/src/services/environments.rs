@@ -33,8 +33,38 @@ fn window_info_with_kernel_id(
             "kernel".to_string(),
             serde_json::Value::String(kernel.resource_name.clone()),
         );
+        // Client Hints 的完整版本号在这里定下来（创建、修改、批量和模板创建都经过这里）：
+        // 已有且和内核同主版本就不动，换了主版本才重新挑；Firefox 内核不用它
+        if kernel.type_code == "MZ_KERNEL_CHROMIUM" {
+            if let Some(major) = crate::services::chrome_releases::major_of(&kernel.version) {
+                crate::services::chrome_releases::ensure_full_version(object, major);
+            }
+        } else {
+            object.remove(crate::services::chrome_releases::FULL_VERSION_KEY);
+        }
     }
     window_info
+}
+
+/// 请求里没有 Client Hints 版本号时，从已存的配置里补上（之后由 window_info_with_kernel_id 核对主版本）
+async fn carry_over_full_version(
+    pool: &crate::database::DbPool,
+    env_uuid: Uuid,
+    window_info: &mut serde_json::Value,
+) {
+    let key = crate::services::chrome_releases::FULL_VERSION_KEY;
+    let Some(object) = window_info.as_object_mut() else { return };
+    if object.get(key).and_then(serde_json::Value::as_str).is_some() {
+        return;
+    }
+    let stored = models::fetch_environment_config(pool, env_uuid)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|config| config.window_info.get(key).and_then(serde_json::Value::as_str).map(str::to_string));
+    if let Some(version) = stored {
+        object.insert(key.to_string(), serde_json::Value::String(version));
+    }
 }
 
 /// 创建环境
@@ -48,7 +78,12 @@ pub async fn create_environment_service(
         true,
     )
     .await?;
-    let window_info = window_info_with_kernel_id(&payload.config.window_info, &selected_kernel);
+    // 新环境总是自己挑一个 Client Hints 版本号：从模板或别的环境带过来的不沿用，免得多个环境撞同一个
+    let mut requested_window_info = payload.config.window_info.clone();
+    if let Some(object) = requested_window_info.as_object_mut() {
+        object.remove(crate::services::chrome_releases::FULL_VERSION_KEY);
+    }
+    let window_info = window_info_with_kernel_id(&requested_window_info, &selected_kernel);
 
     // 提取系统信息
     let system_info = payload
@@ -832,7 +867,10 @@ pub async fn update_environment_service(
             )
             .await?
         };
-        let window_info = window_info_with_kernel_id(&config.window_info, &selected_kernel);
+        // 编辑表单不一定带回 Client Hints 版本号；沿用已存的，免得每次保存都换一个
+        let mut requested_window_info = config.window_info.clone();
+        carry_over_full_version(&svc_ctx.db, payload.uuid, &mut requested_window_info).await;
+        let window_info = window_info_with_kernel_id(&requested_window_info, &selected_kernel);
         models::upsert_environment_config(
             &svc_ctx.db,
             payload.uuid,
@@ -1341,4 +1379,61 @@ pub async fn batch_create_environments_service(
     }
 
     Ok(created_uuids)
+}
+
+#[cfg(test)]
+mod full_version_tests {
+    use super::*;
+    use crate::services::chrome_releases::{FULL_VERSION_KEY, is_full_release_of};
+    use crate::{database, utils::DatabaseConfig};
+
+    async fn test_ctx() -> SvcCtx {
+        let mut config = DatabaseConfig::embedded("sqlite::memory:");
+        config.max_connections = 1;
+        config.min_connections = 1;
+        let db = database::connect(&config).await.unwrap();
+        database::migrate(&db).await.unwrap();
+        crate::services::browser_kernels::import_default_catalog(&db).await.unwrap();
+        SvcCtx { db }
+    }
+
+    fn config(window_info: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({
+            "window_info": window_info, "basic_settings": {}, "fingerprint_settings": {},
+            "device_settings": {}, "preference_settings": {}
+        })
+    }
+
+    async fn stored_version(ctx: &SvcCtx, uuid: Uuid) -> Option<String> {
+        let config = models::fetch_environment_config(&ctx.db, uuid).await.unwrap().unwrap();
+        config.window_info.get(FULL_VERSION_KEY).and_then(serde_json::Value::as_str).map(str::to_string)
+    }
+
+    #[tokio::test]
+    async fn the_version_is_fixed_at_creation_and_kept_by_edits() {
+        let ctx = test_ctx().await;
+        let window_info = serde_json::json!({
+            "name": "fv", "system": "Windows", "kernel": "Chrome 156",
+            // copied from a template: must not be reused
+            "uaFullVersion": "156.0.8078.12"
+        });
+        let request: CreateEnvironmentRequest = serde_json::from_value(serde_json::json!({
+            "name": "fv", "config": config(window_info)
+        }))
+        .unwrap();
+        let uuid = create_environment_service(&ctx, &request).await.unwrap();
+        let created = stored_version(&ctx, uuid).await.expect("a version is chosen at creation");
+        assert!(is_full_release_of(&created, 156), "{created}");
+
+        // the edit form sends window_info without the field: the stored version stays
+        for _ in 0..5 {
+            let update: UpdateEnvironmentRequest = serde_json::from_value(serde_json::json!({
+                "uuid": uuid,
+                "config": config(serde_json::json!({ "name": "fv", "system": "Windows", "kernel": "Chrome 156" }))
+            }))
+            .unwrap();
+            update_environment_service(&ctx, &update).await.unwrap();
+            assert_eq!(stored_version(&ctx, uuid).await.as_deref(), Some(created.as_str()));
+        }
+    }
 }

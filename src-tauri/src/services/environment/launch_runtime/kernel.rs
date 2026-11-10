@@ -201,6 +201,18 @@ pub(super) async fn resolve_kernel_launch(
     )
     .await?;
 
+    if engine == KernelEngine::Chromium {
+        if let Some(kernel_dir) = std::path::Path::new(&exe_path).parent().map(std::path::Path::to_path_buf) {
+            // icacls 走遍一次 260 多个文件，放到阻塞线程；做过一次就有标记，之后直接返回
+            let _ = tokio::task::spawn_blocking(move || {
+                if let Err(error) = crate::services::environment::kernel::utils::ensure_sandbox_read_access(&kernel_dir) {
+                    log::warn!("could not grant the Chromium sandbox read access to {}: {error}", kernel_dir.display());
+                }
+            })
+            .await;
+        }
+    }
+
     Ok(ResolvedKernelLaunch { exe_path, engine, major_version })
 }
 

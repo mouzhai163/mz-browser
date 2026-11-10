@@ -130,7 +130,10 @@ impl JobManager {
     /// flush its profile. The held process handle avoids PID-reuse races.
     #[cfg(target_os = "windows")]
     pub async fn finish_process(&self, env_uuid: &str) -> Result<Option<bool>> {
-        self.finish_process_with_timeout(env_uuid, std::time::Duration::from_secs(10)).await
+        // Chromium 关闭时最多等 10 秒让网络服务进程写完 Cookie/缓存并退出
+        // （BrowserProcessIOThread::ProcessHostCleanUp）。宽限要比它长，浏览器才能自己走完退出流程，
+        // 不在它放弃等待之前被强杀
+        self.finish_process_with_timeout(env_uuid, std::time::Duration::from_secs(15)).await
     }
 
     #[cfg(target_os = "windows")]
@@ -140,8 +143,9 @@ impl JobManager {
         let forced = !job.wait_for_exit(grace).await;
         if forced {
             job.terminate()?;
-            // 强制结束后进程退出也可能被机器负载拖慢（编译、杀毒），3 秒太短会误报失败
-            if !job.wait_for_exit(std::time::Duration::from_secs(15)).await {
+            // 强制结束后进程退出也可能被机器负载拖慢（编译、杀毒）：3 秒、15 秒都实测过误报失败
+            // （满负载编译时强杀后约 17 秒才退出）。进程已经在被结束，这里只是多等一会儿
+            if !job.wait_for_exit(std::time::Duration::from_secs(30)).await {
                 return Err(RuntimeError::Internal("Owned browser did not exit after termination".into()));
             }
         }

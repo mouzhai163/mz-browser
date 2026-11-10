@@ -3,6 +3,7 @@ mod time;
 // 新增模块
 pub mod accounts;
 pub mod browser_kernels;
+pub mod chrome_releases;
 pub mod environments;
 pub mod groups;
 pub mod proxies;

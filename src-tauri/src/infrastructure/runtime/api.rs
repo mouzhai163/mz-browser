@@ -15,6 +15,10 @@ pub struct FingerprintConfig {
     /// Sec-CH-UA-Platform-Version（Windows 10 为 "10.0.0"，Windows 11 为 "13.0.0" 及以上）
     pub platform_version: Option<String>,
     pub user_agent: Option<String>,
+    /// Client Hints 报的完整版本号（同主版本里真实发布过的版本，环境创建时定下，见 business chrome_releases），
+    /// UA 字符串本身仍是 主版本.0.0.0；内核只在主版本一致时采用
+    #[serde(default)]
+    pub original_chrome_version: Option<String>,
     pub sound: Option<bool>,
     pub images: Option<bool>,
     pub video: Option<bool>,

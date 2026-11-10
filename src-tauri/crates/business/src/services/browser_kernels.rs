@@ -698,11 +698,21 @@ mod tests {
             .await
             .unwrap();
         let kernels = &groups["MZ_KERNEL_CHROMIUM"];
-        assert_eq!(kernels.len(), 3, "catalog import must be idempotent");
-        assert_eq!(kernels[0].resource_name, "Chrome 156");
-        assert_eq!(kernels[0].install_dir_name, "Chrome 156");
+        let bundled_chromium = parse_default_catalog()
+            .unwrap()
+            .kernels
+            .iter()
+            .filter(|kernel| kernel.type_code == "MZ_KERNEL_CHROMIUM")
+            .count();
+        assert_eq!(kernels.len(), bundled_chromium, "catalog import must be idempotent");
+        let first = &parse_default_catalog().unwrap().kernels[0];
+        assert_eq!(kernels[0].resource_name, first.resource_name);
+        assert_eq!(kernels[0].install_dir_name, first.install_dir_name.clone().unwrap());
         assert_eq!(kernels[0].kernel_id.len(), 64);
-        assert_eq!(kernels[0].compatible_signatures.len(), 1);
+        assert_eq!(
+            kernels[0].compatible_signatures.len(),
+            parse_default_catalog().unwrap().kernels[0].compatible_signatures.len()
+        );
         assert!(kernels[0]
             .url
             .as_deref()
@@ -717,6 +727,12 @@ mod tests {
         assert_eq!(firefox.len(), 1);
         assert_eq!(firefox[0].install_dir_name, "Firefox 158");
         assert_eq!(firefox[0].signature.len(), 64);
+        // 和 Chromium 一样从我们自己的 Release 下载（只含 Windows 字体的重新打包）
+        assert!(firefox[0]
+            .url
+            .as_deref()
+            .unwrap()
+            .starts_with("https://github.com/mouzhai163/browser-kernel/releases/download/firefox-"));
         assert_eq!(
             default_browser_kernel(&pool).await.unwrap().unwrap().type_code,
             "MZ_KERNEL_CHROMIUM"
@@ -741,9 +757,16 @@ mod tests {
             .iter()
             .map(|kernel| kernel.resource_name.as_str())
             .collect();
+        let bundled: Vec<String> = parse_default_catalog()
+            .unwrap()
+            .kernels
+            .into_iter()
+            .filter(|kernel| kernel.type_code == "MZ_KERNEL_CHROMIUM")
+            .map(|kernel| kernel.resource_name)
+            .collect();
         assert_eq!(
             names,
-            ["Chrome 156", "Chrome 159", "Chrome 158"],
+            bundled,
             "the dropped kernel must not be offered any more"
         );
         let still_there = get_browser_kernel(&pool, &old_id).await.unwrap().unwrap();
@@ -808,7 +831,7 @@ mod tests {
         let new_id = kernel_id(&current.kernels[0]).unwrap();
         let moved = get_environment_kernel(&context.db, bound[0]).await.unwrap().unwrap();
         assert_eq!(moved.kernel_id, new_id);
-        assert!(moved.url.as_deref().unwrap().contains("-mz2/"));
+        assert_eq!(moved.url.as_deref(), Some(current.kernels[0].url.trim()));
         let stored = crate::models::environments::fetch_environment_config(&context.db, bound[0])
             .await
             .unwrap()
@@ -863,7 +886,7 @@ mod tests {
         assert_eq!(artifact_count, 1);
         assert_eq!(active_source_count, 1);
         assert_eq!(active_source, "https://example.invalid/second.zip");
-        assert_eq!(install_dir_name, "Chrome 156");
+        assert_eq!(install_dir_name, parse_default_catalog().unwrap().kernels[0].install_dir_name.clone().unwrap());
     }
 
     #[tokio::test]

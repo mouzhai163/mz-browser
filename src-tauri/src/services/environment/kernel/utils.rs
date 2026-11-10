@@ -68,6 +68,49 @@ pub fn extract_zip_to_dir(zip_path: &Path, target_dir: &Path) -> Result<()> {
 }
 
 /// 可执行文件名。Firefox 内核目前用 Camoufox 的发布包，主程序是 camoufox.exe。
+/// 内核目录上已经授权过沙箱读取权限的标记
+const SANDBOX_ACCESS_MARKER: &str = ".mz-sandbox-access";
+
+/// Chromium 的网络服务等进程跑在 AppContainer 沙箱里（身份是 ALL APPLICATION PACKAGES /
+/// ALL RESTRICTED APPLICATION PACKAGES），要能读内核目录。Program Files 默认给了这两个身份，
+/// 用户目录（内核解压到的 LOCALAPPDATA）没有：每次启动都会报 "Sandbox cannot access executable"，
+/// 网络服务崩溃后重启。Chrome 的安装程序会给安装目录加这两条权限，这里对内核目录做同样的事。
+#[cfg(target_os = "windows")]
+pub fn ensure_sandbox_read_access(kernel_dir: &Path) -> Result<()> {
+    use std::os::windows::process::CommandExt;
+    let marker = kernel_dir.join(SANDBOX_ACCESS_MARKER);
+    if marker.is_file() {
+        return Ok(());
+    }
+    let icacls = std::env::var_os("SystemRoot")
+        .map(|root| Path::new(&root).join("System32").join("icacls.exe"))
+        .ok_or_else(|| "SystemRoot is not set".to_string())?;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let output = std::process::Command::new(icacls)
+        .arg(kernel_dir)
+        // S-1-15-2-1 = ALL APPLICATION PACKAGES, S-1-15-2-2 = ALL RESTRICTED APPLICATION PACKAGES
+        .args(["/grant", "*S-1-15-2-1:(OI)(CI)(RX)", "*S-1-15-2-2:(OI)(CI)(RX)", "/T", "/C", "/Q"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|error| format!("icacls failed to start: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "icacls exited with {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        )
+        .into());
+    }
+    std::fs::write(&marker, b"granted
+").map_err(|error| format!("cannot write {}: {error}", marker.display()))?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn ensure_sandbox_read_access(_kernel_dir: &Path) -> Result<()> {
+    Ok(())
+}
+
 pub fn exe_name(engine: KernelEngine) -> &'static str {
     match engine {
         #[cfg(target_os = "windows")]
@@ -344,6 +387,27 @@ mod head_hash_tests {
             calculate_file_hash_head(&a, SIGNATURE_HASH_SIZE).unwrap(),
             calculate_file_hash_head(&b, SIGNATURE_HASH_SIZE).unwrap()
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod sandbox_access_tests {
+    use super::*;
+
+    #[test]
+    fn the_sandbox_gets_read_access_once_per_kernel_directory() {
+        let dir = std::env::temp_dir().join(format!("mz-sandbox-acl-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("156.0.8078.96")).unwrap();
+        std::fs::write(dir.join("156.0.8078.96").join("chrome.dll"), b"dll").unwrap();
+        ensure_sandbox_read_access(&dir).unwrap();
+        assert!(dir.join(SANDBOX_ACCESS_MARKER).is_file());
+        let icacls = Path::new(&std::env::var_os("SystemRoot").unwrap()).join("System32").join("icacls.exe");
+        let listing = std::process::Command::new(icacls).arg(dir.join("156.0.8078.96").join("chrome.dll")).output().unwrap();
+        let text = String::from_utf8_lossy(&listing.stdout).to_string();
+        // the two app-package SIDs show up by name (localized) or as S-1-15-2-x; both lines carry (RX)
+        assert!(text.matches("(RX)").count() >= 2, "{text}");
+        ensure_sandbox_read_access(&dir).unwrap(); // marker present: returns without running icacls
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

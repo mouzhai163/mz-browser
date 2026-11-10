@@ -482,6 +482,10 @@ fn base_browser_args(env_id: &str, user_data_dir: &str, cdp_port: u16) -> Vec<St
         "--remote-debugging-address=127.0.0.1".into(),
         "--remote-allow-origins=tauri://localhost,http://tauri.localhost,http://localhost:5173,http://127.0.0.1:5173".into(),
         "--disable-skia-graphite".into(),
+        // 新环境的配置目录第一次启动时，Chromium 会先显示首次运行引导窗口而不是普通浏览器窗口：
+        // 起始页等不到浏览器窗口就被放弃，引导窗口还会拖住关闭。环境由软件管理，不需要首次运行流程
+        "--no-first-run".into(),
+        "--no-default-browser-check".into(),
         "--enable-logging".into(),
         format!(
             "--log-file={}",
@@ -570,6 +574,13 @@ mod policy_tests {
         );
         assert!(!args.iter().any(|arg| arg == "--remote-allow-origins=*"));
         assert!(args.iter().any(|arg| arg == "--remote-debugging-address=127.0.0.1"));
+    }
+
+    #[test]
+    fn new_profiles_skip_the_first_run_flow() {
+        let args = super::base_browser_args("env-1", "test-profile", 29200);
+        assert!(args.iter().any(|arg| arg == "--no-first-run"));
+        assert!(args.iter().any(|arg| arg == "--no-default-browser-check"));
     }
 
     #[test]

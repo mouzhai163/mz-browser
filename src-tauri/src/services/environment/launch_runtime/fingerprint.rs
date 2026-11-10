@@ -23,6 +23,8 @@ pub(super) fn build_fingerprint_config(config: Option<&Value>) -> FingerprintCon
         platform_version: get_string_from_map(&window_info, "platformVersion")
             .filter(|_| window_info.get("system").and_then(Value::as_str) == Some("Windows")),
         user_agent: get_string_from_map(&window_info, "userAgent"),
+        // 创建时定下的 Client Hints 完整版本号；启动时再核对一次主版本（见 launch_runtime/mod.rs）
+        original_chrome_version: get_string_from_map(&window_info, "uaFullVersion"),
         sound: get_bool(&basic_settings, "sound"),
         images: get_bool(&basic_settings, "images"),
         video: get_bool(&basic_settings, "video"),

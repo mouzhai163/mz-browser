@@ -23,6 +23,8 @@ pub struct FingerprintConfig {
     pub platform: Option<String>,
     pub platform_version: Option<String>,
     pub user_agent: Option<String>,
+    #[serde(default)]
+    pub original_chrome_version: Option<String>,
     pub sound: Option<bool>,
     pub images: Option<bool>,
     pub video: Option<bool>,

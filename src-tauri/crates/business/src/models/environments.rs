@@ -937,6 +937,24 @@ pub async fn upsert_environment_config(
     Ok(id)
 }
 
+/// 改 window_info 里的一个字符串字段，其余配置不动
+pub async fn set_window_info_string(
+    pool: &Pool<Db>,
+    env_uuid: Uuid,
+    key: &str,
+    value: &str,
+) -> Result<u64, Error> {
+    let result = sqlx::query(
+        "UPDATE environment_configs SET window_info = json_set(window_info, $2, $3)          WHERE environment_uuid = $1",
+    )
+    .bind(env_uuid)
+    .bind(format!("$.{key}"))
+    .bind(value)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
+}
+
 /// 查询环境配置
 pub async fn fetch_environment_config(
     pool: &Pool<Db>,
