@@ -42,6 +42,8 @@ pub async fn execute_local_rpa_script(
 
     let mut command = Command::new("node");
     command.arg(&script_path);
+    // 超时后 command.output() 的 future 被丢弃，这里保证 Node 进程跟着结束
+    command.kill_on_drop(true);
     apply_hidden_window_flags(&mut command);
 
     let execution = timeout(Duration::from_secs(60), command.output()).await;

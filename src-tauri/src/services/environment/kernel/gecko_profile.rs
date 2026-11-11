@@ -173,6 +173,8 @@ pub fn build_gecko_launch(
         }
     }
     prefs.insert("webgl.force-enabled".into(), json!(true));
+    // 软件在本机监听的端口：网页连得上就能认出这是 MZ 浏览器
+    prefs.insert("network.security.ports.banned".into(), json!(mz_local_service_ports()));
 
     // 字体：宿主机是 Windows、环境也是 Windows 时 Camoufox 用系统真实字体，列表只决定页面能看到哪些
     if let Some(fonts) = config
@@ -215,6 +217,13 @@ pub fn build_gecko_launch(
         prefs,
         window,
     }
+}
+
+/// 环境的调试端口段（runtime 的 CDP_PORT_START..=CDP_PORT_END）和 MCP 默认端口。Chromium 内核里有同一份名单。
+fn mz_local_service_ports() -> String {
+    let mut ports: Vec<String> = (29200..=29499).map(|port: u16| port.to_string()).collect();
+    ports.push(crate::mcp::config::DEFAULT_MCP_PORT.to_string());
+    ports.join(",")
 }
 
 #[cfg(test)]
@@ -266,6 +275,11 @@ mod tests {
         assert_eq!(c["window.screenX"], 10);
         assert_eq!(spec.prefs["intl.locale.requested"], "ja-JP");
         assert_eq!(spec.prefs["media.peerconnection.enabled"], false);
+        let banned = spec.prefs["network.security.ports.banned"].as_str().unwrap();
+        for port in ["29200", "29350", "29499", "37110"] {
+            assert!(banned.split(',').any(|item| item == port), "{port}");
+        }
+        assert!(!banned.split(',').any(|item| item == "29500"));
     }
 
     #[test]

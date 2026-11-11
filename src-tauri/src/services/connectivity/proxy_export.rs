@@ -34,11 +34,11 @@ impl ProxyExportService {
     /// # 参数
     /// - `path`: 文件保存路径
     /// - `proxies`: 代理列表
-    /// - `export_plain_password`: 是否导出密码列（当前始终导出明文密码）
+    /// - `export_plain_password`: 是否导出明文密码；否的话密码列留空
     pub async fn export_proxies_to_csv(
         path: String,
         proxies: Vec<ProxyExportItem>,
-        _export_plain_password: bool,
+        export_plain_password: bool,
     ) -> Result<()> {
         let path_buf = std::path::PathBuf::from(&path);
 
@@ -51,7 +51,7 @@ impl ProxyExportService {
         let mut csv_content = String::from("name,host,port,type,username,password\n");
 
         for proxy in proxies {
-            let password = proxy.password.unwrap_or_default();
+            let password = if export_plain_password { proxy.password.unwrap_or_default() } else { String::new() };
 
             // 转义 CSV 值
             let name = escape_csv(&proxy.name);

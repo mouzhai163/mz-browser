@@ -8,7 +8,7 @@ import type { BrowserAdapter } from '../runtime/browser-adapter';
 import { createBrowserAdapter } from '../runtime/create-browser-adapter';
 import { RpaDebugSession } from '../runtime/debug-session';
 import { describeRunError, isStopError } from '../runtime/errors';
-import { isEnvironmentBusy } from '../runtime/execution-manager';
+import { claimEnvironment, releaseEnvironmentClaim } from '../runtime/execution-manager';
 import { RpaRunner, type RpaRunnerOptions, type RpaRunnerStepEvent } from '../runtime/runner';
 import type { RpaCapturedSelector, RpaWorkflowSchema, RpaWorkflowStep } from '../types';
 
@@ -115,7 +115,7 @@ export function useEditorRun(stepName: (id: string) => string) {
 
   const execute = useCallback(
     async (envUuid: string, work: () => Promise<void>) => {
-      if (isEnvironmentBusy(envUuid)) {
+      if (!claimEnvironment(envUuid)) {
         toast.warning(t('editor.errors.environmentBusy'));
         return;
       }
@@ -135,6 +135,7 @@ export function useEditorRun(stepName: (id: string) => string) {
         }
       } finally {
         fullRun.current = null;
+        releaseEnvironmentClaim(envUuid);
       }
     },
     [t]
@@ -182,14 +183,20 @@ export function useEditorRun(stepName: (id: string) => string) {
 
   const pick = useCallback(
     async (workflow: RpaWorkflowSchema): Promise<RpaCapturedSelector | null> => {
+      const envUuid = workflow.environments[0];
+      if (!claimEnvironment(envUuid)) {
+        toast.warning(t('editor.errors.environmentBusy'));
+        return null;
+      }
       setPicking(true);
       try {
-        return await debug.current.pick(workflow.environments[0], workflow);
+        return await debug.current.pick(envUuid, workflow);
       } catch (error) {
         toast.error(describeRunError(error, t));
         return null;
       } finally {
         setPicking(false);
+        releaseEnvironmentClaim(envUuid);
       }
     },
     [t]

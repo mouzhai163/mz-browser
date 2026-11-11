@@ -135,6 +135,7 @@ export function TaskEditor() {
   stepsRef.current = steps;
   const lastMerge = useRef<{ key: string; at: number } | null>(null);
   const savedSnapshot = useRef('');
+  const justCreated = useRef<string | null>(null);
 
   const stepName = useCallback((stepId: string) => findStep(stepsRef.current, stepId)?.name ?? stepId, []);
   const run = useEditorRun(stepName);
@@ -171,6 +172,12 @@ export function TaskEditor() {
       setLoadingTask(false);
       return;
     }
+    // 刚保存的新任务内容就是当前内容，不用重新加载（否则撤销记录和选中状态会丢）
+    if (justCreated.current === id) {
+      justCreated.current = null;
+      setLoadingTask(false);
+      return;
+    }
     let cancelled = false;
     setLoadingTask(true);
     getRpaTaskDetail(id)
@@ -197,8 +204,11 @@ export function TaskEditor() {
 
   // 任务被 MCP 改了：没有未保存内容就重新加载，有就提醒，不丢用户正在改的内容
   const externalEdit = useStore(rpaExecutionStore, (state) => (id ? state.externalEdits[id] : undefined));
+  const handledExternalEdit = useRef(externalEdit);
   useEffect(() => {
-    if (!id || !externalEdit) return;
+    // 打开页面之前发生的修改已经包含在加载的数据里
+    if (!id || !externalEdit || externalEdit === handledExternalEdit.current) return;
+    handledExternalEdit.current = externalEdit;
     if (snapshotOf(config, steps) !== savedSnapshot.current) {
       toast.warning(t('editor.externalConflict'));
       return;
@@ -422,6 +432,7 @@ export function TaskEditor() {
         await updateRpaTask({ ...payload, uuid: id });
       } else {
         const uuid = await createRpaTask(payload);
+        justCreated.current = uuid;
         navigate(`/rpa/edit/${uuid}`, { replace: true });
       }
       savedSnapshot.current = snapshotOf(config, steps);

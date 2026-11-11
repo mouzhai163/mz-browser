@@ -49,6 +49,8 @@ export interface PortableRpaTaskSummary {
   triggerType: string;
   environmentCount: number;
   stepCount: number;
+  /** 在本机执行的脚本步骤数量：这类脚本能访问整台电脑 */
+  localScriptCount: number;
 }
 
 export function buildPortableRpaTask(detail: RpaTaskDetailDto): PortableRpaTaskDocument {
@@ -97,13 +99,19 @@ export function parsePortableRpaTask(content: string): PortableRpaTaskDocument {
   return parsed as PortableRpaTaskDocument;
 }
 
+function isLocalScriptStep(step: PortableRpaTaskStep): boolean {
+  const stored = step.config?.workflow_step as { config?: Record<string, unknown> } | undefined;
+  return step.config?.executionMode === 'local' || stored?.config?.executionMode === 'local';
+}
+
 export function buildPortableRpaTaskSummary(document: PortableRpaTaskDocument): PortableRpaTaskSummary {
   return {
     name: document.task.name,
     description: document.task.description ?? '',
     triggerType: document.task.trigger_type,
-    environmentCount: document.task.environment_uuids.length,
+    environmentCount: (document.task.environment_uuids ?? []).length,
     stepCount: document.task.steps.length,
+    localScriptCount: document.task.steps.filter(isLocalScriptStep).length,
   };
 }
 

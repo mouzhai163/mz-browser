@@ -1,5 +1,6 @@
 pub mod kernel;
 pub mod launch_runtime;
+pub mod permanent_delete;
 pub mod position_manager;
 pub mod status_manager;
 

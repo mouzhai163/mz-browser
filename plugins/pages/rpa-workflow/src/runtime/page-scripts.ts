@@ -167,6 +167,20 @@ export function buildLocateExpression(target: RpaWorkflowSelector): string {
         return false;
       };
       obscured = !top || !(related(top, el) || related(el, top));
+      // 中心点被滚动容器裁切时，那个位置上是容器外的内容（常常是祖先元素），点下去点不到它。
+      // 命中了元素自己就不可能被裁切（比如 fixed 定位的浮层不受祖先的 overflow 影响）
+      const hitsElement = top && related(top, el);
+      for (let parent = hitsElement ? null : el.parentElement; parent && parent !== doc.body && parent !== doc.documentElement; parent = parent.parentElement) {
+        const parentStyle = view.getComputedStyle(parent);
+        if (parentStyle.overflowX === 'visible' && parentStyle.overflowY === 'visible') continue;
+        const clip = parent.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        if (centerX < clip.left || centerX > clip.right || centerY < clip.top || centerY > clip.bottom) {
+          obscured = true;
+          break;
+        }
+      }
     }
     return { found: true, visible, inView, obscured, disabled: !!el.disabled, x, y, width: rect.width, height: rect.height, viewportWidth: vw, viewportHeight: vh };
   `);

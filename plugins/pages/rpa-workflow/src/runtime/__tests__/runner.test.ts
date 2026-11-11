@@ -215,6 +215,29 @@ describe('RpaRunner', () => {
   });
 });
 
+describe('cleanup', () => {
+  const workflow = {
+    name: 't',
+    environments: [],
+    variables: [],
+    steps: [],
+    settings: { speed: 'normal' },
+  } as unknown as RpaWorkflowSchema;
+
+  it('finishes and disconnects by default', async () => {
+    const { adapter, calls } = fakeAdapter();
+    await new RpaRunner(adapter).run(workflow, { envUuid: 'e', browserWsUrl: 'ws://x' });
+    expect(calls.slice(-2)).toEqual(['finishRun', 'close']);
+  });
+
+  it('leaves the connection alone when the caller handles cleanup', async () => {
+    const { adapter, calls } = fakeAdapter();
+    await new RpaRunner(adapter).run(workflow, { envUuid: 'e', browserWsUrl: 'ws://x' }, { cleanupHandled: () => true });
+    expect(calls).not.toContain('finishRun');
+    expect(calls).not.toContain('close');
+  });
+});
+
 describe('renderTemplate', () => {
   it('reads nested paths and JSON strings', () => {
     expect(renderTemplate('{{a.b[1]}}', { a: '{"b":[1,2]}' })).toBe('2');

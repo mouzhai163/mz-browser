@@ -14,7 +14,7 @@ pub mod extension;
 mod gecko_profile;
 pub mod language;
 pub(crate) mod network_fingerprint;
-mod runtime_bridge;
+pub(crate) mod runtime_bridge;
 mod state;
 pub mod timezone;
 pub mod types;

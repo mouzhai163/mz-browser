@@ -35,4 +35,8 @@ uuid = { version = "1.11.0", features = [
     "serde",
 ] }
 url = "2.5.4"
+base64 = "0.22"
 croner = "4.0.3"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61.1", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Cryptography"] }

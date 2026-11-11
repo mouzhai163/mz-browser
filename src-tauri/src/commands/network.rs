@@ -3,9 +3,8 @@
 /// 命令层仅负责参数解析和响应，业务逻辑由服务层处理
 use crate::core::error::Result;
 use crate::infrastructure::http::client::JsonRespnse;
-use crate::services::connectivity::{DownloadService, ProxyService};
+use crate::services::connectivity::ProxyService;
 use serde_json::Value;
-use std::collections::HashMap;
 
 // 重导出类型供外部使用
 pub use crate::infrastructure::proxy::{IpInfo, ProxyConfig, ProxyTestResult};
@@ -23,7 +22,7 @@ pub async fn http_post(
 ) -> std::result::Result<JsonRespnse, String> {
     let payload = data.unwrap_or_else(|| Value::Object(Default::default()));
     if let Some(result) =
-        business::dispatcher::dispatch_post(&business_context, &url, &payload).await
+        crate::services::environment::permanent_delete::dispatch_post(&business_context, &url, &payload).await
     {
         return Ok(match result {
             Ok(data) => JsonRespnse {
@@ -63,19 +62,4 @@ pub async fn test_direct_ip() -> Result<ProxyTestResult> {
 pub async fn detect_proxy_ip(config: ProxyConfig) -> Result<Option<IpInfo>> {
     let result = ProxyService::test_proxy(config).await?;
     Ok(result.ip_info)
-}
-
-// ============================================================================
-// 文件下载命令
-// ============================================================================
-
-/// 下载多个文件
-#[tauri::command]
-pub async fn download_files(
-    urls: Vec<String>,
-    save_paths: Vec<String>,
-    max_retries: Option<u32>,
-    retry_delay_ms: Option<u64>,
-) -> Result<HashMap<String, bool>> {
-    DownloadService::download_files(urls, save_paths, max_retries, retry_delay_ms).await
 }

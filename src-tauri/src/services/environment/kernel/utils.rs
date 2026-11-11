@@ -52,7 +52,11 @@ pub fn extract_zip_to_dir(zip_path: &Path, target_dir: &Path) -> Result<()> {
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i)?;
         let name = entry.name().to_string();
-        let out_path = target_dir.join(&name);
+        // enclosed_name 拒绝 ../ 和绝对路径，压缩包里的文件不能写到目标目录之外
+        let relative = entry
+            .enclosed_name()
+            .ok_or_else(|| format!("压缩包里有不安全的路径: {name}"))?;
+        let out_path = target_dir.join(relative);
 
         if name.ends_with('/') || entry.is_dir() {
             fs::create_dir_all(&out_path)?;

@@ -25,7 +25,7 @@ pub async fn insert_platform_account(
     .bind(platform_url)
     .bind(platform_name)
     .bind(account)
-    .bind(password)
+    .bind(password.map(crate::secret::protect))
     .bind(remark)
     .fetch_one(pool)
     .await?;
@@ -157,7 +157,7 @@ pub async fn update_platform_account(
     .bind(platform_url)
     .bind(platform_name)
     .bind(account)
-    .bind(password)
+    .bind(password.map(crate::secret::protect))
     .bind(remark)
     .bind(status)
     .bind(account_uuid)

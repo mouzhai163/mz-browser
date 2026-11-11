@@ -20,7 +20,7 @@ use tauri::{AppHandle, Emitter};
 use crate::{
     core::error::Result,
     infrastructure::persistence::tauri_store,
-    services::environment::{EnvironmentLaunchRuntimeService, KernelService},
+    services::environment::{EnvironmentLaunchRuntimeService, KernelService, kernel::types::CdpEndpointResponse},
 };
 
 pub use link::{link_from_args, root_from_args, validate_link};
@@ -219,8 +219,8 @@ pub async fn open_url_in_environment(app: &AppHandle, env_uuid: &str, raw_url: &
 
     if let Some(endpoint) = KernelService::get_cdp_endpoint(env_uuid.to_string()).await? {
         // 端点记录还在，不代表浏览器还在（窗口刚被关掉时）。连不上就当作没在运行。
-        if browser_reachable(&endpoint.host, endpoint.port).await {
-            return open_in_running_browser(&endpoint.host, endpoint.port, &url).await.map(|_| ());
+        if browser_reachable(&endpoint).await {
+            return open_in_running_browser(&endpoint, &url).await.map(|_| ());
         }
         log::info!("{env_uuid} has a CDP endpoint but the browser is gone; launching it again");
     }
@@ -256,20 +256,35 @@ fn devtools_client(timeout: Duration) -> Result<reqwest::Client> {
     Ok(reqwest::Client::builder().no_proxy().timeout(timeout).build()?)
 }
 
+/// 内核的 WebSocket 地址里带着访问令牌时，其他 DevTools 请求也要带上。
+/// 旧内核的地址里没有，这时不能带：`/json/new` 会把多余的查询串当成网址的一部分。
+fn token_query(endpoint: &CdpEndpointResponse) -> Option<&str> {
+    endpoint.browser_ws_url.as_deref()?.split_once('?').map(|(_, query)| query)
+}
+
+/// DevTools HTTP 接口的地址，`command` 不含查询串。
+fn devtools_url(endpoint: &CdpEndpointResponse, command: &str) -> String {
+    let url = format!("http://{}:{}/json/{command}", endpoint.host, endpoint.port);
+    match token_query(endpoint) {
+        Some(query) => format!("{url}?{query}"),
+        None => url,
+    }
+}
+
 /// 浏览器的 DevTools 接口能不能连上。
-async fn browser_reachable(host: &str, port: u16) -> bool {
+async fn browser_reachable(endpoint: &CdpEndpointResponse) -> bool {
     let Ok(client) = devtools_client(Duration::from_secs(2)) else { return false };
     matches!(
-        client.get(format!("http://{host}:{port}/json/version")).send().await,
+        client.get(devtools_url(endpoint, "version")).send().await,
         Ok(response) if response.status().is_success()
     )
 }
 
 /// 当前所有页面标签页：(id, url)。
-async fn list_pages(host: &str, port: u16) -> Result<Vec<(String, String)>> {
+async fn list_pages(endpoint: &CdpEndpointResponse) -> Result<Vec<(String, String)>> {
     let client = devtools_client(Duration::from_secs(5))?;
     let targets = client
-        .get(format!("http://{host}:{port}/json/list"))
+        .get(devtools_url(endpoint, "list"))
         .send()
         .await?
         .error_for_status()?
@@ -294,14 +309,14 @@ async fn list_pages(host: &str, port: u16) -> Result<Vec<(String, String)>> {
 async fn open_after_launch(env_uuid: &str, url: &str) -> Result<()> {
     for _ in 0..60 {
         if let Ok(Some(endpoint)) = KernelService::get_cdp_endpoint(env_uuid.to_string()).await {
-            if let Ok(pages) = list_pages(&endpoint.host, endpoint.port).await {
+            if let Ok(pages) = list_pages(&endpoint).await {
                 if !pages.is_empty() {
-                    let created = open_in_running_browser(&endpoint.host, endpoint.port, url).await?;
+                    let created = open_in_running_browser(&endpoint, url).await?;
                     let client = devtools_client(Duration::from_secs(5))?;
                     for (id, page_url) in &pages {
                         if Some(id) != created.as_ref() && is_blank_tab(page_url) {
                             let _ = client
-                                .get(format!("http://{}:{}/json/close/{id}", endpoint.host, endpoint.port))
+                                .get(devtools_url(&endpoint, &format!("close/{id}")))
                                 .send()
                                 .await;
                         }
@@ -316,11 +331,15 @@ async fn open_after_launch(env_uuid: &str, url: &str) -> Result<()> {
 }
 
 /// 通过该环境的 DevTools HTTP 接口新开标签页（`PUT /json/new?<url>`）并切到前台，返回新标签页 ID。
-async fn open_in_running_browser(host: &str, port: u16, url: &str) -> Result<Option<String>> {
+async fn open_in_running_browser(endpoint: &CdpEndpointResponse, url: &str) -> Result<Option<String>> {
     let client = devtools_client(Duration::from_secs(10))?;
-    let base = format!("http://{host}:{port}");
+    let mut new_tab_url =
+        format!("http://{}:{}/json/new?{}", endpoint.host, endpoint.port, link::percent_encode_all(url));
+    if let Some(query) = token_query(endpoint) {
+        new_tab_url = format!("{new_tab_url}&{query}");
+    }
     let created = client
-        .put(format!("{base}/json/new?{}", link::percent_encode_all(url)))
+        .put(new_tab_url)
         .send()
         .await?
         .error_for_status()?
@@ -329,7 +348,7 @@ async fn open_in_running_browser(host: &str, port: u16, url: &str) -> Result<Opt
     let target_id = created.get("id").and_then(Value::as_str).map(str::to_string);
     if let Some(target_id) = &target_id {
         // 切换标签页并把窗口带到前台；失败不影响链接已经打开。
-        let _ = client.get(format!("{base}/json/activate/{target_id}")).send().await;
+        let _ = client.get(devtools_url(endpoint, &format!("activate/{target_id}"))).send().await;
     }
     Ok(target_id)
 }

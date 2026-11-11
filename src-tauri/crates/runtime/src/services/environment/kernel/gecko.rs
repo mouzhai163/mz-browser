@@ -152,6 +152,11 @@ pub async fn launch_browser(
         return Err(RuntimeError::InvalidState(format!("environment {env_id} is already active")));
     }
     status_manager.set_status(&env_id, EnvironmentStatus::Starting).await;
+    // 上一个进程可能还在退出、占着配置目录，等它走完再启动
+    #[cfg(target_os = "windows")]
+    if let Err(error) = job_manager.finish_process(&env_id).await {
+        log::warn!("previous browser of {env_id} did not exit cleanly: {error}");
+    }
 
     match start(&env_id, &request, &cdp_endpoint_manager, &job_manager).await {
         Ok((child, instance)) => {

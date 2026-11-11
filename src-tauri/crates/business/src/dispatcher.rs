@@ -1068,6 +1068,40 @@ mod tests {
         call(&context, "rpa/tasks/duplicate", json!({ "uuid": task })).await;
         assert_eq!(call(&context, "rpa/tasks", json!({ "page": 1, "page_size": 20 })).await["total"], 2);
 
+        // 敏感字段：磁盘上是密文，接口读出来是明文，旧明文启动时被加密
+        #[cfg(windows)]
+        {
+            let secret_proxy = call(
+                &context,
+                "proxies/create",
+                json!({ "name": "S", "host": "h", "port": 1, "proxy_type": "socks5", "password": "pw-secret" }),
+            )
+            .await["uuid"]
+                .as_str()
+                .unwrap()
+                .to_string();
+            let stored: String = sqlx::query_scalar("SELECT password FROM proxies WHERE name = 'S'")
+                .fetch_one(&context.db)
+                .await
+                .unwrap();
+            assert!(crate::secret::is_protected(&stored));
+            assert!(!stored.contains("pw-secret"));
+            let listed = call(&context, "proxies/list", json!({ "page": 1, "page_size": 50 })).await;
+            let item = listed["items"].as_array().unwrap().iter().find(|p| p["name"] == "S").unwrap().clone();
+            assert_eq!(item["password"], "pw-secret");
+
+            sqlx::query("UPDATE proxies SET password = 'legacy-plain' WHERE name = 'S'")
+                .execute(&context.db)
+                .await
+                .unwrap();
+            assert_eq!(crate::secret::encrypt_existing(&context.db).await.unwrap(), 1);
+            assert_eq!(crate::secret::encrypt_existing(&context.db).await.unwrap(), 0);
+            let listed = call(&context, "proxies/list", json!({ "page": 1, "page_size": 50 })).await;
+            let item = listed["items"].as_array().unwrap().iter().find(|p| p["name"] == "S").unwrap().clone();
+            assert_eq!(item["password"], "legacy-plain");
+            call(&context, "proxies/delete", json!({ "uuid": secret_proxy })).await;
+        }
+
         // 回收站：删除、列出、恢复；删除后其余关联数据不能被连带清掉
         call(&context, "environments/delete", json!({ "uuid": from_template })).await;
         let bin = call(&context, "environments/recycle-bin/list", json!({ "page": 1, "page_size": 20 })).await;

@@ -9,6 +9,14 @@ pub fn window_event_handle(window: &Window, event: &WindowEvent) {
                 api.prevent_close();
                 let _ = window.hide();
             }
+            // 同步器窗口是唯一的操作入口，窗口关了不能让同步继续在后台跑
+            if window.label() == "syncer" {
+                tauri::async_runtime::spawn(async {
+                    if let Err(error) = crate::services::environment::EnvironmentService::stop_sync().await {
+                        log::warn!("failed to stop sync when its window closed: {error}");
+                    }
+                });
+            }
         }
         _ => {}
     }

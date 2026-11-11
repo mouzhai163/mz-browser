@@ -11,6 +11,7 @@ pub struct PlatformAccountDto {
     pub platform_url: String,
     pub platform_name: Option<String>,
     pub account: String,
+    #[sqlx(try_from = "crate::secret::StoredSecret")]
     pub password: Option<String>,
     pub status: String,
     pub remark: Option<String>,

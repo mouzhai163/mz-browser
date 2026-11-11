@@ -15,6 +15,9 @@ interface RpaImportDialogProps {
 export function RpaImportDialog({ open, summary, onOpenChange, onPreview }: RpaImportDialogProps) {
   const { t } = useTranslation('rpa');
   const [previewing, setPreviewing] = useState(false);
+  const [confirmedFor, setConfirmedFor] = useState<PortableRpaTaskSummary | null>(null);
+  const needsConfirm = (summary?.localScriptCount ?? 0) > 0;
+  const confirmed = !needsConfirm || confirmedFor === summary;
 
   const handlePreview = async () => {
     setPreviewing(true);
@@ -70,12 +73,26 @@ export function RpaImportDialog({ open, summary, onOpenChange, onPreview }: RpaI
         </div>
       </div>
 
+      {needsConfirm ? (
+        <div className="mt-3 space-y-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+          <p>{t('dialog.import.localScriptWarning', { count: summary?.localScriptCount ?? 0 })}</p>
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={confirmed}
+              onChange={(event) => setConfirmedFor(event.target.checked ? summary : null)}
+            />
+            <span>{t('dialog.import.localScriptConfirm')}</span>
+          </label>
+        </div>
+      ) : null}
+
       <FormattedDialogFooter>
         <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={previewing}>
           <X className="mr-1.5 h-4 w-4" />
           {t('dialog.import.cancel')}
         </Button>
-        <Button size="sm" onClick={handlePreview} disabled={!summary || previewing}>
+        <Button size="sm" onClick={handlePreview} disabled={!summary || previewing || !confirmed}>
           <Eye className="mr-1.5 h-4 w-4" />
           {t('dialog.import.preview')}
         </Button>

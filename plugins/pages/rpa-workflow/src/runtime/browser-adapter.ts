@@ -72,6 +72,7 @@ export interface BrowserAdapter {
   /** 让用户在浏览器里点一下来拾取元素 */
   pickElement(timeoutMs?: number): Promise<RpaCapturedSelector>;
   /** 运行结束：关闭这次运行开的标签，只留当前这个 */
-  finishRun(): Promise<void>;
+  /** 关闭这次运行打开的标签，默认留下当前标签；keepCurrent 为 false 时全部关闭 */
+  finishRun(options?: { keepCurrent?: boolean }): Promise<void>;
   close(): void;
 }

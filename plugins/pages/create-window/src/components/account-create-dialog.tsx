@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { ChevronDown, Eye, EyeOff } from 'lucide-react';
+import { ChevronDown, Eye, EyeOff, Globe } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -28,16 +28,6 @@ const PLATFORMS = [
   { name: 'Instagram', url: 'https://www.instagram.com/' },
   { name: 'LinkedIn', url: 'https://www.linkedin.com/' },
 ];
-
-// 获取 favicon URL
-const getFaviconUrl = (url: string): string => {
-  try {
-    const urlObj = new URL(url);
-    return `https://www.google.com/s2/favicons?domain=${urlObj.hostname}&sz=16`;
-  } catch {
-    return '';
-  }
-};
 
 export interface AccountFormData {
   platform: string;
@@ -172,15 +162,7 @@ export function AccountCreateDialog({
                       className="cursor-pointer"
                     >
                       <div className="flex items-center gap-2 w-full">
-                        <img
-                          src={getFaviconUrl(platform.url)}
-                          alt={platform.name}
-                          className="w-4 h-4 shrink-0"
-                          onError={(e) => {
-                            // 如果 favicon 加载失败，隐藏图片
-                            (e.target as HTMLImageElement).style.display = 'none';
-                          }}
-                        />
+                        <Globe className="w-4 h-4 shrink-0 text-muted-foreground" />
                         <span className="flex-1 text-xs truncate">{platform.url}</span>
                       </div>
                     </DropdownMenuItem>

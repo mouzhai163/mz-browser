@@ -4,9 +4,9 @@ import { invoke } from '@/lib/tauri';
 import { createRpaTask, deleteRpaTask, duplicateRpaTask, getRpaTaskDetail, updateRpaTask } from '../api';
 import type { TaskConfig, TaskVariable } from '../components/task-editor/task-settings-form';
 import { buildTaskPayload, buildWorkflowSchema, mapTaskDetailToEditorState } from '../components/task-editor/workflow-mapper';
-import { COMPONENTS } from '../lib/step-catalog';
-import { branchesOf, type EditorStep } from '../lib/step-tree';
-import { markRpaTaskEdited, rpaExecutionStore, startRpaExecution, stopRpaExecution } from './execution-manager';
+import type { EditorStep } from '../lib/step-tree';
+import { markRpaTaskEdited, rpaExecutionStore, startRpaExecution, stopRpaExecution, stopRpaExecutionAndWait } from './execution-manager';
+import { normalizeSteps } from './mcp-steps';
 import { deleteRpaTaskFiles } from './tauri';
 import { validateSteps } from './validate-workflow';
 
@@ -14,23 +14,7 @@ type Payload = Record<string, unknown>;
 
 const translate = (key: string) => i18n.getFixedT(null, 'rpa')(key) as string;
 
-/** MCP 传来的步骤补全成编辑器的格式，未知类型直接报错 */
-function normalizeStep(raw: unknown): EditorStep {
-  const input = (raw ?? {}) as Payload;
-  const type = String(input.type ?? '');
-  if (!COMPONENTS.some((item) => item.type === type)) throw new Error(`Unknown step type: ${type}`);
-  const step: EditorStep = {
-    id: typeof input.id === 'string' && input.id ? input.id : crypto.randomUUID(),
-    type,
-    name: typeof input.name === 'string' && input.name ? input.name : translate(`editor.stepTypes.${type}`),
-    config: { ...((input.config as Payload | undefined) ?? {}) },
-    enabled: input.enabled !== false,
-  };
-  for (const branch of branchesOf(type)) {
-    step[branch] = Array.isArray(input[branch]) ? (input[branch] as unknown[]).map(normalizeStep) : [];
-  }
-  return step;
-}
+const stepName = (type: string) => translate(`editor.stepTypes.${type}`);
 
 const SETTING_KEYS: Array<keyof TaskConfig> = [
   'name', 'description', 'tags', 'triggerType', 'schedule', 'cronExpression', 'selectedEnvironments', 'runMode',
@@ -92,7 +76,7 @@ const handlers: Record<string, (payload: Payload) => Promise<unknown>> = {
   async create({ name, steps, settings }) {
     const config = applySettings({ ...NEW_TASK, name: String(name ?? '') }, settings);
     if (!config.name.trim()) throw new Error(translate('editor.errors.nameRequired'));
-    const tree = ((steps as unknown[]) ?? []).map(normalizeStep);
+    const tree = normalizeSteps((steps as unknown[]) ?? [], stepName);
     const uuid = await createRpaTask(buildTaskPayload(config, tree));
     markRpaTaskEdited(uuid);
     return { uuid, issues: issuesOf(config, tree) };
@@ -101,7 +85,7 @@ const handlers: Record<string, (payload: Payload) => Promise<unknown>> = {
     const uuid = String(taskUuid);
     const state = mapTaskDetailToEditorState(await getRpaTaskDetail(uuid));
     const config = applySettings(state.config, settings);
-    const tree = Array.isArray(steps) ? steps.map(normalizeStep) : state.steps;
+    const tree = Array.isArray(steps) ? normalizeSteps(steps, stepName) : state.steps;
     await updateRpaTask({ ...buildTaskPayload(config, tree), uuid });
     markRpaTaskEdited(uuid);
     return { uuid, issues: issuesOf(config, tree) };
@@ -113,6 +97,7 @@ const handlers: Record<string, (payload: Payload) => Promise<unknown>> = {
   },
   async delete({ taskUuid }) {
     const uuid = String(taskUuid);
+    await stopRpaExecutionAndWait(uuid);
     await deleteRpaTask(uuid);
     void deleteRpaTaskFiles([uuid]).catch(() => undefined);
     markRpaTaskEdited(uuid);

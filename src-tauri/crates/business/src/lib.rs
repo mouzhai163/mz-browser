@@ -4,6 +4,7 @@ pub mod dto;
 pub mod entitys;
 pub mod errors;
 pub mod models;
+pub mod secret;
 pub mod services;
 pub mod svc_ctx;
 pub mod utils;

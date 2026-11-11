@@ -69,7 +69,6 @@ pub fn register_handles() -> impl Fn(Invoke<tauri::Wry>) -> bool + Send + Sync +
         network::test_proxy,
         network::test_direct_ip,
         network::detect_proxy_ip,
-        network::download_files,
         rpa::execute_local_rpa_script,
         rpa::save_rpa_run_screenshot,
         rpa::read_rpa_run_screenshot,

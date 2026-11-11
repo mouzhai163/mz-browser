@@ -116,6 +116,7 @@ pub struct ProxyRowDto {
     pub port: i32,
     pub proxy_type: String,
     pub username: Option<String>,
+    #[sqlx(try_from = "crate::secret::StoredSecret")]
     pub password: Option<String>,
     pub country: Option<String>,
     pub city: Option<String>,
@@ -256,6 +257,7 @@ pub struct EnvironmentCookieDto {
     pub site_input: String,
     pub domain: String,
     pub name: String,
+    #[sqlx(try_from = "crate::secret::StoredText")]
     pub value: String,
     pub path: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,

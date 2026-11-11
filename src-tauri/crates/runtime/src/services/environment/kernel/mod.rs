@@ -143,6 +143,10 @@ impl KernelRuntime {
                 let _ = events.emit("environment.shutdown_failed", &serde_json::json!({"env_uuid": env_uuid, "error": error.to_string()}));
                 return;
             }
+            // 等旧进程退出的这段时间里可能已经重新启动了，端点和状态属于新进程，不能清
+            if relaunch_in_progress(self.status_manager.get_status(env_uuid).await) {
+                return;
+            }
             if matches!(previous, Some(super::EnvironmentStatus::Error)) {
                 self.status_manager.set_status(env_uuid, super::EnvironmentStatus::Error).await;
             }
@@ -180,6 +184,19 @@ impl KernelRuntime {
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 fn disconnect_cleanup_allowed(current: Option<super::EnvironmentStatus>) -> bool {
     matches!(current, None | Some(super::EnvironmentStatus::Stopped))
+}
+
+/// 环境已经开始了新一轮启动（或已经启动完）。
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn relaunch_in_progress(current: Option<super::EnvironmentStatus>) -> bool {
+    !matches!(
+        current,
+        None | Some(
+            super::EnvironmentStatus::Stopped
+                | super::EnvironmentStatus::Stopping
+                | super::EnvironmentStatus::Error
+        )
+    )
 }
 
 #[cfg(test)]
@@ -287,6 +304,16 @@ mod tests {
 
         assert_eq!(runtime.cdp_endpoint_manager.get_port("env-1").await, Some(port));
         assert_eq!(status_manager.get_status("env-1").await, Some(EnvironmentStatus::Starting));
+    }
+
+    #[test]
+    fn a_new_launch_is_recognised_after_the_old_process_exits() {
+        for own in [None, Some(EnvironmentStatus::Stopped), Some(EnvironmentStatus::Stopping), Some(EnvironmentStatus::Error)] {
+            assert!(!relaunch_in_progress(own));
+        }
+        for newer in [EnvironmentStatus::Initializing, EnvironmentStatus::Starting, EnvironmentStatus::Running] {
+            assert!(relaunch_in_progress(Some(newer)));
+        }
     }
 
     #[test]

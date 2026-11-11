@@ -148,8 +148,13 @@ pub fn load_config(app: &AppHandle) -> Result<McpConfig, String> {
         Some(value) => {
             let mut config = serde_json::from_value::<McpConfig>(value)
                 .map_err(|error| format!("MCP 配置格式无效: {error}"))?;
+            let stored = std::mem::take(&mut config.access_token);
+            // 解不开（换了电脑或 Windows 用户）时生成新令牌
+            config.access_token = business::secret::reveal(&stored).unwrap_or_default();
             if config.access_token.is_empty() {
                 config.access_token = new_access_token();
+                save_config(app, &config)?;
+            } else if !business::secret::is_protected(&stored) {
                 save_config(app, &config)?;
             }
             config.validate()?;
@@ -165,7 +170,9 @@ pub fn load_config(app: &AppHandle) -> Result<McpConfig, String> {
 
 pub fn save_config(app: &AppHandle, config: &McpConfig) -> Result<(), String> {
     config.validate()?;
-    let value = serde_json::to_value(config).map_err(|error| error.to_string())?;
+    let mut stored = config.clone();
+    stored.access_token = business::secret::protect(&config.access_token);
+    let value = serde_json::to_value(stored).map_err(|error| error.to_string())?;
     set_store_key(app, keys::MCP, value)
 }
 

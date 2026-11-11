@@ -57,6 +57,9 @@ jobs:
       - name: Regression typecheck
         run: pnpm typecheck:regression
 
+      - name: Frontend unit tests
+        run: pnpm test
+
       - name: Build frontend
         run: node build.cjs
 
@@ -74,3 +77,7 @@ jobs:
       - name: Browser runtime policy tests
         working-directory: src-tauri
         run: cargo test --locked -p runtime
+
+      - name: Business layer tests
+        working-directory: src-tauri
+        run: cargo test --locked -p business

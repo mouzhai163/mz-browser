@@ -13,6 +13,7 @@ pub struct ProxyDto {
     pub port: i32,
     pub proxy_type: String,
     pub username: Option<String>,
+    #[sqlx(try_from = "crate::secret::StoredSecret")]
     pub password: Option<String>,
     pub ssh_key_encrypted: Option<String>,
     pub ssh_passphrase_encrypted: Option<String>,

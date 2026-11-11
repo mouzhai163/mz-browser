@@ -2,7 +2,8 @@
 //!
 //! Replaces the former Node worker (`automation/browser-worker.mjs`), so page tools work in an
 //! installed build without any extra runtime. The rules are the same as before:
-//! * only `ws://127.0.0.1:<kernel CDP port>/devtools/browser/<id>` endpoints are accepted;
+//! * only `ws://127.0.0.1:<kernel CDP port>/devtools/browser/<id>` endpoints are accepted,
+//!   optionally carrying the kernel's `mz_token` access token;
 //! * only pages (and every frame inside them) whose origin is explicitly allowed are touched;
 //! * the connection is only ever detached, never `Browser.close` / `Target.closeTarget`.
 
@@ -47,6 +48,12 @@ fn err(code: &str) -> McpToolError {
     McpToolError::upstream(code)
 }
 
+fn is_debug_token_query(query: &str) -> bool {
+    query
+        .strip_prefix("mz_token=")
+        .is_some_and(|token| !token.is_empty() && token.chars().all(|c| c.is_ascii_hexdigit()))
+}
+
 /// Accepts only the browser-level websocket of a local kernel.
 pub fn validate_endpoint(value: &str) -> Result<reqwest::Url, McpToolError> {
     let url = reqwest::Url::parse(value).map_err(|_| err(code::INVALID_ENDPOINT))?;
@@ -60,7 +67,7 @@ pub fn validate_endpoint(value: &str) -> Result<reqwest::Url, McpToolError> {
         || !port_ok
         || !url.username().is_empty()
         || url.password().is_some()
-        || url.query().is_some()
+        || !url.query().is_none_or(is_debug_token_query)
         || url.fragment().is_some()
         || !path_ok
     {
@@ -543,6 +550,7 @@ mod tests {
     #[test]
     fn endpoint_policy_only_allows_local_kernel_browser_sockets() {
         assert!(validate_endpoint("ws://127.0.0.1:29200/devtools/browser/abc-123").is_ok());
+        assert!(validate_endpoint("ws://127.0.0.1:29200/devtools/browser/abc?mz_token=ab12").is_ok());
         for bad in [
             "ws://localhost:29200/devtools/browser/abc",
             "ws://127.0.0.1:29199/devtools/browser/abc",
@@ -553,6 +561,8 @@ mod tests {
             "ws://127.0.0.1:29200/devtools/page/abc",
             "ws://127.0.0.1:29200/devtools/browser/",
             "ws://127.0.0.1:29200/devtools/browser/abc?x=1",
+            "ws://127.0.0.1:29200/devtools/browser/abc?mz_token=",
+            "ws://127.0.0.1:29200/devtools/browser/abc?mz_token=ab&x=1",
             "ws://127.0.0.1:29200/devtools/browser/a/b",
         ] {
             assert!(validate_endpoint(bad).is_err(), "{bad}");

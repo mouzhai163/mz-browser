@@ -29,6 +29,8 @@ const FIXTURE = `<!doctype html><meta charset=utf-8><title>fixture</title>
 <div id=host></div>
 <svg id=icon width=24 height=24 onclick="log('svg')"><circle cx=12 cy=12 r=10></circle></svg>
 <div id=result>extracted text</div>
+<div id=scroller style="height:60px;width:200px;overflow:auto"><div style="height:50px"></div><button id=clipped style="height:40px">Clipped</button><div style="height:300px"></div></div>
+<div style="width:20px;height:20px;overflow:hidden"><button id=floating style="position:fixed;right:8px;top:8px;width:60px;height:24px">Float</button></div>
 <ul id=rows><li class="row a1"><a href=/one><b class=title>one</b></a></li><li class="row"><a href=/two><b class=title>two</b></a></li><li class=row><a href=/three><b class=title>three</b></a></li><li class=row><b class=title></b></li></ul>
 <div id=slot></div>
 <div class=spacer></div><button id=far>Far</button>
@@ -215,6 +217,20 @@ describe.skipIf(!wsUrl)('real browser', () => {
     await adapter.closeTab(list.length);
     expect((await pages()).length).toBe(list.length - 1);
   }, 40000);
+
+  it('clicks an element clipped by a scrolling container', async () => {
+    await main();
+    await adapter.click(css('#clipped'), { timeoutMs: 8000 });
+    const clicks = (await log()).clicks as { id: string; trusted: boolean }[];
+    expect(clicks.at(-1)).toMatchObject({ id: 'clipped', trusted: true });
+  }, 30000);
+
+  it('clicks a fixed element inside a clipping container', async () => {
+    await main();
+    await adapter.click(css('#floating'), { timeoutMs: 8000 });
+    const clicks = (await log()).clicks as { id: string; trusted: boolean }[];
+    expect(clicks.at(-1)).toMatchObject({ id: 'floating', trusted: true });
+  }, 30000);
 
   it('extracts every match', async () => {
     await main();

@@ -57,6 +57,11 @@ pub async fn launch_browser(
     }
     status_manager.set_status(&env_id, EnvironmentStatus::Initializing).await;
     status_manager.set_status(&env_id, EnvironmentStatus::Starting).await;
+    // 上一个进程可能还在退出、占着配置目录，等它走完再启动
+    #[cfg(target_os = "windows")]
+    if let Err(error) = job_manager.finish_process(&env_id).await {
+        log::warn!("previous browser of {env_id} did not exit cleanly: {error}");
+    }
 
     let path = Path::new(&request.exe_path);
     if !path.exists() {
@@ -91,8 +96,8 @@ pub async fn launch_browser(
         }
     };
 
-    let cdp_port = match cdp_endpoint_manager.allocate_port(&env_id).await {
-        Ok(port) => port,
+    let (cdp_port, debug_token) = match cdp_endpoint_manager.allocate_with_token(&env_id).await {
+        Ok(slot) => slot,
         Err(error) => {
             fail_launch(
                 &env_id,
@@ -131,6 +136,7 @@ pub async fn launch_browser(
         &env_id,
         &request.user_data_dir,
         cdp_port,
+        &debug_token,
         request.display_id.as_deref(),
         request.window_position.as_deref(),
         request.window_size.as_deref(),
@@ -181,7 +187,7 @@ pub async fn launch_browser(
             }
         };
 
-    let (mut browser, browser_ws_url) = match wait_for_cdp_ready(&env_id, cdp_port, browser).await {
+    let (mut browser, browser_ws_url) = match wait_for_cdp_ready(&env_id, cdp_port, &debug_token, browser).await {
         Ok(ready) => ready,
         Err(error) => {
             fail_launch(
@@ -251,9 +257,10 @@ pub async fn launch_browser(
 async fn wait_for_cdp_ready(
     env_id: &str,
     cdp_port: u16,
+    debug_token: &str,
     mut browser: Child,
 ) -> Result<(Child, String)> {
-    let version_url = format!("http://127.0.0.1:{}/json/version", cdp_port);
+    let version_url = super::cdp::debug_url(cdp_port, "version", debug_token);
     let client = reqwest::Client::builder()
         .no_proxy()
         .timeout(Duration::from_millis(500))
@@ -288,8 +295,8 @@ async fn wait_for_cdp_ready(
 
         if tokio::time::Instant::now() >= deadline {
             return Err(RuntimeError::Internal(format!(
-                "CDP endpoint {} did not become ready within {} seconds for environment {}",
-                version_url,
+                "CDP port {} did not become ready within {} seconds for environment {}",
+                cdp_port,
                 CDP_STARTUP_TIMEOUT.as_secs(),
                 env_id
             )));
@@ -371,6 +378,7 @@ async fn spawn_browser_process(
     env_id: &str,
     user_data_dir: &str,
     cdp_port: u16,
+    debug_token: &str,
     display_id: Option<&str>,
     window_position: Option<&str>,
     window_size: Option<&str>,
@@ -418,6 +426,8 @@ async fn spawn_browser_process(
 
     let mut command = tokio::process::Command::new(exe_path);
     command.current_dir(work_dir).args(&args).stdin(Stdio::null());
+    // 走环境变量而不是命令行：命令行能被进程列表直接看到
+    command.env(DEBUG_TOKEN_ENV, debug_token);
 
     // 浏览器日志由内核自己写入 user-data-dir 下的 mz-browser.log（见 base_browser_args 的
     // --log-file）。不要再用 --enable-logging=stderr 并重定向 stderr：Windows 上 Chromium 的
@@ -482,24 +492,40 @@ fn browser_ui_language_arg(language: &str) -> Option<String> {
     valid.then(|| format!("--lang={language}"))
 }
 
+#[cfg(feature = "production")]
+const REMOTE_ALLOW_ORIGINS: &str = "tauri://localhost,http://tauri.localhost";
+#[cfg(not(feature = "production"))]
+const REMOTE_ALLOW_ORIGINS: &str =
+    "tauri://localhost,http://tauri.localhost,http://localhost:5173,http://127.0.0.1:5173";
+
+const DEBUG_TOKEN_ENV: &str = "MZ_DEBUG_TOKEN";
+
 fn base_browser_args(env_id: &str, user_data_dir: &str, cdp_port: u16) -> Vec<String> {
     let args = vec![
         format!("--mz-env-id={env_id}"),
         format!("--user-data-dir={user_data_dir}"),
         format!("--remote-debugging-port={cdp_port}"),
         "--remote-debugging-address=127.0.0.1".into(),
-        "--remote-allow-origins=tauri://localhost,http://tauri.localhost,http://localhost:5173,http://127.0.0.1:5173".into(),
+        format!("--remote-allow-origins={REMOTE_ALLOW_ORIGINS}"),
         "--disable-skia-graphite".into(),
+        // 这些后台请求不走环境代理，会用真实 IP 连 Google，并把所有环境关联起来
+        "--disable-background-networking".into(),
+        "--disable-component-update".into(),
+        // 不用构建自带的实验配置，特性集和正式版 Chrome 的默认值保持一致
+        "--disable-field-trial-config".into(),
         // 新环境的配置目录第一次启动时，Chromium 会先显示首次运行引导窗口而不是普通浏览器窗口：
         // 起始页等不到浏览器窗口就被放弃，引导窗口还会拖住关闭。环境由软件管理，不需要首次运行流程
         "--no-first-run".into(),
         "--no-default-browser-check".into(),
-        "--enable-logging".into(),
-        format!(
-            "--log-file={}",
-            Path::new(user_data_dir).join("mz-browser.log").display()
-        ),
     ];
+    // 内核日志里有完整的指纹配置，只在开发时写
+    #[cfg(not(feature = "production"))]
+    let args = {
+        let mut args = args;
+        args.push("--enable-logging".into());
+        args.push(format!("--log-file={}", Path::new(user_data_dir).join("mz-browser.log").display()));
+        args
+    };
     #[cfg(all(feature = "desktop-e2e", debug_assertions, not(feature = "production")))]
     let args = append_test_certificate(args);
     args

@@ -13,7 +13,7 @@ import { TextareaInput } from '@/components/textarea-input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { RefreshCw, X, Globe, Facebook, Youtube, Instagram, Linkedin, Twitter } from 'lucide-react';
 import { FiChrome } from 'react-icons/fi';
-import { FaFirefoxBrowser, FaWindows, FaApple, FaLinux, FaGoogle, FaAmazon } from 'react-icons/fa';
+import { FaFirefoxBrowser, FaWindows, FaGoogle, FaAmazon } from 'react-icons/fa';
 import { SiGooglechrome } from 'react-icons/si';
 import { cn } from '@/lib/utils';
 import type { CookieGroup, WindowInfo } from '../types';
@@ -85,11 +85,8 @@ function getCurrentKernelVersion(
   return kernel.version;
 }
 
-const systemOptions = [
-  { value: 'Windows', label: 'Windows', icon: FaWindows },
-  { value: 'macOS', label: 'macOS', icon: FaApple },
-  { value: 'Linux', label: 'Linux', icon: FaLinux },
-];
+// 内核的 navigator.platform 目前总是 Win32，其他系统身份会自相矛盾，修好内核前只提供 Windows
+const systemOptions = [{ value: 'Windows', label: 'Windows', icon: FaWindows }];
 
 
 const KERNEL_TYPE_CHROME = 'chrome';

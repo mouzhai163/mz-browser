@@ -1,18 +1,17 @@
 import i18n from 'i18next';
 import { createStore } from 'zustand/vanilla';
-import { stopEnvironmentRuntime, getEnvironmentDetail, startEnvironmentRuntime } from '../../../../services/environment/src';
+import { stopEnvironmentRuntime, getEnvironmentDetail } from '../../../../services/environment/src';
 import { finishRpaRun, getRpaTaskDetail, setRpaTaskStatus, startRpaRun } from '../api';
 import { mapTaskDetailToEditorState } from '../components/task-editor/workflow-mapper';
 import { countSteps, findStep, type EditorStep } from '../lib/step-tree';
 import type { RpaWorkflowSchema } from '../types';
-import { waitForCdpEndpoint } from './bound-environment';
+import { ensureEnvironmentStarted, settledEnvironmentStatus, waitForCdpEndpoint } from './bound-environment';
 import type { BrowserAdapter } from './browser-adapter';
 import { createBrowserAdapter } from './create-browser-adapter';
 import { describeRunError, isStopError, RpaError } from './errors';
 import { RpaRunner, type RpaRunnerStepEvent } from './runner';
 import {
   deleteRpaRunFiles,
-  getEnvironmentStatus,
   saveRpaRunScreenshot,
   sendRpaNotification,
 } from './tauri';
@@ -32,6 +31,8 @@ export interface RpaRunLogEntry {
   durationMs?: number;
   error?: string;
   value?: string;
+  /** 输出可能含密码等内容，没有完整页面权限的 MCP 客户端看不到 */
+  sensitive?: boolean;
   screenshot?: string;
 }
 
@@ -40,6 +41,7 @@ export interface RpaExtractedItem {
   stepName: string;
   key: string;
   value: string;
+  sensitive: boolean;
 }
 
 export interface RpaEnvRun {
@@ -85,6 +87,16 @@ export function markRpaTaskEdited(taskId: string): void {
   }));
 }
 
+/** 只有读文本和链接的提取结果算公开内容；读字段值、HTML 和脚本的输出都可能含密码 */
+function isSensitiveOutput(step: EditorStep | null): boolean {
+  if (step?.type !== 'extract' && step?.type !== 'extract_text') return true;
+  const kind = step.config.extractType;
+  return kind !== undefined && kind !== 'text' && kind !== 'href';
+}
+
+/** 放弃一次运行时，等收尾标签的最长时间 */
+const ABANDON_TIMEOUT_MS = 3000;
+
 interface ActiveExecution {
   controller: AbortController;
 }
@@ -97,6 +109,17 @@ const environmentWaiters = new Map<string, Array<() => void>>();
 
 export function isEnvironmentBusy(envUuid: string): boolean {
   return busyEnvironments.has(envUuid);
+}
+
+/** 编辑器调试和拾取用：环境空闲就占用并返回 true，否则返回 false，不排队 */
+export function claimEnvironment(envUuid: string): boolean {
+  if (busyEnvironments.has(envUuid)) return false;
+  busyEnvironments.add(envUuid);
+  return true;
+}
+
+export function releaseEnvironmentClaim(envUuid: string): void {
+  releaseEnvironment(envUuid);
 }
 
 async function acquireEnvironment(envUuid: string, signal: AbortSignal): Promise<void> {
@@ -177,6 +200,8 @@ async function runOnEnvironment(plan: RunPlan, envUuid: string, signal: AbortSig
 
   let holdsEnvironment = false;
   let startedByRun = false;
+  let connectedOnce = false;
+  let browserGone = false;
   let runUuid: string | null = null;
   let log: RpaRunLogEntry[] = [];
   let extracted: RpaExtractedItem[] = [];
@@ -216,27 +241,45 @@ async function runOnEnvironment(plan: RunPlan, envUuid: string, signal: AbortSig
       signal.addEventListener('abort', abortAttempt, { once: true });
       let timedOut = false;
       let adapter: BrowserAdapter | null = null;
+      let abandoned = false;
+      // 先关掉这次打开的标签再断开，否则连接断了就关不了，重试会越积越多
+      const abandon = (keepCurrent: boolean) => {
+        const current = adapter;
+        if (!current) return;
+        abandoned = true;
+        void Promise.race([
+          current.finishRun({ keepCurrent }).catch(() => undefined),
+          new Promise((resolve) => window.setTimeout(resolve, ABANDON_TIMEOUT_MS)),
+        ]).finally(() => current.close());
+      };
       const timer =
         timeoutSeconds > 0
           ? window.setTimeout(() => {
               timedOut = true;
               attemptController.abort();
-              adapter?.close();
+              abandon(false);
             }, timeoutSeconds * 1000)
           : undefined;
-      const closeOnStop = () => adapter?.close();
+      const closeOnStop = () => abandon(true);
       signal.addEventListener('abort', closeOnStop, { once: true });
 
       try {
         patchEnv(taskId, envUuid, (env) => ({ ...env, status: 'starting', attempt, log: [], error: undefined }));
 
-        if ((await getEnvironmentStatus(envUuid)) !== 'running') {
-          await startEnvironmentRuntime(envUuid);
-          startedByRun = true;
+        // 连接过之后环境没了，说明浏览器被关掉了，重试不能把它重新打开
+        if (connectedOnce) {
+          const status = await settledEnvironmentStatus(envUuid, attemptController.signal);
+          if (attemptController.signal.aborted) throw new RpaError('RUN_STOPPED');
+          if (status !== 'running') {
+            browserGone = true;
+            throw new RpaError('BROWSER_DISCONNECTED');
+          }
         }
+        if (await ensureEnvironmentStarted(envUuid, attemptController.signal)) startedByRun = true;
         if (attemptController.signal.aborted) throw new RpaError('RUN_STOPPED');
 
         const endpoint = await waitForCdpEndpoint(envUuid);
+        connectedOnce = true;
         adapter = createBrowserAdapter(endpoint.browser_ws_url || '');
         patchEnv(taskId, envUuid, (env) => ({ ...env, status: 'running' }));
 
@@ -245,6 +288,7 @@ async function runOnEnvironment(plan: RunPlan, envUuid: string, signal: AbortSig
           { envUuid, browserWsUrl: endpoint.browser_ws_url || '' },
           {
             signal: attemptController.signal,
+            cleanupHandled: () => abandoned,
             onStepStatusChange: (event) => {
               const step = findStep(plan.steps, event.stepId);
               const stepName = step?.name ?? event.stepType;
@@ -291,9 +335,13 @@ async function runOnEnvironment(plan: RunPlan, envUuid: string, signal: AbortSig
                 stepName: step?.name ?? event.stepType,
                 key: event.output ?? '',
                 value: event.value,
+                sensitive: isSensitiveOutput(step),
               });
               const row = [...log].reverse().find((entry) => entry.stepId === event.stepId);
-              if (row) row.value = event.value;
+              if (row) {
+                row.value = event.value;
+                row.sensitive = isSensitiveOutput(step);
+              }
               publishLog();
             },
             onScreenshotCaptured: (event) => {
@@ -325,7 +373,7 @@ async function runOnEnvironment(plan: RunPlan, envUuid: string, signal: AbortSig
           errorMessage = undefined;
           break;
         }
-        if (attempt > retryCount) {
+        if (attempt > retryCount || browserGone) {
           outcome = 'failed';
           break;
         }
@@ -335,7 +383,7 @@ async function runOnEnvironment(plan: RunPlan, envUuid: string, signal: AbortSig
         window.clearTimeout(timer);
         signal.removeEventListener('abort', abortAttempt);
         signal.removeEventListener('abort', closeOnStop);
-        adapter?.close();
+        if (!abandoned) adapter?.close();
       }
     }
   } catch (error) {
@@ -447,6 +495,16 @@ export async function startRpaExecution(taskId: string, options: StartRpaExecuti
       ),
     };
 
+    // 运行对话框之外（定时、批量、MCP）也要保证必填参数有值
+    const missing = state.config.globalVariables.find((variable) => {
+      if (!variable.promptOnRun || !variable.required) return false;
+      const value = Object.prototype.hasOwnProperty.call(overrides, variable.name)
+        ? overrides[variable.name]
+        : variable.value;
+      return !value?.trim();
+    });
+    if (missing) throw new Error(translate('editor.variablePanel.runDialog.requiredError', { name: missing.name }));
+
     if (workflow.environments.length === 0) throw new Error(translate('dialog.run.environmentRequired'));
     if (state.steps.length === 0) throw new Error(translate('editor.errors.stepsRequired'));
     const [issue] = validateSteps(workflow.steps);
@@ -500,6 +558,15 @@ export function stopRpaExecution(taskId: string): void {
   if (!entry) return;
   patchExecution(taskId, (execution) => ({ ...execution, status: 'stopping' }));
   entry.controller.abort();
+}
+
+/** 停止任务并等它结束，删除任务前用 */
+export async function stopRpaExecutionAndWait(taskId: string, timeoutMs = 15000): Promise<void> {
+  stopRpaExecution(taskId);
+  const deadline = Date.now() + timeoutMs;
+  while (active.has(taskId) && Date.now() < deadline) {
+    await new Promise((resolve) => window.setTimeout(resolve, 100));
+  }
 }
 
 export function isRpaTaskActive(taskId: string): boolean {

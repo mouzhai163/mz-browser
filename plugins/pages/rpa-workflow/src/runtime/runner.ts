@@ -18,6 +18,8 @@ export interface RpaRunnerStepEvent {
 
 export interface RpaRunnerOptions {
   signal?: AbortSignal;
+  /** 返回 true 时收尾和断开由调用方负责，这里不再动连接 */
+  cleanupHandled?: () => boolean;
   /** 运行时变量的初始值（覆盖任务里定义的默认值） */
   variables?: Record<string, unknown>;
   onStepStatusChange?: (event: RpaRunnerStepEvent) => void;
@@ -57,8 +59,10 @@ export class RpaRunner {
       await this.runList(workflow.steps, context);
       return context.variables;
     } finally {
-      await this.adapter.finishRun().catch(() => undefined);
-      this.adapter.close();
+      if (!options?.cleanupHandled?.()) {
+        await this.adapter.finishRun().catch(() => undefined);
+        this.adapter.close();
+      }
     }
   }
 

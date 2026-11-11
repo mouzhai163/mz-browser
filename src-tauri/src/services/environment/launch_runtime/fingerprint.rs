@@ -19,9 +19,7 @@ pub(super) fn build_fingerprint_config(config: Option<&Value>) -> FingerprintCon
         geolocation_prompt: get_string(&basic_settings, "geolocationPrompt"),
         geolocation: get_json_string(&basic_settings, "geolocation"),
         platform: get_string_from_map(&window_info, "system"),
-        // 环境里存的都是 Windows 的版本号；macOS / Linux 环境发出去会和 platform 矛盾
-        platform_version: get_string_from_map(&window_info, "platformVersion")
-            .filter(|_| window_info.get("system").and_then(Value::as_str) == Some("Windows")),
+        platform_version: platform_version_for(&window_info),
         user_agent: get_string_from_map(&window_info, "userAgent"),
         // 创建时定下的 Client Hints 完整版本号；启动时再核对一次主版本（见 launch_runtime/mod.rs）
         original_chrome_version: get_string_from_map(&window_info, "uaFullVersion"),
@@ -84,6 +82,26 @@ fn get_string(source: &Option<serde_json::Map<String, Value>>, key: &str) -> Opt
         .and_then(|obj| obj.get(key))
         .and_then(Value::as_str)
         .map(ToOwned::to_owned)
+}
+
+/// Sec-CH-UA-Platform-Version 的 Windows 取值（见界面的 device-samples.ts）
+const WINDOWS_PLATFORM_VERSIONS: [&str; 4] = ["10.0.0", "13.0.0", "15.0.0", "19.0.0"];
+/// 非 Windows 身份没有存自己系统的版本号时用：macOS 15 Sequoia、Linux 内核 6.8
+const DEFAULT_MACOS_PLATFORM_VERSION: &str = "15.7.1";
+const DEFAULT_LINUX_PLATFORM_VERSION: &str = "6.8.0";
+
+/// 环境存的版本号都按 Windows 生成。macOS / Linux 身份不能用它，也不能不发：
+/// 不发时内核会报宿主机的 Windows 版本，和身份矛盾。
+fn platform_version_for(window_info: &serde_json::Map<String, Value>) -> Option<String> {
+    let stored = get_string_from_map(window_info, "platformVersion").filter(|version| !version.trim().is_empty());
+    let own_or = |default: &str| {
+        Some(stored.clone().filter(|version| !WINDOWS_PLATFORM_VERSIONS.contains(&version.as_str())).unwrap_or_else(|| default.to_string()))
+    };
+    match window_info.get("system").and_then(Value::as_str) {
+        Some("macOS") => own_or(DEFAULT_MACOS_PLATFORM_VERSION),
+        Some("Linux") => own_or(DEFAULT_LINUX_PLATFORM_VERSION),
+        _ => stored,
+    }
 }
 
 fn get_string_from_map(source: &serde_json::Map<String, Value>, key: &str) -> Option<String> {
@@ -151,16 +169,19 @@ mod device_id_tests {
     use super::{build_fingerprint_config, normalize_gpu_name, with_device_id, GPU_DEVICE_IDS};
 
     #[test]
-    fn platform_version_is_only_sent_for_windows() {
-        let config_for = |system: &str| {
-            serde_json::json!({ "window_info": { "system": system, "platformVersion": "19.0.0" } })
+    fn every_identity_reports_a_version_of_its_own_system() {
+        let version = |system: &str, stored: Option<&str>| {
+            let mut window_info = serde_json::json!({ "system": system });
+            if let Some(stored) = stored {
+                window_info["platformVersion"] = serde_json::json!(stored);
+            }
+            build_fingerprint_config(Some(&serde_json::json!({ "window_info": window_info }))).platform_version
         };
-        assert_eq!(
-            build_fingerprint_config(Some(&config_for("Windows"))).platform_version.as_deref(),
-            Some("19.0.0")
-        );
-        assert_eq!(build_fingerprint_config(Some(&config_for("macOS"))).platform_version, None);
-        assert_eq!(build_fingerprint_config(Some(&config_for("Linux"))).platform_version, None);
+        assert_eq!(version("Windows", Some("19.0.0")).as_deref(), Some("19.0.0"));
+        assert_eq!(version("macOS", Some("19.0.0")).as_deref(), Some("15.7.1"));
+        assert_eq!(version("macOS", None).as_deref(), Some("15.7.1"));
+        assert_eq!(version("macOS", Some("26.1.0")).as_deref(), Some("26.1.0"));
+        assert_eq!(version("Linux", Some("10.0.0")).as_deref(), Some("6.8.0"));
     }
 
     #[test]

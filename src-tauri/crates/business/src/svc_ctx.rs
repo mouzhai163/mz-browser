@@ -16,6 +16,7 @@ impl SvcCtx {
     pub async fn new(config: &DatabaseConfig) -> Result<Self, anyhow::Error> {
         let db = Self::create_db(config).await?;
         database::migrate(&db).await?;
+        crate::secret::encrypt_existing(&db).await?;
         crate::services::browser_kernels::import_default_catalog(&db)
             .await
             .map_err(anyhow::Error::msg)?;

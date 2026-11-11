@@ -194,11 +194,7 @@ function ProxyCellContent({
         <TooltipContent>
           <div className="flex items-center gap-2">
             {flagCode && (
-              <img
-                src={`https://flagcdn.com/w20/${flagCode.toLowerCase()}.png`}
-                className="h-3"
-                alt={proxy.country || flagCode}
-              />
+              <span className="rounded bg-muted px-1 font-mono text-[10px] uppercase">{flagCode}</span>
             )}
             <div className="flex flex-col">
               <span className="font-mono text-xs">

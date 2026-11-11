@@ -2,6 +2,7 @@ import type { RpaCapturedSelector, RpaWorkflowSchema, RpaWorkflowStep } from '..
 import type { BrowserAdapter } from './browser-adapter';
 import { connectBoundRpaEnvironment } from './bound-environment';
 import { createBrowserAdapter } from './create-browser-adapter';
+import { getEnvironmentCdpEndpoint } from './tauri';
 import { RpaRunner, type RpaRunContext, type RpaRunnerOptions } from './runner';
 
 /**
@@ -13,9 +14,17 @@ export class RpaDebugSession {
   private runner: RpaRunner | null = null;
   private context: RpaRunContext | null = null;
   private envUuid: string | null = null;
+  private browserWsUrl: string | null = null;
 
   private async ensure(envUuid: string, workflow: RpaWorkflowSchema): Promise<RpaRunner> {
-    if (this.runner && this.envUuid === envUuid) return this.runner;
+    if (this.runner && this.envUuid === envUuid) {
+      // 没有端点是浏览器被关掉了，地址变了是重开过，这两种情况旧连接才没用。
+      // 查询失败或地址暂时为空只是浏览器一时没响应，调试的状态不能丢
+      const current = await getEnvironmentCdpEndpoint(envUuid).catch(() => undefined);
+      const browserChanged =
+        current === null || (!!current?.browser_ws_url && current.browser_ws_url !== this.browserWsUrl);
+      if (!browserChanged) return this.runner;
+    }
     this.dispose();
     const endpoint = await connectBoundRpaEnvironment(envUuid);
     const adapter = createBrowserAdapter(endpoint.browser_ws_url || '');
@@ -26,6 +35,7 @@ export class RpaDebugSession {
     this.adapter = adapter;
     this.runner = new RpaRunner(adapter);
     this.envUuid = envUuid;
+    this.browserWsUrl = endpoint.browser_ws_url || null;
     return this.runner;
   }
 
@@ -72,5 +82,6 @@ export class RpaDebugSession {
     this.runner = null;
     this.context = null;
     this.envUuid = null;
+    this.browserWsUrl = null;
   }
 }

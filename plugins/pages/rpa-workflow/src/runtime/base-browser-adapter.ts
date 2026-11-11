@@ -77,6 +77,20 @@ const isTransient = (error: unknown) =>
     error instanceof Error ? error.message : String(error)
   );
 
+/** 脚本已经开始执行，被页面跳转打断 */
+const isInterruptedByNavigation = (error: unknown) =>
+  /destroyed|navigated or closed/i.test(error instanceof Error ? error.message : String(error));
+
+/** 执行环境还没就绪时，脚本最多尝试的次数 */
+const SCRIPT_ATTEMPTS = 3;
+
+/** 和浏览器的连接没了：浏览器被关闭或运行被停止，再等下去没有意义 */
+const isDisconnected = (error: unknown) =>
+  (error instanceof RpaError && error.code === 'RUN_STOPPED') ||
+  /CDP_CONNECTION|BIDI_CONNECTION|connection is not open|CDP_REQUEST_ABORTED/i.test(
+    error instanceof Error ? error.message : String(error)
+  );
+
 /**
  * 真实鼠标键盘操作的公共逻辑。子类（CDP、BiDi）只实现协议层的几个基本动作，
  * 等待、拟人轨迹、标签管理等行为在两种内核上完全一致。
@@ -211,8 +225,8 @@ export abstract class BaseBrowserAdapter implements BrowserAdapter {
     return page;
   }
 
-  async finishRun(): Promise<void> {
-    const keep = this.currentPage;
+  async finishRun(options?: { keepCurrent?: boolean }): Promise<void> {
+    const keep = options?.keepCurrent === false ? null : this.currentPage;
     for (const id of this.runTabs) {
       if (id !== keep) await this.closePage(id).catch(() => undefined);
     }
@@ -261,7 +275,10 @@ export abstract class BaseBrowserAdapter implements BrowserAdapter {
     const deadline = Date.now() + timeoutMs;
     let lastState = '';
     while (Date.now() < deadline) {
-      const result = (await this.evaluate(READY_STATE_EXPRESSION).catch(() => null)) as { state?: string } | null;
+      const result = (await this.evaluate(READY_STATE_EXPRESSION).catch((error) => {
+        if (isDisconnected(error)) throw error;
+        return null;
+      })) as { state?: string } | null;
       if (!this.session) throw new RpaError('RUN_STOPPED');
       lastState = result?.state ?? '';
       if (lastState === 'complete') return;
@@ -282,6 +299,7 @@ export abstract class BaseBrowserAdapter implements BrowserAdapter {
     const deadline = Date.now() + timeoutMs;
     let last: LocateResult = { found: false };
     let previous: LocateResult | null = null;
+    let scrolledInto = false;
     while (Date.now() < deadline) {
       last = await this.locate(target);
       if (last.found && last.visible && !last.disabled) {
@@ -293,6 +311,13 @@ export abstract class BaseBrowserAdapter implements BrowserAdapter {
         const stable =
           previous && Math.abs(previous.x! - last.x!) < 1 && Math.abs(previous.y! - last.y!) < 1;
         if (stable && !last.obscured) return last;
+        if (stable && !scrolledInto) {
+          // 中心点在视口内但被滚动容器裁切时，滚轮够不到，直接把它滚进来
+          scrolledInto = true;
+          await this.evaluate(buildScrollIntoViewExpression(target));
+          previous = null;
+          continue;
+        }
         previous = last;
       }
       await sleep(120);
@@ -399,7 +424,14 @@ export abstract class BaseBrowserAdapter implements BrowserAdapter {
         break;
       }
     }
-    await this.waitLoaded(SETTLE_TIMEOUT).catch(() => undefined);
+    await this.settleAfterAction();
+  }
+
+  /** 操作后等页面稳定。加载慢不算失败，但浏览器已经断开就不能报成功 */
+  private async settleAfterAction(): Promise<void> {
+    await this.waitLoaded(SETTLE_TIMEOUT).catch((error) => {
+      if (isDisconnected(error)) throw error;
+    });
   }
 
   // ---------- 键盘
@@ -464,7 +496,7 @@ export abstract class BaseBrowserAdapter implements BrowserAdapter {
     } else {
       await this.typeText(page, key);
     }
-    await this.waitLoaded(SETTLE_TIMEOUT).catch(() => undefined);
+    await this.settleAfterAction();
   }
 
   // ---------- 其他元素操作
@@ -510,9 +542,23 @@ export abstract class BaseBrowserAdapter implements BrowserAdapter {
   }
 
   async executeScript(script: string): Promise<string> {
-    const result = (await this.evaluate(buildExecuteScriptExpression(script), 'main')) as
-      | { ok?: boolean; value?: unknown; error?: unknown }
-      | undefined;
+    const page = await this.requirePage();
+    let result: { ok?: boolean; value?: unknown; error?: unknown } | undefined;
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        result = (await this.evaluateIn(page, buildExecuteScriptExpression(script), 'main')) as typeof result;
+        break;
+      } catch (error) {
+        // 脚本自己跳转了页面：已经执行过，不能再跑一遍
+        if (isInterruptedByNavigation(error)) {
+          await this.settleAfterAction();
+          return '';
+        }
+        // 执行环境还没就绪，脚本一行都没跑，等页面稳定后再试
+        if (!isTransient(error) || attempt >= SCRIPT_ATTEMPTS) throw error;
+        await this.settleAfterAction();
+      }
+    }
     if (!result?.ok) throw new RpaError('SCRIPT_FAILED', String(result?.error ?? ''));
     return String(result.value ?? '');
   }

@@ -30,15 +30,24 @@ select_tab, close_tab: tabIndex (from 1)
 wait: waitType (time|element), duration (ms), target
 condition: conditionType (element_visible|text_present|url_contains), target, expectedText, urlFragment
 loop: iterations
-extract: target, extractType (text|href|value|html|attribute), attribute, outputKey, extractAll (true returns every match of a css/xpath selector as a JSON array; default first match only)
+extract: target, extractType (text|href; value|html|attribute need full page access), attribute, outputKey, extractAll (true returns every match of a css/xpath selector as a JSON array; default first match only)
 set_variable: variableName, variableValue
 script (needs full page access): script (JavaScript function body run in the page; return a value), outputKey
 upload (needs full page access): target, filePath"#;
+
+/// Replaces secret values returned without full page access. It can never be written back.
+const HIDDEN_VALUE: &str = "[hidden]";
+/// Step config keys that can hold secrets or arbitrary code.
+const SENSITIVE_CONFIG_KEYS: [&str; 4] = ["text", "script", "variableValue", "filePath"];
+/// Settings that change what a task does when it runs on its own.
+const EXECUTION_SETTINGS: [&str; 5] =
+    ["triggerType", "schedule", "cronExpression", "selectedEnvironments", "globalVariables"];
 
 struct StepPolicy {
     needs_full_access: bool,
     local_script: bool,
     unsafe_url: bool,
+    malformed: bool,
 }
 
 fn is_web_url(url: &str) -> bool {
@@ -48,18 +57,32 @@ fn is_web_url(url: &str) -> bool {
 
 /// Applies one step (editor form or stored form) to the policy summary.
 fn inspect_step(step: &Value, policy: &mut StepPolicy) {
-    let kind = step["type"].as_str().unwrap_or_default();
+    // Anything but a plain string could read differently here and in the frontend.
+    let Some(kind) = step["type"].as_str() else {
+        policy.malformed = true;
+        return;
+    };
     let config = &step["config"];
     if matches!(kind, "script" | "execute_js" | "upload" | "upload_file") {
+        policy.needs_full_access = true;
+    }
+    // Reading a field value or the raw markup can expose what the page tools hide.
+    if matches!(kind, "extract" | "extract_text")
+        && !matches!(config["extractType"].as_str(), None | Some("text" | "href"))
+    {
         policy.needs_full_access = true;
     }
     if config["executionMode"].as_str() == Some("local") {
         policy.local_script = true;
     }
     if matches!(kind, "navigate" | "goto") {
-        let url = config["url"].as_str().or(step["url"].as_str()).unwrap_or_default();
-        if !url.is_empty() && !is_web_url(url) {
-            policy.unsafe_url = true;
+        for candidate in [&config["url"], &step["url"]] {
+            match candidate {
+                Value::Null => {}
+                Value::String(url) if url.is_empty() || is_web_url(url) => {}
+                Value::String(_) => policy.unsafe_url = true,
+                _ => policy.malformed = true,
+            }
         }
     }
     for branch in ["then", "else", "body"] {
@@ -70,7 +93,8 @@ fn inspect_step(step: &Value, policy: &mut StepPolicy) {
 }
 
 fn inspect(steps: impl IntoIterator<Item = Value>) -> StepPolicy {
-    let mut policy = StepPolicy { needs_full_access: false, local_script: false, unsafe_url: false };
+    let mut policy =
+        StepPolicy { needs_full_access: false, local_script: false, unsafe_url: false, malformed: false };
     for step in steps {
         inspect_step(&step, &mut policy);
     }
@@ -78,6 +102,9 @@ fn inspect(steps: impl IntoIterator<Item = Value>) -> StepPolicy {
 }
 
 fn enforce(service: &McpServer, policy: &StepPolicy) -> Result<(), McpToolError> {
+    if policy.malformed {
+        return Err(McpToolError::invalid_params("Step type and url must be strings"));
+    }
     if policy.local_script {
         return Err(McpToolError::invalid_params("Scripts on this computer cannot be used over MCP"));
     }
@@ -85,9 +112,159 @@ fn enforce(service: &McpServer, policy: &StepPolicy) -> Result<(), McpToolError>
         return Err(McpToolError::invalid_params("Only http(s) URLs can be opened over MCP"));
     }
     if policy.needs_full_access && !service.config().access.full_page_access_enabled {
-        return Err(McpToolError::invalid_params("Script and upload steps need full page access"));
+        return Err(McpToolError::invalid_params(
+            "Script, upload and field-reading extract steps need full page access",
+        ));
     }
     Ok(())
+}
+
+fn contains_hidden(value: &Value) -> bool {
+    match value {
+        Value::String(text) => text == HIDDEN_VALUE,
+        Value::Array(items) => items.iter().any(contains_hidden),
+        Value::Object(map) => map.values().any(contains_hidden),
+        _ => false,
+    }
+}
+
+fn reject_hidden(value: &Value) -> Result<(), McpToolError> {
+    if contains_hidden(value) {
+        return Err(McpToolError::invalid_params(
+            "Hidden values cannot be written back; leave them out or use full page access",
+        ));
+    }
+    Ok(())
+}
+
+fn hide_step_secrets(step: &mut Value) {
+    for key in SENSITIVE_CONFIG_KEYS {
+        let value = &mut step["config"][key];
+        if value.as_str().is_some_and(|text| !text.is_empty()) {
+            *value = json!(HIDDEN_VALUE);
+        }
+    }
+    for branch in ["then", "else", "body"] {
+        for child in step[branch].as_array_mut().into_iter().flatten() {
+            hide_step_secrets(child);
+        }
+    }
+}
+
+/// Typed text, scripts and variable values may be secrets; they need full page access.
+fn hide_task_secrets(task: &mut Value) {
+    for variable in task["settings"]["globalVariables"].as_array_mut().into_iter().flatten() {
+        if variable["value"].as_str().is_some_and(|text| !text.is_empty()) {
+            variable["value"] = json!(HIDDEN_VALUE);
+        }
+    }
+    for step in task["steps"].as_array_mut().into_iter().flatten() {
+        hide_step_secrets(step);
+    }
+}
+
+/// Roots of the `{{ expression }}` templates in a string, as the runner resolves them.
+fn template_references(text: &str) -> Vec<&str> {
+    let mut found = Vec::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("{{") {
+        rest = &rest[start + 2..];
+        let Some(end) = rest.find("}}") else { break };
+        let expression = rest[..end].trim();
+        found.push(expression);
+        found.push(expression.split(['.', '[']).next().unwrap_or_default().trim());
+        rest = &rest[end + 2..];
+    }
+    found
+}
+
+fn references_any(value: &Value, names: &[&str]) -> bool {
+    match value {
+        Value::String(text) => template_references(text).iter().any(|item| names.contains(item)),
+        Value::Array(items) => items.iter().any(|item| references_any(item, names)),
+        Value::Object(map) => map.values().any(|item| references_any(item, names)),
+        _ => false,
+    }
+}
+
+/// Hidden variable values must not come back through a step: `https://x/?v={{secret}}` would
+/// reveal them just as well as reading them.
+fn reject_secret_references(task: &Value, steps: &[Value]) -> Result<(), McpToolError> {
+    let names: Vec<&str> = task["settings"]["globalVariables"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|variable| variable["value"].as_str().is_some_and(|value| !value.is_empty()))
+        .filter_map(|variable| variable["name"].as_str())
+        .collect();
+    if steps.iter().any(|step| references_any(step, &names)) {
+        return Err(McpToolError::invalid_params(
+            "Steps cannot reference the task's stored variables without full page access",
+        ));
+    }
+    Ok(())
+}
+
+/// Blanks the values that only full page access may read. Entries from before the flag existed
+/// have no way of showing they are safe, so they are hidden too.
+fn hide_sensitive_entries(entries: &mut Value) {
+    for entry in entries.as_array_mut().into_iter().flatten() {
+        let Some(entry) = entry.as_object_mut() else { continue };
+        if entry.contains_key("value") && entry.get("sensitive") != Some(&Value::Bool(false)) {
+            entry.insert("value".into(), json!(HIDDEN_VALUE));
+        }
+    }
+}
+
+fn hide_sensitive_summary(run: &mut Value) {
+    let Some(text) = run["result_summary"].as_str() else { return };
+    let summary = serde_json::from_str::<Value>(text).ok().and_then(|mut summary| {
+        hide_sensitive_entries(summary.get_mut("extracted")?);
+        Some(summary.to_string())
+    });
+    run["result_summary"] = summary.map_or(Value::Null, Value::String);
+}
+
+fn guard_run(service: &McpServer, run: &mut Value) {
+    if !can_read_pages(service, run["environment_uuid"].as_str()) {
+        run["logs"] = Value::Null;
+        run["result_summary"] = Value::Null;
+        run["content_hidden"] = json!(true);
+    } else if !service.config().access.full_page_access_enabled {
+        hide_sensitive_entries(&mut run["logs"]);
+        hide_sensitive_summary(run);
+    }
+}
+
+fn check_settings(settings: &Value) -> Result<(), McpToolError> {
+    let trigger = &settings["triggerType"];
+    let environments = &settings["selectedEnvironments"];
+    let environments_ok = environments.is_null()
+        || environments.as_array().is_some_and(|items| items.iter().all(Value::is_string));
+    if !(trigger.is_null() || trigger.is_string()) || !environments_ok {
+        return Err(McpToolError::invalid_params(
+            "triggerType must be a string and selectedEnvironments a list of strings",
+        ));
+    }
+    Ok(())
+}
+
+/// A scheduled task runs later with nobody calling mz_run_rpa_task, so scheduling it needs
+/// everything running it would need.
+async fn require_can_schedule(
+    service: &McpServer,
+    environments: &[Value],
+    steps: Vec<Value>,
+) -> Result<(), McpToolError> {
+    service.require_act().await?;
+    for env in environments {
+        service.require_environment(env.as_str().unwrap_or_default()).await?;
+    }
+    enforce(service, &inspect(steps))
+}
+
+fn environment_list(value: &Value) -> Vec<Value> {
+    value.as_array().cloned().unwrap_or_default()
 }
 
 /// Saved rows keep the step under `config.workflow_step`; the tree is flat there.
@@ -252,7 +429,11 @@ impl AsyncTool<McpServer> for ListTasks {
 impl AsyncTool<McpServer> for GetTask {
     async fn invoke(service: &McpServer, input: TaskInput) -> Result<ReadOutput, McpToolError> {
         service.require_manage().await?;
-        ok(rpa_bridge::call("get", json!({ "taskUuid": input.task_uuid })).await?)
+        let mut task = rpa_bridge::call("get", json!({ "taskUuid": input.task_uuid })).await?;
+        if !service.config().access.full_page_access_enabled {
+            hide_task_secrets(&mut task);
+        }
+        ok(task)
     }
 }
 
@@ -260,6 +441,14 @@ impl AsyncTool<McpServer> for CreateTask {
     async fn invoke(service: &McpServer, input: CreateTaskInput) -> Result<ReadOutput, McpToolError> {
         service.require_manage().await?;
         enforce(service, &inspect(input.steps.iter().cloned()))?;
+        let settings = input.settings.clone().unwrap_or(Value::Null);
+        check_settings(&settings)?;
+        reject_hidden(&settings)?;
+        reject_hidden(&json!(input.steps))?;
+        if settings["triggerType"].as_str() == Some("scheduled") {
+            let environments = environment_list(&settings["selectedEnvironments"]);
+            require_can_schedule(service, &environments, input.steps.clone()).await?;
+        }
         ok(rpa_bridge::call(
             "create",
             json!({ "name": input.name, "steps": input.steps, "settings": input.settings }),
@@ -273,6 +462,33 @@ impl AsyncTool<McpServer> for UpdateTask {
         service.require_manage().await?;
         if let Some(steps) = &input.steps {
             enforce(service, &inspect(steps.iter().cloned()))?;
+            reject_hidden(&json!(steps))?;
+            if !service.config().access.full_page_access_enabled {
+                let task = rpa_bridge::call("get", json!({ "taskUuid": input.task_uuid })).await?;
+                reject_secret_references(&task, steps)?;
+            }
+        }
+        let settings = input.settings.clone().unwrap_or(Value::Null);
+        check_settings(&settings)?;
+        reject_hidden(&settings)?;
+        let changes_execution =
+            input.steps.is_some() || EXECUTION_SETTINGS.iter().any(|key| !settings[*key].is_null());
+        if changes_execution {
+            let detail = service
+                .bridge()
+                .dispatch_value("rpa/tasks/detail", json!({ "uuid": input.task_uuid }))
+                .await?;
+            let trigger =
+                settings["triggerType"].as_str().or(detail["task"]["trigger_type"].as_str());
+            if trigger == Some("scheduled") {
+                let environments = if settings["selectedEnvironments"].is_null() {
+                    environment_list(&detail["environment_uuids"])
+                } else {
+                    environment_list(&settings["selectedEnvironments"])
+                };
+                let steps = input.steps.clone().unwrap_or_else(|| stored_steps(&detail));
+                require_can_schedule(service, &environments, steps).await?;
+            }
         }
         ok(rpa_bridge::call(
             "update",
@@ -285,6 +501,14 @@ impl AsyncTool<McpServer> for UpdateTask {
 impl AsyncTool<McpServer> for DuplicateTask {
     async fn invoke(service: &McpServer, input: TaskInput) -> Result<ReadOutput, McpToolError> {
         service.require_manage().await?;
+        let detail = service
+            .bridge()
+            .dispatch_value("rpa/tasks/detail", json!({ "uuid": input.task_uuid }))
+            .await?;
+        if detail["task"]["trigger_type"].as_str() == Some("scheduled") {
+            let environments = environment_list(&detail["environment_uuids"]);
+            require_can_schedule(service, &environments, stored_steps(&detail)).await?;
+        }
         ok(rpa_bridge::call("duplicate", json!({ "taskUuid": input.task_uuid })).await?)
     }
 }
@@ -330,6 +554,8 @@ impl AsyncTool<McpServer> for GetExecution {
         for env in execution["environments"].as_array_mut().into_iter().flatten() {
             if !can_read_pages(service, env["envUuid"].as_str()) {
                 env["log"] = json!([]);
+            } else if !service.config().access.full_page_access_enabled {
+                hide_sensitive_entries(&mut env["log"]);
             }
         }
         ok(execution)
@@ -339,7 +565,7 @@ impl AsyncTool<McpServer> for GetExecution {
 impl AsyncTool<McpServer> for ListRuns {
     async fn invoke(service: &McpServer, input: ListRunsInput) -> Result<ReadOutput, McpToolError> {
         service.require_manage().await?;
-        ok(service
+        let mut runs = service
             .bridge()
             .dispatch_value(
                 "rpa/runs/list",
@@ -350,7 +576,11 @@ impl AsyncTool<McpServer> for ListRuns {
                     "page_size": input.page_size.unwrap_or(20).clamp(1, 100),
                 }),
             )
-            .await?)
+            .await?;
+        for run in runs["items"].as_array_mut().into_iter().flatten() {
+            guard_run(service, run);
+        }
+        ok(runs)
     }
 }
 
@@ -361,11 +591,7 @@ impl AsyncTool<McpServer> for GetRun {
             .bridge()
             .dispatch_value("rpa/runs/detail", json!({ "uuid": input.run_uuid }))
             .await?;
-        if !can_read_pages(service, run["environment_uuid"].as_str()) {
-            run["logs"] = Value::Null;
-            run["result_summary"] = Value::Null;
-            run["content_hidden"] = json!(true);
-        }
+        guard_run(service, &mut run);
         ok(run)
     }
 }
@@ -412,6 +638,90 @@ mod tests {
         ] });
         let result = inspect(stored_steps(&detail));
         assert!(result.unsafe_url && result.local_script && result.needs_full_access);
+    }
+
+    #[test]
+    fn a_non_string_type_or_url_is_refused() {
+        assert!(policy(json!([{ "type": ["script"], "config": { "script": "x" } }])).malformed);
+        assert!(policy(json!([{ "type": "loop", "body": [{ "type": 1 }] }])).malformed);
+        assert!(policy(json!([{ "type": "navigate", "config": { "url": ["file:///x"] } }])).malformed);
+    }
+
+    #[test]
+    fn field_reading_extracts_need_full_access() {
+        for kind in ["value", "html", "attribute"] {
+            let step = json!([{ "type": "extract", "config": { "extractType": kind } }]);
+            assert!(policy(step).needs_full_access, "{kind}");
+        }
+        for kind in [json!("text"), json!("href"), Value::Null] {
+            let step = json!([{ "type": "extract", "config": { "extractType": kind } }]);
+            assert!(!policy(step).needs_full_access);
+        }
+        let stored = json!([{ "type": "extract_text", "config": { "extractType": "value" } }]);
+        assert!(policy(stored).needs_full_access);
+    }
+
+    #[test]
+    fn secrets_are_hidden_and_cannot_be_written_back() {
+        let mut task = json!({
+            "settings": { "globalVariables": [{ "name": "pw", "value": "secret" }] },
+            "steps": [{ "type": "loop", "config": {}, "body": [
+                { "type": "input", "config": { "selector": "#a", "text": "secret" } }
+            ] }],
+        });
+        hide_task_secrets(&mut task);
+        assert_eq!(task["settings"]["globalVariables"][0]["value"], HIDDEN_VALUE);
+        assert_eq!(task["steps"][0]["body"][0]["config"]["text"], HIDDEN_VALUE);
+        assert_eq!(task["steps"][0]["body"][0]["config"]["selector"], "#a");
+        assert!(contains_hidden(&task["steps"]));
+        assert!(!contains_hidden(&json!([{ "config": { "text": "plain" } }])));
+    }
+
+    #[test]
+    fn stored_variables_cannot_be_referenced_without_full_access() {
+        let task = json!({ "settings": { "globalVariables": [
+            { "name": "pw", "value": "secret" },
+            { "name": "empty", "value": "" },
+        ] } });
+        let step = |url: &str| vec![json!({ "type": "navigate", "config": { "url": url } })];
+        for leaking in ["https://x/?v={{pw}}", "https://x/{{ pw }}", "https://x/{{pw.length}}", "{{pw[0]}}"] {
+            assert!(reject_secret_references(&task, &step(leaking)).is_err(), "{leaking}");
+        }
+        for fine in ["https://x/", "https://x/{{empty}}", "https://x/{{result}}", "https://x/{{pwd}}"] {
+            assert!(reject_secret_references(&task, &step(fine)).is_ok(), "{fine}");
+        }
+        let nested = vec![json!({ "type": "loop", "body": [{ "type": "input", "config": { "text": "{{pw}}" } }] })];
+        assert!(reject_secret_references(&task, &nested).is_err());
+    }
+
+    #[test]
+    fn only_entries_marked_safe_keep_their_values() {
+        let mut entries = json!([
+            { "value": "visible", "sensitive": false },
+            { "value": "field", "sensitive": true },
+            { "value": "old record" },
+            { "name": "no output" },
+        ]);
+        hide_sensitive_entries(&mut entries);
+        assert_eq!(entries[0]["value"], "visible");
+        assert_eq!(entries[1]["value"], HIDDEN_VALUE);
+        assert_eq!(entries[2]["value"], HIDDEN_VALUE);
+        assert!(entries[3].get("value").is_none());
+
+        let mut run = json!({ "result_summary": r#"{"extracted":[{"value":"pw","sensitive":true}]}"# });
+        hide_sensitive_summary(&mut run);
+        assert!(!run["result_summary"].as_str().unwrap().contains("\"pw\""));
+        let mut broken = json!({ "result_summary": "not json" });
+        hide_sensitive_summary(&mut broken);
+        assert!(broken["result_summary"].is_null());
+    }
+
+    #[test]
+    fn settings_shapes_are_checked() {
+        assert!(check_settings(&json!({ "triggerType": "scheduled", "selectedEnvironments": ["a"] })).is_ok());
+        assert!(check_settings(&Value::Null).is_ok());
+        assert!(check_settings(&json!({ "triggerType": ["scheduled"] })).is_err());
+        assert!(check_settings(&json!({ "selectedEnvironments": [1] })).is_err());
     }
 
     #[test]

@@ -385,7 +385,7 @@ impl ToolBase for GetEnvironmentCdpEndpointTool {
     }
 
     fn description() -> Option<Cow<'static, str>> {
-        Some("Get the CDP endpoint of a running MZ指纹浏览器 environment.".into())
+        Some("Get the CDP endpoint of a running, authorized MZ指纹浏览器 environment. Needs full page access: the endpoint gives complete control of the browser.".into())
     }
 }
 
@@ -395,7 +395,9 @@ impl AsyncTool<McpServer> for GetEnvironmentCdpEndpointTool {
         param: Self::Parameter,
     ) -> Result<Self::Output, Self::Error> {
         service.require_manage().await?;
+        service.require_full_access().await?;
         let env_uuid = require_env_uuid(&param.env_uuid)?;
+        service.require_environment(&env_uuid).await?;
         let endpoint = service.bridge().get_environment_cdp_endpoint(&env_uuid).await?;
 
         Ok(EnvironmentCdpEndpointOutput {

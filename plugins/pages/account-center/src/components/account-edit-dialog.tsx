@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown, Eye, EyeOff, Loader2, UserCog, X } from 'lucide-react';
+import { ChevronDown, Eye, EyeOff, Globe, Loader2, UserCog, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -132,14 +132,7 @@ export function AccountEditDialog({
                     className="cursor-pointer"
                   >
                     <div className="flex items-center gap-2 w-full">
-                      <img
-                        src={`https://www.google.com/s2/favicons?domain=${platform.url}&sz=16`}
-                        alt=""
-                        className="w-4 h-4 shrink-0"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
+                      <Globe className="w-4 h-4 shrink-0 text-muted-foreground" />
                       <span className="flex-1 text-xs truncate">{platform.url}</span>
                     </div>
                   </DropdownMenuItem>

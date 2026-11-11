@@ -529,7 +529,9 @@ fn load_selection_snapshot(app: &tauri::AppHandle) -> Option<MihomoNodeSelection
 
 fn load_connection_config(app: &tauri::AppHandle) -> Option<MihomoConnectionConfig> {
     let value = tauri_store::get_store_key(app, MIHOMO_CONNECTION_CONFIG_STORE_KEY)?;
-    serde_json::from_value(value).ok().map(normalize_connection_config)
+    let mut config: MihomoConnectionConfig = serde_json::from_value(value).ok()?;
+    config.secret = business::secret::reveal(&config.secret).unwrap_or_default();
+    Some(normalize_connection_config(config))
 }
 
 fn require_connection_config(app: &tauri::AppHandle) -> Result<MihomoConnectionConfig, String> {
@@ -540,10 +542,12 @@ fn persist_connection_config(
     app: &tauri::AppHandle,
     config: &MihomoConnectionConfig,
 ) -> Result<(), String> {
+    let mut stored = config.clone();
+    stored.secret = business::secret::protect(&config.secret);
     tauri_store::set_store_key(
         app,
         MIHOMO_CONNECTION_CONFIG_STORE_KEY,
-        serde_json::to_value(config).map_err(|error| error.to_string())?,
+        serde_json::to_value(stored).map_err(|error| error.to_string())?,
     )
 }
 
