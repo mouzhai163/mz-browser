@@ -1,6 +1,9 @@
 //! 彻底删除环境时，业务层只删数据库记录，这里负责浏览器数据目录。
 //!
 //! 目录先删：删不掉时环境还留在回收站，可以再试；反过来记录没了，目录就再也清不掉了。
+//!
+//! 导入备份时也在这里：沿用的环境 ID 在本机没有记录，但早期版本彻底删除环境时不删目录，
+//! 留下的目录会让导入的环境带上当时的 Cookie 和登录状态，所以导入前先把这些无主目录删掉。
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -15,6 +18,7 @@ use crate::{
 
 const SINGLE_ROUTE: &str = "environments/recycle-bin/permanent-delete";
 const BATCH_ROUTE: &str = "environments/recycle-bin/batch-permanent-delete";
+const IMPORT_ROUTE: &str = "environments/import";
 /// 浏览器刚退出时文件可能还占用一小会儿
 const REMOVE_ATTEMPTS: u32 = 5;
 const REMOVE_RETRY_DELAY: Duration = Duration::from_millis(500);
@@ -31,6 +35,36 @@ fn environments_to_delete(route: &str, data: &Value) -> Vec<Uuid> {
         .map(|value| Uuid::parse_str(value.as_str()?).ok())
         .collect::<Option<Vec<_>>>()
         .unwrap_or_default()
+}
+
+/// 导入请求里备份的环境 ID（去重）。其他路由、超出导入上限（业务层会拒绝）时返回空。
+fn imported_source_ids(route: &str, data: &Value) -> Vec<Uuid> {
+    if route.trim_start_matches('/') != IMPORT_ROUTE {
+        return Vec::new();
+    }
+    let Some(environments) = data["bundle"]["environments"].as_array() else { return Vec::new() };
+    if environments.len() > business::services::environment_transfer::MAX_ENVIRONMENTS {
+        return Vec::new();
+    }
+    let ids: std::collections::BTreeSet<Uuid> = environments
+        .iter()
+        .filter_map(|environment| Uuid::parse_str(environment["source_uuid"].as_str()?).ok())
+        .collect();
+    ids.into_iter().collect()
+}
+
+/// 本机没有记录的 ID 导入时会被沿用，它们留下的数据目录没有主人，先删掉
+async fn remove_orphan_profiles(context: &business::svc_ctx::SvcCtx, ids: Vec<Uuid>) -> Result<(), String> {
+    let mut orphans = Vec::new();
+    for id in ids {
+        if !business::services::environment_transfer::environment_uuid_taken(context, id).await? {
+            orphans.push(id);
+        }
+    }
+    if orphans.is_empty() {
+        return Ok(());
+    }
+    remove_profiles(orphans).await
 }
 
 /// 路径只由解析过的 UUID 拼成，不会指向 cache 目录之外。
@@ -62,6 +96,24 @@ pub async fn dispatch_post(
 
     if !environments.is_empty() {
         if let Err(error) = remove_profiles(environments.clone()).await {
+            return Some(Err(error));
+        }
+    }
+
+    // 导入：先检查备份（格式、内核），不通过就什么都不删，错误直接返回
+    if route.trim_start_matches('/') == IMPORT_ROUTE {
+        match serde_json::from_value::<business::services::environment_transfer::ImportEnvironmentsRequest>(data.clone()) {
+            Ok(request) => {
+                if let Err(error) = business::services::environment_transfer::check_import_request(context, &request).await {
+                    return Some(Err(error));
+                }
+            }
+            Err(error) => return Some(Err(error.to_string())),
+        }
+    }
+    let imported = imported_source_ids(route, data);
+    if !imported.is_empty() {
+        if let Err(error) = remove_orphan_profiles(context, imported).await {
             return Some(Err(error));
         }
     }
@@ -115,6 +167,17 @@ mod tests {
         let ids = environments_to_delete(BATCH_ROUTE, &json!({ "uuids": [ID] }));
         let dir = profile_dir("C:/cache", &ids[0]);
         assert_eq!(dir, Path::new("C:/cache").join("browser").join("cache").join(ID));
+    }
+
+    #[test]
+    fn only_the_import_route_selects_backup_ids() {
+        let other = "22222222-2222-4222-8222-222222222222";
+        let data = json!({ "bundle": { "environments": [
+            { "source_uuid": ID }, { "source_uuid": ID }, { "source_uuid": other }, { "source_uuid": "../x" }, {}
+        ] } });
+        assert_eq!(imported_source_ids(IMPORT_ROUTE, &data).len(), 2);
+        assert!(imported_source_ids("environments/batch-create", &data).is_empty());
+        assert!(imported_source_ids(IMPORT_ROUTE, &json!({ "bundle": {} })).is_empty());
     }
 
     #[test]
