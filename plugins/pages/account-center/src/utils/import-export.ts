@@ -1,4 +1,5 @@
 import { invoke } from '@/lib/tauri';
+import { parseCsvRows } from '@/lib/csv';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { toast } from 'sonner';
 import type { Account, ExportRange } from '../types';
@@ -29,64 +30,22 @@ function getPlatformNameFromUrl(url: string): string {
 }
 
 /**
- * 解析 CSV 值（处理引号包裹的值）
- */
-function parseCSVValue(value: string): string {
-  const trimmed = value.trim();
-  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
-    return trimmed.slice(1, -1).replace(/""/g, '"');
-  }
-  return trimmed;
-}
-
-/**
- * 解析 CSV 行（处理引号内的逗号）
- */
-function parseCSVLine(line: string): string[] {
-  const values: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (char === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === ',' && !inQuotes) {
-      values.push(parseCSVValue(current));
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  values.push(parseCSVValue(current));
-
-  return values;
-}
-
-/**
  * 解析 CSV 内容为导入数据
  */
 export function parseCSVContent(content: string): ImportAccountItem[] {
-  const lines = content.split('\n').filter((line) => line.trim());
-  if (lines.length === 0) return [];
+  const rows = parseCsvRows(content);
+  if (rows.length === 0) return [];
 
   // 检查第一行是否为表头
-  const firstLine = lines[0].toLowerCase();
+  const firstLine = rows[0].join(',').toLowerCase();
   const hasHeader =
     firstLine.includes('platform') ||
     firstLine.includes('account') ||
     firstLine.includes('password');
 
-  const dataLines = hasHeader ? lines.slice(1) : lines;
+  const dataRows = hasHeader ? rows.slice(1) : rows;
 
-  return dataLines.map((line) => {
-    const values = parseCSVLine(line);
-
+  return dataRows.map((values) => {
     // 导出格式：platform, account, password, remark
     const [platform = '', account = '', password = '', remark = ''] = values;
 
@@ -105,9 +64,6 @@ export function parseCSVContent(content: string): ImportAccountItem[] {
     } else if (!account) {
       item.valid = false;
       item.error = '缺少账号';
-    } else if (!password) {
-      item.valid = false;
-      item.error = '缺少密码';
     } else {
       // 验证 URL 格式
       try {
@@ -151,9 +107,6 @@ export function parseJSONContent(content: string): ImportAccountItem[] {
       } else if (!account) {
         result.valid = false;
         result.error = '缺少账号';
-      } else if (!password) {
-        result.valid = false;
-        result.error = '缺少密码';
       } else {
         try {
           new URL(platform);
@@ -221,7 +174,7 @@ export async function importAccountItems(items: ImportAccountItem[]): Promise<nu
         platform_url: item.platform,
         platform_name: getPlatformNameFromUrl(item.platform),
         account: item.account,
-        password: item.password,
+        password: item.password || undefined,
         remark: item.remark || undefined,
       });
       successCount++;

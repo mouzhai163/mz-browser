@@ -362,6 +362,20 @@ pub async fn dispatch_post(
             }
             .await
         }
+        "environments/export" => {
+            async {
+                let request: services::environment_transfer::ExportEnvironmentsRequest = payload(data)?;
+                value(services::environment_transfer::export_environments_service(context, &request).await?)
+            }
+            .await
+        }
+        "environments/import" => {
+            async {
+                let request: services::environment_transfer::ImportEnvironmentsRequest = payload(data)?;
+                value(services::environment_transfer::import_environments_service(context, &request).await?)
+            }
+            .await
+        }
         "environments/update" => {
             async {
                 let request: UpdateEnvironmentRequest = payload(data)?;

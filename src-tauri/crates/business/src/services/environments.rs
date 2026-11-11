@@ -72,16 +72,29 @@ pub async fn create_environment_service(
     svc_ctx: &SvcCtx,
     payload: &CreateEnvironmentRequest,
 ) -> Result<Uuid, String> {
+    create_environment_with(svc_ctx, payload, None, false).await
+}
+
+/// `uuid`：沿用的环境 ID（导入备份时），`keep_full_version`：保留配置里的 Client Hints 完整版本号
+pub(crate) async fn create_environment_with(
+    svc_ctx: &SvcCtx,
+    payload: &CreateEnvironmentRequest,
+    uuid: Option<Uuid>,
+    keep_full_version: bool,
+) -> Result<Uuid, String> {
     let selected_kernel = crate::services::browser_kernels::resolve_requested_kernel(
         &svc_ctx.db,
         &payload.config.window_info,
         true,
     )
     .await?;
-    // 新环境总是自己挑一个 Client Hints 版本号：从模板或别的环境带过来的不沿用，免得多个环境撞同一个
+    // 新环境总是自己挑一个 Client Hints 版本号：从模板或别的环境带过来的不沿用，免得多个环境撞同一个。
+    // 恢复备份时保留原来的（换了主版本时 window_info_with_kernel_id 仍会重新挑）
     let mut requested_window_info = payload.config.window_info.clone();
-    if let Some(object) = requested_window_info.as_object_mut() {
-        object.remove(crate::services::chrome_releases::FULL_VERSION_KEY);
+    if !keep_full_version {
+        if let Some(object) = requested_window_info.as_object_mut() {
+            object.remove(crate::services::chrome_releases::FULL_VERSION_KEY);
+        }
     }
     let window_info = window_info_with_kernel_id(&requested_window_info, &selected_kernel);
 
@@ -97,6 +110,7 @@ pub async fn create_environment_service(
     // 创建环境
     let env_uuid = models::insert_environment(
         &svc_ctx.db,
+        uuid,
         &payload.name,
         payload.description.as_deref(),
         payload.group_uuid,

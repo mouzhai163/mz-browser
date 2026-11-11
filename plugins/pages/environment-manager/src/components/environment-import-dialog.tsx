@@ -1,75 +1,89 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Loader2, Upload, X } from 'lucide-react';
+import { FormattedDialog, FormattedDialogFooter } from '@/components/formatted-dialog';
 import { Button } from '@/components/ui/button';
-import { useEnvironmentDialogStore } from '../stores';
 import { importEnvironments } from '../api';
+import type { EnvironmentBundle } from '../utils/environment-transfer';
 
 interface EnvironmentImportDialogProps {
+  bundle: EnvironmentBundle | null;
+  onOpenChange: (open: boolean) => void;
   onComplete?: () => void;
 }
 
-/**
- * 导入环境对话框组件
- */
-export function EnvironmentImportDialog({ onComplete }: EnvironmentImportDialogProps) {
-  const { t } = useTranslation('environment');
-  const dialogStore = useEnvironmentDialogStore();
-  const [submitting, setSubmitting] = useState(false);
+const PREVIEW_COUNT = 5;
 
-  const handleSubmit = async () => {
-    if (!dialogStore.importJson.trim()) {
-      toast.warning(t('dialog.import.emptyJson'));
-      return;
-    }
-    setSubmitting(true);
+/** 确认导入一个环境备份文件 */
+export function EnvironmentImportDialog({ bundle, onOpenChange, onComplete }: EnvironmentImportDialogProps) {
+  const { t } = useTranslation('environment');
+  const [importing, setImporting] = useState(false);
+  const environments = bundle?.environments ?? [];
+
+  const handleImport = async () => {
+    if (!bundle) return;
+    setImporting(true);
     try {
-      const result = await importEnvironments({
-        import_data: dialogStore.importJson,
-      });
-      dialogStore.closeImportDialog();
-      toast.success(
-        t('dialog.import.success', { count: result.length }) || `成功导入 ${result.length} 个环境`
-      );
+      const imported = await importEnvironments({ bundle });
+      const renewed = imported.filter((item) => !item.kept_identity).length;
+      toast.success(t('dialog.import.success', { count: imported.length }));
+      if (renewed > 0) toast.warning(t('dialog.import.newIdentities', { count: renewed }));
+      onOpenChange(false);
       onComplete?.();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : t('dialog.import.failed'));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('dialog.import.failed'));
     } finally {
-      setSubmitting(false);
+      setImporting(false);
     }
   };
 
   return (
-    <Dialog open={dialogStore.importDialogOpen} onOpenChange={dialogStore.setImportDialogOpen}>
-      <DialogContent className="min-w-[600px] max-h-[80vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>{t('dialog.import.title')}</DialogTitle>
-        </DialogHeader>
-        <div className="flex-1 mb-4">
-          <label className="text-xs mb-1 block">{t('dialog.import.jsonLabel')}</label>
-          <textarea
-            value={dialogStore.importJson}
-            onChange={(e) => dialogStore.setImportJson(e.target.value)}
-            className="w-full h-64 px-3 py-2 text-xs font-mono bg-background border border-border rounded"
-            placeholder={t('dialog.import.jsonPlaceholder')}
-          />
-        </div>
-        <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => dialogStore.closeImportDialog()}>
-            {t('dialog.import.cancel')}
-          </Button>
-          <Button size="sm" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? t('dialog.import.submitting') : t('dialog.import.submit')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <FormattedDialog
+      open={!!bundle}
+      onOpenChange={(open) => {
+        if (!importing) onOpenChange(open);
+      }}
+      minWidth="min-w-[460px]"
+      header={{
+        icon: Upload,
+        iconColor: 'text-primary',
+        title: t('dialog.import.title'),
+        description: t('dialog.import.description', { count: environments.length }),
+        gradient: 'bg-gradient-to-r from-primary/10 via-blue-500/10 to-primary/10',
+        className: 'border-b border-primary/20',
+      }}
+      contentPadding="p-5"
+    >
+      <div className="space-y-3 text-xs">
+        <ul className="space-y-1 rounded-md border border-border/50 bg-muted/50 p-3">
+          {environments.slice(0, PREVIEW_COUNT).map((environment) => (
+            <li key={environment.source_uuid} className="truncate text-foreground">
+              {environment.name}
+            </li>
+          ))}
+          {environments.length > PREVIEW_COUNT ? (
+            <li className="text-muted-foreground">
+              {t('dialog.import.more', { count: environments.length - PREVIEW_COUNT })}
+            </li>
+          ) : null}
+        </ul>
+        <p className="text-muted-foreground">
+          {bundle?.includes_secrets ? t('dialog.import.withSecrets') : t('dialog.import.withoutSecrets')}
+        </p>
+        <p className="text-muted-foreground">{t('dialog.import.identityNote')}</p>
+      </div>
+
+      <FormattedDialogFooter>
+        <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={importing}>
+          <X className="mr-1.5 h-4 w-4" />
+          {t('dialog.import.cancel')}
+        </Button>
+        <Button size="sm" onClick={handleImport} disabled={importing || environments.length === 0}>
+          {importing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Upload className="mr-1.5 h-4 w-4" />}
+          {importing ? t('dialog.import.submitting') : t('dialog.import.submit')}
+        </Button>
+      </FormattedDialogFooter>
+    </FormattedDialog>
   );
 }

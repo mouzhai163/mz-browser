@@ -32,8 +32,12 @@ export function ImportDialog({ open, onOpenChange }: ImportDialogProps) {
       const data = JSON.parse(importJson);
       setSubmitting(true);
 
+      // 环境备份文件（环境页导出的完整备份）走导入接口，沿用原环境 ID 和指纹
+      const isBackup = data?.format === 'mz-browser-environments' && Array.isArray(data.environments);
       const environments = Array.isArray(data) ? data : [data];
-      const response = await post<unknown[]>('environments/batch-create', { environments });
+      const response = isBackup
+        ? await post<unknown[]>('environments/import', { bundle: data })
+        : await post<unknown[]>('environments/batch-create', { environments });
 
       if (!isSuccess(response)) {
         throw new Error(response.message || '导入失败');

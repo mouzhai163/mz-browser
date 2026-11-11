@@ -3,8 +3,6 @@ import type { Environment } from '../../types';
 
 interface DialogState {
   // 导入对话框
-  importDialogOpen: boolean;
-  importJson: string;
 
   // 移动到分组对话框
   moveToGroupDialogOpen: boolean;
@@ -100,10 +98,6 @@ interface DialogState {
 
 interface DialogActions {
   // 导入对话框
-  setImportDialogOpen: (open: boolean) => void;
-  setImportJson: (json: string) => void;
-  openImportDialog: () => void;
-  closeImportDialog: () => void;
 
   // 移动到分组对话框
   setMoveToGroupDialogOpen: (open: boolean) => void;
@@ -248,8 +242,6 @@ interface DialogActions {
  */
 export const useEnvironmentDialogStore = create<DialogState & DialogActions>((set) => ({
   // 初始状态
-  importDialogOpen: false,
-  importJson: '',
   moveToGroupDialogOpen: false,
   selectedGroupId: '',
   assignTagDialogOpen: false,
@@ -299,10 +291,6 @@ export const useEnvironmentDialogStore = create<DialogState & DialogActions>((se
   batchPermanentDeleteCount: 0,
 
   // 导入对话框
-  setImportDialogOpen: (open) => set({ importDialogOpen: open }),
-  setImportJson: (json) => set({ importJson: json }),
-  openImportDialog: () => set({ importDialogOpen: true }),
-  closeImportDialog: () => set({ importDialogOpen: false, importJson: '' }),
 
   // 移动到分组对话框
   setMoveToGroupDialogOpen: (open) => set({ moveToGroupDialogOpen: open }),

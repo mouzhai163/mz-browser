@@ -562,8 +562,11 @@ export async function batchMoveToGroup(request: BatchMoveToGroupRequest): Promis
  */
 export async function exportEnvironments(
   request: ExportEnvironmentsRequest
-): Promise<Environment[]> {
-  const result = await post<Environment[]>(API_ENDPOINTS.EXPORT_ENVIRONMENTS, request);
+): Promise<import('../utils/environment-transfer').EnvironmentBundle> {
+  const result = await post<import('../utils/environment-transfer').EnvironmentBundle>(
+    API_ENDPOINTS.EXPORT_ENVIRONMENTS,
+    request
+  );
   if (!isSuccess(result)) {
     throw new Error(result.message || '导出环境失败');
   }
@@ -575,8 +578,11 @@ export async function exportEnvironments(
  */
 export async function importEnvironments(
   request: ImportEnvironmentsRequest
-): Promise<Environment[]> {
-  const result = await post<Environment[]>(API_ENDPOINTS.IMPORT_ENVIRONMENTS, request);
+): Promise<import('../utils/environment-transfer').ImportedEnvironment[]> {
+  const result = await post<import('../utils/environment-transfer').ImportedEnvironment[]>(
+    API_ENDPOINTS.IMPORT_ENVIRONMENTS,
+    request
+  );
   if (!isSuccess(result)) {
     throw new Error(result.message || '导入环境失败');
   }

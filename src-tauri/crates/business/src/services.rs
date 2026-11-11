@@ -4,6 +4,7 @@ mod time;
 pub mod accounts;
 pub mod browser_kernels;
 pub mod chrome_releases;
+pub mod environment_transfer;
 pub mod environments;
 pub mod groups;
 pub mod proxies;

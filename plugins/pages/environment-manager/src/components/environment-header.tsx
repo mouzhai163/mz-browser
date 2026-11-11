@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Tag, MousePointer2, Download, Search, LayoutList, Zap, TriangleAlert, Cpu } from 'lucide-react';
+import { toast } from 'sonner';
+import { Tag, MousePointer2, Download, Upload, Search, LayoutList, Zap, TriangleAlert, Cpu } from 'lucide-react';
 import { invoke } from '@/lib/tauri';
 import { cn } from '@/lib/utils';
 import { PageTitle } from '@/components/page-title';
@@ -10,6 +11,8 @@ import { useEnvironmentFiltersStore, useEnvironmentSelectionStore, useRunningEnv
 import type { EnvironmentViewType } from '../stores/filters-store';
 import type { Environment } from '../types';
 import { EnvironmentExportDialog } from './environment-export-dialog';
+import { EnvironmentImportDialog } from './environment-import-dialog';
+import { pickEnvironmentBundle, type EnvironmentBundle } from '../utils/environment-transfer';
 import { EnvironmentSearchDialog } from './environment-search-dialog';
 
 interface EnvironmentHeaderProps {
@@ -33,13 +36,23 @@ async function openSyncerWindow() {
 
 const PROXY_ERROR_STATUSES = new Set(['error', 'failed', 'unavailable', 'offline', 'inactive', 'invalid']);
 
-export function EnvironmentHeader({ environments, total, onManageTags }: EnvironmentHeaderProps) {
+export function EnvironmentHeader({ environments, total, onComplete, onManageTags }: EnvironmentHeaderProps) {
   const { t } = useTranslation('environment');
   const filtersStore = useEnvironmentFiltersStore();
   const selectionStore = useEnvironmentSelectionStore();
   const statusCache = useRunningEnvsStore((state) => state.statusCache);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
+  const [importBundle, setImportBundle] = useState<EnvironmentBundle | null>(null);
+
+  const chooseImportFile = async () => {
+    try {
+      const bundle = await pickEnvironmentBundle();
+      if (bundle) setImportBundle(bundle);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('dialog.import.failed'));
+    }
+  };
 
   // 监听 Ctrl+K / Cmd+K 快捷键
   useEffect(() => {
@@ -102,6 +115,10 @@ export function EnvironmentHeader({ environments, total, onManageTags }: Environ
               <Tag className="h-4 w-4" />
               {t('stats.manageTags') || '标签管理'}
             </Button>
+            <Button variant="outline" size="sm" onClick={() => void chooseImportFile()}>
+              <Upload className="h-4 w-4" />
+              {t('header.import')}
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setExportDialogOpen(true)}>
               <Download className="h-4 w-4" />
               {t('header.export')}
@@ -145,6 +162,14 @@ export function EnvironmentHeader({ environments, total, onManageTags }: Environ
         open={exportDialogOpen}
         environments={environmentsToExport}
         onOpenChange={setExportDialogOpen}
+      />
+
+      <EnvironmentImportDialog
+        bundle={importBundle}
+        onOpenChange={(open) => {
+          if (!open) setImportBundle(null);
+        }}
+        onComplete={onComplete}
       />
 
       <EnvironmentSearchDialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen} />

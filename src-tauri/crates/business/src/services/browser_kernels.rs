@@ -860,7 +860,7 @@ mod tests {
         let mut bound = Vec::new();
         for id in [&old_id, &dropped_id] {
             let environment = crate::models::environments::insert_environment(
-                &context.db, "Env", None, None, None, Some("Windows"), None,
+                &context.db, None, "Env", None, None, None, Some("Windows"), None,
             )
             .await
             .unwrap();
@@ -1001,6 +1001,7 @@ mod tests {
         let context = crate::svc_ctx::SvcCtx::new(&config).await.unwrap();
         let environment_uuid = crate::models::environments::insert_environment(
             &context.db,
+            None,
             "Legacy browser",
             None,
             None,

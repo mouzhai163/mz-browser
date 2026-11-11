@@ -225,8 +225,10 @@ pub async fn delete_tag(pool: &Pool<Db>, tag_uuid: Uuid) -> Result<(), Error> {
 // ============ Environments ============
 
 /// 创建环境
+/// `uuid` 为空时由数据库生成
 pub async fn insert_environment(
     pool: &Pool<Db>,
+    uuid: Option<Uuid>,
     name: &str,
     description: Option<&str>,
     group_uuid: Option<Uuid>,
@@ -236,12 +238,13 @@ pub async fn insert_environment(
 ) -> Result<Uuid, Error> {
     let uuid: Uuid = sqlx::query_scalar(
         r#"
-        INSERT INTO environments (name, description,
+        INSERT INTO environments (uuid, name, description,
                                    group_uuid, proxy_uuid, system_info, kernel_info)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        VALUES (COALESCE($1, randomblob(16)), $2, $3, $4, $5, $6, $7)
         RETURNING uuid;
         "#,
     )
+    .bind(uuid)
     .bind(name)
     .bind(description)
     .bind(group_uuid)

@@ -432,6 +432,7 @@ mod tests {
 
         let environment_uuid = environments::insert_environment(
             pool,
+            None,
             "Browser A",
             None,
             Some(group_uuid),

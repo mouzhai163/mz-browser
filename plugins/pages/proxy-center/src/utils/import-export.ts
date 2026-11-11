@@ -1,4 +1,5 @@
 import { invoke } from '@/lib/tauri';
+import { parseCsvRows } from '@/lib/csv';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { toast } from 'sonner';
 import type { Proxy, ProxyFormData, ExportRange } from '../types';
@@ -19,64 +20,20 @@ export interface ImportProxyItem {
 }
 
 /**
- * 解析 CSV 值（处理引号包裹的值）
- */
-function parseCSVValue(value: string): string {
-  const trimmed = value.trim();
-  // 如果被引号包裹，去掉引号并处理转义的引号
-  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
-    return trimmed.slice(1, -1).replace(/""/g, '"');
-  }
-  return trimmed;
-}
-
-/**
- * 解析 CSV 行（处理引号内的逗号）
- */
-function parseCSVLine(line: string): string[] {
-  const values: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    if (char === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        // 转义的引号
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === ',' && !inQuotes) {
-      values.push(parseCSVValue(current));
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-  values.push(parseCSVValue(current));
-
-  return values;
-}
-
-/**
  * 解析 CSV 内容为导入数据
  */
 export function parseCSVContent(content: string): ImportProxyItem[] {
-  const lines = content.split('\n').filter((line) => line.trim());
-  if (lines.length === 0) return [];
+  const rows = parseCsvRows(content);
+  if (rows.length === 0) return [];
 
   // 检查第一行是否为表头
-  const firstLine = lines[0].toLowerCase();
+  const firstLine = rows[0].join(',').toLowerCase();
   const hasHeader =
     firstLine.includes('name') || firstLine.includes('host') || firstLine.includes('port');
 
-  const dataLines = hasHeader ? lines.slice(1) : lines;
+  const dataRows = hasHeader ? rows.slice(1) : rows;
 
-  return dataLines.map((line) => {
-    const values = parseCSVLine(line);
-
+  return dataRows.map((values) => {
     // 根据导出格式：name, host, port, type, username, password
     const [name = '', host = '', port = '', type = '', username = '', password = ''] = values;
 

@@ -142,14 +142,13 @@ export interface BatchDeleteRequest {
 }
 
 export interface ExportEnvironmentsRequest {
-  uuids?: string[];
-  include_config?: boolean;
-  include_accounts?: boolean;
+  uuids: string[];
+  /** 带上代理密码、账号密码和 Cookie（明文） */
+  include_secrets: boolean;
 }
 
 export interface ImportEnvironmentsRequest {
-  import_data: string;
-  target_group_uuid?: string;
+  bundle: import('../utils/environment-transfer').EnvironmentBundle;
 }
 
 // ============ 响应类型 ============
