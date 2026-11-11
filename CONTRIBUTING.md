@@ -45,6 +45,7 @@ Do not configure a remote `base_url`, PostgreSQL, or Redis for normal desktop de
 Run these from the repository root unless noted otherwise:
 
 ```bash
+pnpm test
 pnpm lint
 pnpm format:check
 pnpm rust:fmt:check
