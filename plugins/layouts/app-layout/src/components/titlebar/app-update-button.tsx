@@ -18,7 +18,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import {
   APP_UPDATE_AVAILABLE_EVENT,
   APP_UPDATE_DIALOG_EVENT,
-  checkForAppUpdate,
   getAvailableAppUpdate,
   installAvailableAppUpdate,
 } from '@/lib/app-updater';
@@ -45,13 +44,9 @@ export function AppUpdateButton() {
       }
     };
 
+    // 不在启动时自动检查：用户在设置里点“检查更新”后，有新版本才在这里出现按钮
     window.addEventListener(APP_UPDATE_AVAILABLE_EVENT, handleAvailable);
     window.addEventListener(APP_UPDATE_DIALOG_EVENT, handleOpen);
-
-    // One non-blocking check is performed after the authenticated main layout mounts.
-    void checkForAppUpdate().catch((checkError) => {
-      console.warn('[Updater] Automatic update check failed:', checkError);
-    });
 
     return () => {
       window.removeEventListener(APP_UPDATE_AVAILABLE_EVENT, handleAvailable);

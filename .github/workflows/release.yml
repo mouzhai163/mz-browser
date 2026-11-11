@@ -1,9 +1,10 @@
 name: release
 
+# 只能手动运行（Actions → release → Run workflow，选择要发布的标签）。版本在本地编译签名后发布，
+# 推送标签不会触发这里；要在云端构建，先在仓库 Secrets 里配置 TAURI_UPDATER_PUBLIC_KEY、
+# TAURI_PRIVATE_KEY、TAURI_KEY_PASSWORD，并设置仓库变量 WEBVIEW2_FIXED_RUNTIME_BASE_URL。
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write

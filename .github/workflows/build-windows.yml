@@ -61,24 +61,31 @@ jobs:
 
       - name: Download fixed WebView2 runtimes
         shell: powershell
+        env:
+          # 自己托管的 webview-fixed-x64.zip / -arm64.zip / -x86.zip 所在的地址（仓库变量）
+          WEBVIEW2_FIXED_RUNTIME_BASE_URL: ${{ vars.WEBVIEW2_FIXED_RUNTIME_BASE_URL }}
         run: |
+          $base = "$env:WEBVIEW2_FIXED_RUNTIME_BASE_URL".TrimEnd('/')
+          if ([string]::IsNullOrWhiteSpace($base)) {
+            throw "Set the repository variable WEBVIEW2_FIXED_RUNTIME_BASE_URL to where the fixed WebView2 runtime archives are hosted"
+          }
           $destination = Join-Path $PWD "src-tauri/webview-fixed"
           New-Item -ItemType Directory -Path $destination -Force | Out-Null
 
           $runtimes = @(
             @{
               Name = "x64"
-              Url = "https://pub-39307a5e69c74324855a762027cbf9bf.r2.dev/webview-fixed-x64.zip"
+              Url = "$base/webview-fixed-x64.zip"
               Directory = "Microsoft.WebView2.FixedVersionRuntime.151.0.4129.78.x64"
             },
             @{
               Name = "arm64"
-              Url = "https://pub-39307a5e69c74324855a762027cbf9bf.r2.dev/webview-fixed-arm64.zip"
+              Url = "$base/webview-fixed-arm64.zip"
               Directory = "Microsoft.WebView2.FixedVersionRuntime.151.0.4129.78.arm64"
             },
             @{
               Name = "x86"
-              Url = "https://pub-39307a5e69c74324855a762027cbf9bf.r2.dev/webview-fixed-x86.zip"
+              Url = "$base/webview-fixed-x86.zip"
               Directory = "Microsoft.WebView2.FixedVersionRuntime.151.0.4129.78.x86"
             }
           )
