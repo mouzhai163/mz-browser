@@ -29,6 +29,7 @@ export class CdpClient {
   private nextId = 1;
   private readonly pending = new Map<number, CdpPendingRequest>();
   private readonly eventWaiters = new Set<CdpEventWaiter>();
+  private readonly listeners = new Map<string, (params: unknown, sessionId?: string) => void>();
   private readonly requestTimeoutMs: number;
   private abortConnection: (() => void) | null = null;
 
@@ -154,6 +155,11 @@ export class CdpClient {
     });
   }
 
+  /** 持续监听某个事件（一个事件一个监听者） */
+  on(method: string, listener: (params: unknown, sessionId?: string) => void): void {
+    this.listeners.set(method, listener);
+  }
+
   async waitForEvent<T = unknown>(
     method: string,
     options?: { sessionId?: string; timeoutMs?: number; signal?: AbortSignal }
@@ -241,6 +247,8 @@ export class CdpClient {
     if (typeof envelope.method !== 'string') {
       return;
     }
+
+    this.listeners.get(envelope.method)?.(envelope.params, envelope.sessionId);
 
     for (const waiter of this.eventWaiters) {
       if (waiter.method !== envelope.method) {

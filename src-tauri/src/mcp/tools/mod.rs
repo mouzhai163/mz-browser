@@ -5,6 +5,7 @@ pub mod environments;
 pub mod environments_extras;
 pub mod groups;
 pub mod proxies;
+pub mod rpa;
 pub mod tags;
 
 use rmcp::handler::server::router::tool::ToolRoute;
@@ -34,6 +35,7 @@ fn manage_routes() -> Vec<ToolRoute<McpServer>> {
     routes.extend(environments_extras::routes());
     routes.extend(groups::routes());
     routes.extend(proxies::routes());
+    routes.extend(rpa::routes());
     routes.extend(tags::routes());
     routes
 }

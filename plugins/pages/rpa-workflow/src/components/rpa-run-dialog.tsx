@@ -55,7 +55,6 @@ export function RpaRunDialog({
               [
                 variable.name,
                 t('editor.variablePanel.runDialog.requiredError', {
-                  defaultValue: '请输入 {{name}}',
                   name: variable.name,
                 }),
               ],
@@ -83,15 +82,12 @@ export function RpaRunDialog({
       header={{
         icon: Play,
         iconColor: 'text-primary',
-        title: t('dialog.run.title', { defaultValue: '开始执行任务' }),
+        title: t('dialog.run.title'),
         description: pending
           ? t('dialog.run.descriptionWithEnvCount', {
-              defaultValue: '将在 {{count}} 个绑定环境中正式执行该任务。',
               count: environmentCount,
             })
-          : t('dialog.run.description', {
-              defaultValue: '将在已绑定环境上正式执行该任务。',
-            }),
+          : t('dialog.run.description'),
         gradient: 'bg-gradient-to-r from-primary/10 via-blue-500/10 to-primary/10',
         className: 'border-b border-primary/20',
       }}
@@ -101,7 +97,7 @@ export function RpaRunDialog({
       <div className="space-y-4 text-sm">
         <div className="space-y-1">
           <div className="text-base font-semibold text-foreground">
-            {pending?.task.name || t('dialog.run.noTask', { defaultValue: '未选择任务' })}
+            {pending?.task.name || t('dialog.run.noTask')}
           </div>
           {pending?.task.description ? (
             <div className="text-xs text-muted-foreground">{pending.task.description}</div>
@@ -111,7 +107,7 @@ export function RpaRunDialog({
         {inputVariables.length > 0 ? (
           <div className="rounded-md border border-border/50 bg-muted/20 p-3">
             <div className="mb-3 text-xs font-medium text-foreground">
-              {t('editor.variablePanel.runDialog.title', { defaultValue: '输入参数' })}
+              {t('editor.variablePanel.runDialog.title')}
             </div>
             <div className="space-y-3">
               {inputVariables.map((variable) => {
@@ -143,9 +139,7 @@ export function RpaRunDialog({
                           return next;
                         });
                       }}
-                      placeholder={t('editor.variablePanel.runDialog.valuePlaceholder', {
-                        defaultValue: '请输入参数值',
-                      })}
+                      placeholder={t('editor.variablePanel.runDialog.valuePlaceholder')}
                       className={error ? 'border-destructive focus-visible:ring-destructive' : ''}
                     />
                     {error ? (
@@ -160,31 +154,29 @@ export function RpaRunDialog({
 
         <div className="rounded-md border border-border/50 bg-muted/20 p-3">
           <div className="mb-2 text-xs font-medium text-foreground">
-            {t('dialog.run.strategy', { defaultValue: '执行策略' })}
+            {t('dialog.run.strategy')}
           </div>
           <div className="flex flex-wrap gap-1.5">
-            <Badge variant="outline" className="gap-1">
-              <RotateCcw className="h-3 w-3" />
-              {t('dialog.run.retryCount', {
-                defaultValue: '重试 {{count}} 次',
-                count: strategy?.retry_count ?? 3,
-              })}
-            </Badge>
+            {strategy?.retry_count ? (
+              <>
+                <Badge variant="outline" className="gap-1">
+                  <RotateCcw className="h-3 w-3" />
+                  {t('dialog.run.retryCount', { count: strategy.retry_count })}
+                </Badge>
+                <Badge variant="outline">
+                  {t('dialog.run.retryInterval', { seconds: strategy.retry_interval ?? 5 })}
+                </Badge>
+              </>
+            ) : null}
+            {strategy?.timeout ? (
+              <Badge variant="outline">{t('dialog.run.timeout', { seconds: strategy.timeout })}</Badge>
+            ) : null}
             <Badge variant="outline">
-              {t('dialog.run.retryInterval', {
-                defaultValue: '间隔 {{seconds}} 秒',
-                seconds: strategy?.retry_interval ?? 5,
-              })}
-            </Badge>
-            <Badge variant="outline">
-              {t('dialog.run.timeout', {
-                defaultValue: '超时 {{seconds}} 秒',
-                seconds: strategy?.timeout ?? 300,
-              })}
+              {t(strategy?.run_mode === 'parallel' ? 'editor.environments.parallel' : 'editor.environments.sequential')}
             </Badge>
             {strategy?.stop_on_error ? (
               <Badge variant="outline">
-                {t('dialog.run.stopOnError', { defaultValue: '出错时停止' })}
+                {t('dialog.run.stopOnError')}
               </Badge>
             ) : null}
           </div>
@@ -192,9 +184,7 @@ export function RpaRunDialog({
 
         {pending && !canRun ? (
           <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
-            {t('dialog.run.environmentRequired', {
-              defaultValue: '请先为任务绑定环境后再执行。',
-            })}
+            {t('dialog.run.environmentRequired')}
           </div>
         ) : null}
       </div>
@@ -202,11 +192,11 @@ export function RpaRunDialog({
       <FormattedDialogFooter>
         <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={loading}>
           <X className="mr-1.5 h-4 w-4" />
-          {t('dialog.run.cancel', { defaultValue: '取消' })}
+          {t('dialog.run.cancel')}
         </Button>
         <Button type="button" size="sm" onClick={handleConfirm} disabled={loading || !canRun}>
           <Play className="mr-1.5 h-4 w-4" />
-          {t('dialog.run.confirm', { defaultValue: '开始执行' })}
+          {t('dialog.run.confirm')}
         </Button>
       </FormattedDialogFooter>
     </FormattedDialog>

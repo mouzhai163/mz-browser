@@ -1,5 +1,6 @@
 ﻿import { useCallback } from 'react';
 import { batchDeleteRpaTasks, deleteRpaTask, duplicateRpaTask, getRpaTaskDetail } from '../api';
+import { deleteRpaTaskFiles } from '../runtime/tauri';
 import {
   buildPortableRpaTask,
   buildPortableRpaTaskFilename,
@@ -24,6 +25,7 @@ export function useRpaOperations(params: UseRpaOperationsParams = {}): UseRpaOpe
   const deleteTask = useCallback(
     async (id: string) => {
       await deleteRpaTask(id);
+      void deleteRpaTaskFiles([id]).catch(() => undefined);
       onSuccess?.();
     },
     [onSuccess]
@@ -48,6 +50,7 @@ export function useRpaOperations(params: UseRpaOperationsParams = {}): UseRpaOpe
   const batchDelete = useCallback(
     async (ids: string[]) => {
       await batchDeleteRpaTasks(ids);
+      void deleteRpaTaskFiles(ids).catch(() => undefined);
       onSuccess?.();
     },
     [onSuccess]

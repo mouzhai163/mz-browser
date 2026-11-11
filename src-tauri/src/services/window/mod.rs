@@ -281,6 +281,8 @@ impl WindowService {
                 .center()
                 .decorations(false)
                 .visible(false)
+                // 窗口隐藏或最小化时，RPA 定时任务和操作延时要照常运行
+                .background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled)
                 .devtools(devtools_enabled);
         // `drag_and_drop` is only provided by Tauri on Windows.
         #[cfg(windows)]

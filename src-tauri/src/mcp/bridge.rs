@@ -579,6 +579,15 @@ impl LocalApiBridge {
         Ok(())
     }
 
+    /// Runs a business route and returns its raw JSON (used by the RPA tools).
+    pub async fn dispatch_value(
+        &self,
+        route: &str,
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, McpToolError> {
+        self.dispatch_business(route, &payload).await
+    }
+
     async fn dispatch_business<T, P>(
         &self,
         route: &str,

@@ -1,5 +1,6 @@
 ﻿import { invoke } from '@/lib/tauri';
 import { save } from '@tauri-apps/plugin-dialog';
+import i18n from 'i18next';
 import type { RpaTaskDetailDto } from '../api';
 
 export interface PortableRpaTaskStep {
@@ -91,7 +92,7 @@ export function buildPortableRpaTask(detail: RpaTaskDetailDto): PortableRpaTaskD
 export function parsePortableRpaTask(content: string): PortableRpaTaskDocument {
   const parsed = JSON.parse(content) as Partial<PortableRpaTaskDocument>;
   if (parsed?.schema_version !== '1.0' || !parsed.task || !Array.isArray(parsed.task.steps)) {
-    throw new Error('导入文件格式不正确');
+    throw new Error(i18n.getFixedT(null, 'rpa')('common.importInvalid') as string);
   }
   return parsed as PortableRpaTaskDocument;
 }
@@ -118,7 +119,7 @@ export function buildPortableRpaTaskFilename(detail: RpaTaskDetailDto): string {
 export async function savePortableRpaTask(filename: string, content: string): Promise<boolean> {
   const filePath = await save({
     defaultPath: filename,
-    filters: [{ name: 'JSON 文件', extensions: ['json'] }],
+    filters: [{ name: 'JSON', extensions: ['json'] }],
   });
 
   if (!filePath) {

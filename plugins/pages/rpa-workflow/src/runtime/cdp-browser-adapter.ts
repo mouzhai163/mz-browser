@@ -1,553 +1,220 @@
-﻿import type { BrowserAdapter, BrowserConditionCheck, BrowserExtractOptions, BrowserExtractResult, BrowserScriptResult, BrowserSession } from './browser-adapter';
+﻿import { BaseBrowserAdapter, type KeySpec, type MouseEventSpec, type PageInfo, type World } from './base-browser-adapter';
+import type { BrowserSession } from './browser-adapter';
 import { CdpClient } from './cdp-client';
-import {
-  CLEAR_CLICK_CAPTURE,
-  INSTALL_CLICK_CAPTURE,
-  READ_CLICK_CAPTURE,
-  buildClickExpression,
-  buildConditionExpression,
-  buildExecuteScriptExpression,
-  buildExtractExpression,
-  buildFillExpression,
-  buildScreenshotClipExpression,
-  buildScrollExpression,
-  buildUploadTargetExpression,
-  buildWaitForExpression,
-} from './page-scripts';
-import type { RpaCapturedSelector, RpaWorkflowSelector } from '../types';
-import { closeEnvironmentRpaTab, selectEnvironmentRpaTab } from './tauri';
+import { RpaError } from './errors';
 
-interface CdpCreateTargetResult {
+interface TargetInfo {
   targetId: string;
+  type: string;
+  url: string;
 }
 
-interface CdpAttachToTargetResult {
-  sessionId: string;
+interface EvaluateResult {
+  result?: { value?: unknown; objectId?: string };
+  exceptionDetails?: { text?: string; exception?: { description?: string } };
 }
 
-interface CdpScreenshotResult {
-  data?: string;
-}
+const MODIFIER_CTRL = 2;
+const MODIFIER_SHIFT = 8;
 
-interface CdpNavigateResult {
-  errorText?: string;
-}
-
-interface RuntimeEvaluateResult {
-  result?: {
-    value?: unknown;
-    objectId?: string;
-    type?: string;
-    subtype?: string;
-  };
-}
-
-interface DomDocumentResult {
-  root?: {
-    nodeId: number;
-  };
-}
-
-interface DomQuerySelectorResult {
-  nodeId: number;
-}
-
-export class CdpBrowserAdapter implements BrowserAdapter {
+/** Chromium 内核的 RPA 适配器（CDP）：只实现协议层的基本动作，行为在 BaseBrowserAdapter 里 */
+export class CdpBrowserAdapter extends BaseBrowserAdapter {
   private readonly client = new CdpClient();
-  private session: BrowserSession | null = null;
-  private targetSessionId: string | null = null;
-  private readonly targets: Array<{ targetId: string; sessionId: string }> = [];
+  private readonly sessions = new Map<string, string>();
+  /** 隔离环境的 id，页面跳转后失效，用到时重新创建 */
+  private readonly worlds = new Map<string, number>();
+  private buttons = 0;
 
-  async connect(session: BrowserSession): Promise<void> {
-    this.session = session;
+  protected async connectClient(session: BrowserSession): Promise<void> {
     await this.client.connect(session.browserWsUrl);
+    // 页面的 alert/confirm 会卡住后续所有命令，出现就自动确认
+    this.client.on('Page.javascriptDialogOpening', (_params, sessionId) => {
+      void this.client.send('Page.handleJavaScriptDialog', { accept: true }, sessionId).catch(() => undefined);
+    });
   }
 
-  async goto(url: string, options?: { waitUntil?: string }): Promise<void> {
-    this.assertConnected();
-    const waitUntil = options?.waitUntil === 'commit' ? 'commit' : 'load';
-    const sessionId = await this.createPageSession();
-
-    // Subscribe before sending Page.navigate: a fast page can fire its load event
-    // before the navigate response is processed, and a late subscription would miss it.
-    const waiters = new AbortController();
-    const loaded =
-      waitUntil === 'commit'
-        ? null
-        : Promise.any([
-            this.client.waitForEvent('Page.loadEventFired', {
-              sessionId,
-              timeoutMs: 60000,
-              signal: waiters.signal,
-            }),
-            this.client.waitForEvent('Page.frameStoppedLoading', {
-              sessionId,
-              timeoutMs: 60000,
-              signal: waiters.signal,
-            }),
-          ]);
-    // Never leave a rejected waiter unobserved if navigation fails first.
-    loaded?.catch(() => undefined);
-
-    try {
-      const navigation = await this.client.send<CdpNavigateResult>(
-        'Page.navigate',
-        { url },
-        sessionId
-      );
-      if (navigation.errorText) {
-        throw new Error(navigation.errorText);
-      }
-      if (loaded) {
-        await loaded;
-      }
-    } catch (error) {
-      if (error instanceof AggregateError) {
-        throw error.errors[0] instanceof Error ? error.errors[0] : error;
-      }
-      throw error;
-    } finally {
-      // Releases whichever waiter did not fire so it cannot leak until its timeout.
-      waiters.abort();
+  protected closeClient(): void {
+    for (const sessionId of this.sessions.values()) {
+      void this.client.send('Target.detachFromTarget', { sessionId }).catch(() => undefined);
     }
-  }
-
-  async selectTab(index: number): Promise<void> {
-    this.assertConnected();
-
-    if (!Number.isInteger(index) || index < 1) {
-      throw new Error('TAB_INDEX_INVALID');
-    }
-
-    if (!this.session?.envUuid) {
-      throw new Error('Browser session has not been connected');
-    }
-
-    const selection = await selectEnvironmentRpaTab(this.session.envUuid, index);
-    const targetId = typeof selection.target_id === 'string' ? selection.target_id.trim() : '';
-    if (!targetId) {
-      throw new Error('TAB_TARGET_UNAVAILABLE');
-    }
-
-    const sessionId = await this.attachOrReuseTarget(targetId);
-    this.targetSessionId = sessionId;
-    await this.client.send('Page.bringToFront', undefined, sessionId).catch(() => undefined);
-  }
-
-  async closeTab(index: number): Promise<void> {
-    this.assertConnected();
-
-    if (!Number.isInteger(index) || index < 1) {
-      throw new Error('TAB_INDEX_INVALID');
-    }
-
-    if (!this.session?.envUuid) {
-      throw new Error('Browser session has not been connected');
-    }
-
-    const result = await closeEnvironmentRpaTab(this.session.envUuid, index);
-    const targetId = typeof result.target_id === 'string' ? result.target_id.trim() : '';
-    if (!targetId) {
-      throw new Error('TAB_TARGET_UNAVAILABLE');
-    }
-
-    const sessionId = await this.attachOrReuseTarget(targetId);
-    this.targetSessionId = sessionId;
-    await this.client.send('Page.bringToFront', undefined, sessionId).catch(() => undefined);
-  }
-
-  async screenshot(options?: { fullPage?: boolean; target?: RpaWorkflowSelector }): Promise<string> {
-    const sessionId = this.assertTargetSession();
-    const params = {
-      format: 'png',
-      captureBeyondViewport: options?.fullPage === true || Boolean(options?.target),
-    } as Record<string, unknown>;
-
-    if (options?.target) {
-      const clip = await this.resolveScreenshotClip(options.target, sessionId);
-      params.clip = clip;
-    }
-
-    const result = await this.client.send<CdpScreenshotResult>(
-      'Page.captureScreenshot',
-      params,
-      sessionId
-    );
-    return result.data ?? '';
-  }
-
-  async click(target: RpaWorkflowSelector): Promise<void> {
-    const sessionId = this.assertTargetSession();
-    const expression = buildClickExpression(target);
-    const result = await this.client.send<RuntimeEvaluateResult>(
-      'Runtime.evaluate',
-      {
-        expression,
-        returnByValue: true,
-        awaitPromise: true,
-      },
-      sessionId
-    );
-
-    if (!result.result?.value) {
-      throw new Error(`Failed to click target: ${JSON.stringify(target)}`);
-    }
-  }
-
-  async captureClickTarget(timeoutMs = 60000): Promise<RpaCapturedSelector> {
-    const sessionId = this.assertTargetSession();
-    await this.installClickCapture(sessionId);
-
-    const startedAt = Date.now();
-    while (Date.now() - startedAt < timeoutMs) {
-      const result = await this.client.send<RuntimeEvaluateResult>(
-        'Runtime.evaluate',
-        {
-          expression: READ_CLICK_CAPTURE,
-          returnByValue: true,
-          awaitPromise: true,
-        },
-        sessionId
-      );
-
-      const value = result.result?.value as Record<string, unknown> | null | undefined;
-      if (value && typeof value.xpath === 'string' && value.xpath.trim()) {
-        await this.clearClickCapture(sessionId);
-        const primary: RpaWorkflowSelector = {
-          by: 'xpath',
-          value: value.xpath.trim(),
-        };
-
-        return {
-          primary,
-          candidates: [primary],
-          snapshot: {
-            tag: this.readString(value.tag),
-            text: this.readString(value.text),
-            id: this.readString(value.id),
-            className: this.readString(value.className),
-            role: this.readString(value.role),
-            name: this.readString(value.name),
-            placeholder: this.readString(value.placeholder),
-            ariaLabel: this.readString(value.ariaLabel),
-          },
-        };
-      }
-
-      await new Promise((resolve) => window.setTimeout(resolve, 250));
-    }
-
-    await this.clearClickCapture(sessionId);
-    throw new Error('Timed out waiting for a browser click');
-  }
-
-  async fill(target: RpaWorkflowSelector, value: string): Promise<void> {
-    const sessionId = this.assertTargetSession();
-    const expression = buildFillExpression(target, value);
-    const result = await this.client.send<RuntimeEvaluateResult>(
-      'Runtime.evaluate',
-      {
-        expression,
-        returnByValue: true,
-        awaitPromise: true,
-      },
-      sessionId
-    );
-
-    if (!result.result?.value) {
-      throw new Error(`Failed to fill target: ${JSON.stringify(target)}`);
-    }
-  }
-
-  async uploadFile(target: RpaWorkflowSelector, filePath: string): Promise<void> {
-    const sessionId = this.assertTargetSession();
-    const result = await this.client.send<RuntimeEvaluateResult>(
-      'Runtime.evaluate',
-      {
-        expression: buildUploadTargetExpression(target),
-        returnByValue: false,
-        awaitPromise: true,
-      },
-      sessionId
-    );
-
-    const objectId = result.result?.objectId;
-    if (!objectId) {
-      throw new Error(`Failed to resolve upload target: ${JSON.stringify(target)}`);
-    }
-
-    const marker = `mz-upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    await this.client.send(
-      'Runtime.callFunctionOn',
-      {
-        objectId,
-        functionDeclaration: `function() {
-          this.setAttribute('data-mz-upload-marker', ${JSON.stringify(marker)});
-        }`,
-        awaitPromise: true,
-      },
-      sessionId
-    );
-
-    const documentResult = await this.client.send<DomDocumentResult>('DOM.getDocument', {}, sessionId);
-    const rootNodeId = documentResult.root?.nodeId;
-    if (!rootNodeId) {
-      throw new Error(`Failed to resolve upload input: ${JSON.stringify(target)}`);
-    }
-
-    const queryResult = await this.client.send<DomQuerySelectorResult>(
-      'DOM.querySelector',
-      {
-        nodeId: rootNodeId,
-        selector: `[data-mz-upload-marker="${marker}"]`,
-      },
-      sessionId
-    );
-
-    if (!queryResult.nodeId) {
-      throw new Error(`Failed to resolve upload input: ${JSON.stringify(target)}`);
-    }
-
-    await this.client.send(
-      'DOM.setFileInputFiles',
-      {
-        files: [filePath],
-        nodeId: queryResult.nodeId,
-      },
-      sessionId
-    );
-
-    await this.client.send(
-      'Runtime.callFunctionOn',
-      {
-        objectId,
-        functionDeclaration: `function() {
-          this.removeAttribute('data-mz-upload-marker');
-          this.dispatchEvent(new Event('input', { bubbles: true }));
-          this.dispatchEvent(new Event('change', { bubbles: true }));
-        }`,
-        awaitPromise: true,
-      },
-      sessionId
-    );
-  }
-  async extract(options: BrowserExtractOptions): Promise<BrowserExtractResult> {
-    const sessionId = this.assertTargetSession();
-    const result = await this.client.send<RuntimeEvaluateResult>(
-      'Runtime.evaluate',
-      {
-        expression: buildExtractExpression(options),
-        returnByValue: true,
-        awaitPromise: true,
-      },
-      sessionId
-    );
-
-    const value = result.result?.value;
-    return {
-      value: typeof value === 'string' ? value : String(value ?? ''),
-    };
-  }
-  async executeScript(script: string): Promise<BrowserScriptResult> {
-    const sessionId = this.assertTargetSession();
-    const result = await this.client.send<RuntimeEvaluateResult>(
-      'Runtime.evaluate',
-      {
-        expression: buildExecuteScriptExpression(script),
-        returnByValue: true,
-        awaitPromise: true,
-      },
-      sessionId
-    );
-
-    const value = result.result?.value as { ok?: boolean; value?: unknown; error?: unknown } | undefined;
-    if (!value?.ok) {
-      throw new Error(typeof value?.error === 'string' ? value.error : 'SCRIPT_EXECUTION_FAILED');
-    }
-
-    return {
-      value: typeof value.value === 'string' ? value.value : String(value.value ?? ''),
-    };
-  }
-
-  async scroll(options: {
-    mode: 'to_element' | 'by_viewport' | 'to_edge';
-    target?: RpaWorkflowSelector;
-    direction?: 'down' | 'up';
-    viewportCount?: number;
-    edge?: 'top' | 'bottom';
-    block?: 'start' | 'center' | 'end' | 'nearest';
-  }): Promise<void> {
-    const sessionId = this.assertTargetSession();
-    const expression = buildScrollExpression(options);
-    const result = await this.client.send<RuntimeEvaluateResult>(
-      'Runtime.evaluate',
-      {
-        expression,
-        returnByValue: true,
-        awaitPromise: true,
-      },
-      sessionId
-    );
-
-    if (!result.result?.value) {
-      throw new Error(`Failed to scroll with options: ${JSON.stringify(options)}`);
-    }
-  }
-  async waitFor(target: RpaWorkflowSelector, timeoutMs = 10000): Promise<void> {
-    const sessionId = this.assertTargetSession();
-    const startedAt = Date.now();
-
-    while (Date.now() - startedAt < timeoutMs) {
-      const result = await this.client.send<RuntimeEvaluateResult>(
-        'Runtime.evaluate',
-        {
-          expression: buildWaitForExpression(target),
-          returnByValue: true,
-          awaitPromise: true,
-        },
-        sessionId
-      );
-
-      if (result.result?.value) {
-        return;
-      }
-
-      await new Promise((resolve) => window.setTimeout(resolve, 250));
-    }
-
-    throw new Error(`Timed out waiting for target: ${JSON.stringify(target)}`);
-  }
-
-  async evaluateCondition(condition: BrowserConditionCheck): Promise<boolean> {
-    const sessionId = this.assertTargetSession();
-    const result = await this.client.send<RuntimeEvaluateResult>(
-      'Runtime.evaluate',
-      {
-        expression: buildConditionExpression(condition),
-        returnByValue: true,
-        awaitPromise: true,
-      },
-      sessionId
-    );
-
-    return Boolean(result.result?.value);
-  }
-
-  close(): void {
-    for (const target of this.targets) {
-      void this.client
-        .send('Target.detachFromTarget', { sessionId: target.sessionId })
-        .catch(() => undefined);
-    }
-
     this.client.close();
-    this.session = null;
-    this.targetSessionId = null;
-    this.targets.length = 0;
+    this.sessions.clear();
+    this.worlds.clear();
   }
 
-  private assertConnected(): void {
-    if (!this.session) {
-      throw new Error('Browser session has not been connected');
+  protected async listPages(): Promise<PageInfo[]> {
+    const result = await this.client.send<{ targetInfos: TargetInfo[] }>('Target.getTargets');
+    return result.targetInfos
+      .filter((target) => target.type === 'page' && !target.url.startsWith('devtools://'))
+      .map((target) => ({ id: target.targetId, url: target.url }));
+  }
+
+  protected async createPage(): Promise<string> {
+    const result = await this.client.send<{ targetId: string }>('Target.createTarget', { url: 'about:blank' });
+    return result.targetId;
+  }
+
+  protected async activatePage(id: string): Promise<void> {
+    await this.client.send('Target.activateTarget', { targetId: id });
+  }
+
+  protected async closePage(id: string): Promise<void> {
+    await this.client.send('Target.closeTarget', { targetId: id });
+    const sessionId = this.sessions.get(id);
+    if (sessionId) this.worlds.delete(sessionId);
+    this.sessions.delete(id);
+  }
+
+  protected async navigatePage(id: string, url: string): Promise<void> {
+    const sessionId = await this.attach(id);
+    this.worlds.delete(sessionId);
+    const result = await this.client.send<{ errorText?: string }>('Page.navigate', { url }, sessionId);
+    if (result.errorText) throw new RpaError('NAVIGATION_FAILED', `${url} (${result.errorText})`);
+  }
+
+  protected async evaluateIn(id: string, expression: string, world: World): Promise<unknown> {
+    const result = await this.runtimeEvaluate(id, expression, world, true);
+    return result.result?.value;
+  }
+
+  private async runtimeEvaluate(
+    id: string,
+    expression: string,
+    world: World,
+    returnByValue: boolean
+  ): Promise<EvaluateResult> {
+    const sessionId = await this.attach(id);
+    const params: Record<string, unknown> = { expression, returnByValue, awaitPromise: true };
+    if (world === 'isolated') params.contextId = await this.isolatedWorld(sessionId);
+    let result: EvaluateResult;
+    try {
+      result = await this.client.send<EvaluateResult>('Runtime.evaluate', params, sessionId);
+    } catch (error) {
+      // 页面跳转后隔离环境没了：清掉，下次重建（上层会重试）
+      this.worlds.delete(sessionId);
+      throw error;
     }
-  }
-
-  private assertTargetSession(): string {
-    if (!this.targetSessionId) {
-      throw new Error('OPEN_PAGE_REQUIRED');
+    if (result.exceptionDetails) {
+      throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text || 'evaluate failed');
     }
-
-    return this.targetSessionId;
+    return result;
   }
 
-  private async createPageSession(): Promise<string> {
-    const target = await this.client.send<CdpCreateTargetResult>('Target.createTarget', {
-      url: 'about:blank',
-    });
-
-    const sessionId = await this.attachOrReuseTarget(target.targetId);
-    this.targetSessionId = sessionId;
-    return sessionId;
+  private async isolatedWorld(sessionId: string): Promise<number> {
+    const cached = this.worlds.get(sessionId);
+    if (cached !== undefined) return cached;
+    const tree = await this.client.send<{ frameTree: { frame: { id: string } } }>('Page.getFrameTree', undefined, sessionId);
+    const created = await this.client.send<{ executionContextId: number }>(
+      'Page.createIsolatedWorld',
+      { frameId: tree.frameTree.frame.id, worldName: '' },
+      sessionId
+    );
+    this.worlds.set(sessionId, created.executionContextId);
+    return created.executionContextId;
   }
 
-  private async attachOrReuseTarget(targetId: string): Promise<string> {
-    const existing = this.targets.find((target) => target.targetId === targetId);
-    if (existing) {
-      return existing.sessionId;
-    }
-
-    const attached = await this.client.send<CdpAttachToTargetResult>('Target.attachToTarget', {
-      targetId,
-      flatten: true,
-    });
-
+  private async attach(id: string): Promise<string> {
+    const existing = this.sessions.get(id);
+    if (existing) return existing;
+    const attached = await this.client.send<{ sessionId: string }>('Target.attachToTarget', { targetId: id, flatten: true });
+    // 不调用 Runtime.enable：它是最常用的 CDP 检测特征。Runtime.evaluate 不依赖它。
     await this.client.send('Page.enable', undefined, attached.sessionId);
     await this.client.send('DOM.enable', undefined, attached.sessionId);
-    // 不调用 Runtime.enable：它会让页面里的 Error.stack 序列化被观察到，是最常用的 CDP 检测特征。
-    // 这里只用 Runtime.evaluate / callFunctionOn，不依赖 Runtime 事件，不开也能正常执行。
-
-    this.targets.push({
-      targetId,
-      sessionId: attached.sessionId,
-    });
-
+    this.sessions.set(id, attached.sessionId);
     return attached.sessionId;
   }
 
-  private async resolveScreenshotClip(
-    target: RpaWorkflowSelector,
-    sessionId: string
-  ): Promise<{ x: number; y: number; width: number; height: number; scale: number }> {
-    const expression = buildScreenshotClipExpression(target);
-    const result = await this.client.send<RuntimeEvaluateResult>(
-      'Runtime.evaluate',
-      {
-        expression,
-        returnByValue: true,
-        awaitPromise: true,
-      },
-      sessionId
-    );
-
-    const clip = result.result?.value as Record<string, unknown> | undefined;
-    const x = Number(clip?.x);
-    const y = Number(clip?.y);
-    const width = Number(clip?.width);
-    const height = Number(clip?.height);
-
-    if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) {
-      throw new Error(`Failed to resolve screenshot area: ${JSON.stringify(target)}`);
+  protected async dispatchMouse(id: string, event: MouseEventSpec): Promise<void> {
+    const sessionId = await this.attach(id);
+    if (event.type === 'wheel') {
+      await this.client.send(
+        'Input.dispatchMouseEvent',
+        { type: 'mouseWheel', x: event.x, y: event.y, deltaX: 0, deltaY: event.deltaY },
+        sessionId
+      );
+      return;
     }
-
-    return { x, y, width, height, scale: 1 };
-  }
-
-  private async installClickCapture(sessionId: string): Promise<void> {
+    if (event.type === 'move') {
+      await this.client.send(
+        'Input.dispatchMouseEvent',
+        { type: 'mouseMoved', x: event.x, y: event.y, button: 'none', buttons: this.buttons },
+        sessionId
+      );
+      return;
+    }
+    const mask = event.button === 'right' ? 2 : 1;
+    this.buttons = event.type === 'down' ? this.buttons | mask : this.buttons & ~mask;
     await this.client.send(
-      'Runtime.evaluate',
+      'Input.dispatchMouseEvent',
       {
-        expression: INSTALL_CLICK_CAPTURE,
-        returnByValue: true,
-        awaitPromise: true,
+        type: event.type === 'down' ? 'mousePressed' : 'mouseReleased',
+        x: event.x,
+        y: event.y,
+        button: event.button,
+        buttons: this.buttons,
+        clickCount: event.clickCount,
       },
       sessionId
     );
   }
 
-  private async clearClickCapture(sessionId: string): Promise<void> {
-    await this.client.send(
-      'Runtime.evaluate',
-      {
-        expression: CLEAR_CLICK_CAPTURE,
-        returnByValue: true,
-        awaitPromise: true,
-      },
-      sessionId
-    ).catch(() => undefined);
+  protected async dispatchKey(id: string, key: KeySpec): Promise<void> {
+    const sessionId = await this.attach(id);
+    const send = (params: Record<string, unknown>) => this.client.send('Input.dispatchKeyEvent', params, sessionId);
+    if (key.kind === 'select_all') {
+      const base = { key: 'a', code: 'KeyA', windowsVirtualKeyCode: 65, modifiers: MODIFIER_CTRL };
+      await send({ type: 'rawKeyDown', ...base, commands: ['selectAll'] });
+      await send({ type: 'keyUp', ...base });
+      return;
+    }
+    if (key.kind === 'named') {
+      const base = {
+        key: key.key.key,
+        code: key.key.code,
+        windowsVirtualKeyCode: key.key.vk,
+        nativeVirtualKeyCode: key.key.vk,
+      };
+      await send({ type: key.key.text ? 'keyDown' : 'rawKeyDown', ...base, ...(key.key.text ? { text: key.key.text } : {}) });
+      await send({ type: 'keyUp', ...base });
+      return;
+    }
+    const base = {
+      key: key.description.key,
+      code: key.description.code,
+      windowsVirtualKeyCode: key.description.vk,
+      nativeVirtualKeyCode: key.description.vk,
+      modifiers: key.description.shift ? MODIFIER_SHIFT : 0,
+    };
+    await send({ type: 'keyDown', ...base, text: key.text, unmodifiedText: key.text });
+    await send({ type: 'keyUp', ...base });
   }
 
-  private readString(value: unknown): string {
-    return typeof value === 'string' ? value : '';
+  protected async insertText(id: string, text: string): Promise<void> {
+    await this.client.send('Input.insertText', { text }, await this.attach(id));
+  }
+
+  protected async setInputFiles(id: string, elementExpression: string, filePath: string): Promise<boolean> {
+    const result = await this.runtimeEvaluate(id, elementExpression, 'isolated', false);
+    const objectId = result.result?.objectId;
+    if (!objectId) return false;
+    // DOM.setFileInputFiles 自己会触发 input 和 change 事件
+    await this.client.send('DOM.setFileInputFiles', { files: [filePath], objectId }, await this.attach(id));
+    return true;
+  }
+
+  protected async captureScreenshot(
+    id: string,
+    options: { fullPage: boolean; clip?: { x: number; y: number; width: number; height: number } }
+  ): Promise<string> {
+    const result = await this.client.send<{ data?: string }>(
+      'Page.captureScreenshot',
+      {
+        format: 'png',
+        captureBeyondViewport: options.fullPage,
+        ...(options.clip ? { clip: { ...options.clip, scale: 1 } } : {}),
+      },
+      await this.attach(id)
+    );
+    return result.data ?? '';
   }
 }

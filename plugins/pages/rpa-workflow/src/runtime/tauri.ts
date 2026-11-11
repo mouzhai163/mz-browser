@@ -92,3 +92,23 @@ export async function executeLocalRpaScript(
     variables,
   });
 }
+
+export async function saveRpaRunScreenshot(taskUuid: string, runUuid: string, imageBase64: string): Promise<string> {
+  return invoke<string>('save_rpa_run_screenshot', { taskUuid, runUuid, imageBase64 });
+}
+
+export async function readRpaRunScreenshot(taskUuid: string, runUuid: string, file: string): Promise<string> {
+  return invoke<string>('read_rpa_run_screenshot', { taskUuid, runUuid, file });
+}
+
+export async function deleteRpaRunFiles(taskUuid: string, runUuids: string[]): Promise<void> {
+  await invoke('delete_rpa_run_files', { taskUuid, runUuids });
+}
+
+export async function deleteRpaTaskFiles(taskUuids: string[]): Promise<void> {
+  await invoke('delete_rpa_task_files', { taskUuids });
+}
+
+export async function sendRpaNotification(title: string, body: string): Promise<void> {
+  await invoke('send_rpa_notification', { title, body });
+}

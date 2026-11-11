@@ -398,12 +398,13 @@ const CreateEnvironmentButton: React.FC<CreateEnvironmentButtonProps> = ({ colla
     <button
       type="button"
       onClick={handleCreateEnvironment}
-      className={`group relative w-full rounded-md mb-2 text-sm transition-colors duration-200 overflow-hidden cursor-pointer ${collapsed
-        ? 'flex flex-col items-center py-2.5'
+      className={`group relative w-full rounded-md text-sm transition-colors duration-200 overflow-hidden cursor-pointer ${collapsed
+        ? 'flex flex-col items-center py-2.5 mb-2'
         : 'flex flex-row items-center justify-center gap-2 px-3 py-2.5'
         } bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-xs`}
     >
-      <div className="relative z-10 flex items-center gap-2">
+      {/* 加号很轻，图标加文字整体居中时文字看起来偏右，展开时往左收一点做视觉居中 */}
+      <div className={`relative z-10 flex items-center gap-2 ${collapsed ? '' : '-translate-x-1.5'}`}>
         <Plus className="h-4 w-4 text-primary-foreground" />
 
         <span
@@ -444,7 +445,7 @@ const SidebarPlaceholder: React.FC<SidebarPlaceholderProps> = ({ collapsed }) =>
   return (
     <div className="flex flex-col h-full animate-[fadeIn_300ms_ease-in-out]">
       {/* 顶部按钮区域占位符 */}
-      <div className="mt-1 mb-2 m-1 space-y-1 flex flex-col overflow-hidden shrink-0">
+      <div className="mt-2 mb-2 mx-1 space-y-1 flex flex-col overflow-hidden shrink-0">
         <div className="h-12 bg-sidebar rounded-lg" />
         <div className="h-10 bg-sidebar rounded-lg" />
         <div className="h-10 bg-sidebar rounded-lg" />
@@ -578,8 +579,8 @@ export const AppSidebar: React.FC = () => {
         }`}
     >
       <div className={`flex flex-col h-full ${isAnimating ? 'opacity-0' : 'animate-[slideInRight_300ms_ease-in-out]'}`}>
-        {/* 顶部导航区域 */}
-        <div className="mt-1 mb-2 m-1 space-y-1 flex flex-col shrink-0">
+        {/* 顶部导航区域：上边距和左右边距一致（侧栏 px-1 + 这里 mx-1 = 8px） */}
+        <div className="mt-2 mb-2 mx-1 space-y-1 flex flex-col shrink-0">
           <CreateEnvironmentButton collapsed={collapsed} />
           {collapsed && <div className="mx-3 border-b border-sidebar-border pt-2" />}
         </div>

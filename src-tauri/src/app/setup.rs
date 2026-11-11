@@ -55,6 +55,9 @@ pub fn register_plugins(app_handle: &AppHandle) {
     // dialog 插件
     app_handle.plugin(tauri_plugin_dialog::init()).unwrap();
 
+    // 系统通知（RPA 任务完成/失败）
+    app_handle.plugin(tauri_plugin_notification::init()).unwrap();
+
     // store 插件
     app_handle.plugin(tauri_plugin_store::Builder::new().build()).unwrap();
 

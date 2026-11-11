@@ -1,38 +1,18 @@
-import type {
-  BrowserAdapter,
-  BrowserConditionCheck,
-  BrowserExtractOptions,
-  BrowserExtractResult,
-  BrowserScriptResult,
-  BrowserSession,
-} from './browser-adapter';
-import {
-  CLEAR_CLICK_CAPTURE,
-  INSTALL_CLICK_CAPTURE,
-  READ_CLICK_CAPTURE,
-  buildClickExpression,
-  buildConditionExpression,
-  buildExecuteScriptExpression,
-  buildExtractExpression,
-  buildFillExpression,
-  buildScreenshotClipExpression,
-  buildScrollExpression,
-  buildUploadTargetExpression,
-  buildWaitForExpression,
-} from './page-scripts';
-import type { RpaCapturedSelector, RpaWorkflowSelector } from '../types';
-import { closeEnvironmentRpaTab, selectEnvironmentRpaTab } from './tauri';
+import { BaseBrowserAdapter, type KeySpec, type MouseEventSpec, type PageInfo, type World } from './base-browser-adapter';
+import type { BrowserSession } from './browser-adapter';
 
 /**
  * Firefox 内核的 RPA 适配器（WebDriver BiDi）。
  *
- * 连的是运行时的共用会话转发地址（一个 Firefox 只能有一个 BiDi 会话）。页面里执行的脚本和
- * Chromium 版完全相同（page-scripts.ts），只是换成 BiDi 的命令发出去。
+ * 连的是运行时的共用会话转发地址（一个 Firefox 只能有一个 BiDi 会话）。这里只实现协议层的基本动作，
+ * 等待、拟人轨迹、标签管理在 BaseBrowserAdapter 里，和 Chromium 完全一致。
  */
 
-interface BidiResponse {
+interface BidiMessage {
   id?: number;
   type?: string;
+  method?: string;
+  params?: Record<string, unknown>;
   result?: unknown;
   error?: string;
   message?: string;
@@ -52,8 +32,8 @@ class BidiClient {
     number,
     { resolve: (value: unknown) => void; reject: (reason: Error) => void; timer: ReturnType<typeof setTimeout> }
   >();
-
   private readonly timeoutMs = 60000;
+  onEvent: ((method: string, params: Record<string, unknown>) => void) | null = null;
 
   async connect(url: string): Promise<void> {
     await new Promise<void>((resolve, reject) => {
@@ -113,13 +93,17 @@ class BidiClient {
   }
 
   private handle(event: MessageEvent<string>): void {
-    let message: BidiResponse;
+    let message: BidiMessage;
     try {
-      message = JSON.parse(event.data) as BidiResponse;
+      message = JSON.parse(event.data) as BidiMessage;
     } catch {
       return;
     }
-    if (typeof message.id !== 'number' || message.type === 'event') return;
+    if (message.type === 'event') {
+      if (message.method) this.onEvent?.(message.method, message.params ?? {});
+      return;
+    }
+    if (typeof message.id !== 'number') return;
     const pending = this.pending.get(message.id);
     if (!pending) return;
     this.pending.delete(message.id);
@@ -167,205 +151,163 @@ interface EvaluateResult {
   exceptionDetails?: { text?: string };
 }
 
-export class BidiBrowserAdapter implements BrowserAdapter {
-  private readonly client = new BidiClient();
-  private session: BrowserSession | null = null;
-  private context: string | null = null;
+const SANDBOX = 'mz';
+const CONTROL_KEY = '';
+const SHIFT_KEY = '';
 
-  async connect(session: BrowserSession): Promise<void> {
-    this.session = session;
+export class BidiBrowserAdapter extends BaseBrowserAdapter {
+  private readonly client = new BidiClient();
+
+  protected async connectClient(session: BrowserSession): Promise<void> {
     await this.client.connect(session.browserWsUrl);
+    // 页面的 alert/confirm 会卡住后续命令，出现就自动确认
+    this.client.onEvent = (method, params) => {
+      if (method === 'browsingContext.userPromptOpened') {
+        void this.client
+          .send('browsingContext.handleUserPrompt', { context: params.context, accept: true })
+          .catch(() => undefined);
+      }
+    };
+    await this.client.send('session.subscribe', { events: ['browsingContext.userPromptOpened'] }).catch(() => undefined);
   }
 
-  async goto(url: string, options?: { waitUntil?: string }): Promise<void> {
-    this.assertConnected();
-    // 和 Chromium 版一样，每次打开网页都开一个新标签页
+  protected closeClient(): void {
+    this.client.close();
+  }
+
+  protected async listPages(): Promise<PageInfo[]> {
+    const tree = await this.client.send<{ contexts: { context: string; url: string }[] }>('browsingContext.getTree', {
+      maxDepth: 0,
+    });
+    return tree.contexts.map((item) => ({ id: item.context, url: item.url }));
+  }
+
+  protected async createPage(): Promise<string> {
     const created = await this.client.send<{ context: string }>('browsingContext.create', { type: 'tab' });
-    this.context = created.context;
+    return created.context;
+  }
+
+  protected async activatePage(id: string): Promise<void> {
+    await this.client.send('browsingContext.activate', { context: id });
+  }
+
+  protected async closePage(id: string): Promise<void> {
+    await this.client.send('browsingContext.close', { context: id });
+  }
+
+  protected async navigatePage(id: string, url: string, commitOnly: boolean): Promise<void> {
     await this.client.send('browsingContext.navigate', {
-      context: created.context,
+      context: id,
       url,
-      wait: options?.waitUntil === 'commit' ? 'none' : 'complete',
+      wait: commitOnly ? 'none' : 'interactive',
     });
   }
 
-  async selectTab(index: number): Promise<void> {
-    this.assertConnected();
-    if (!Number.isInteger(index) || index < 1) {
-      throw new Error('TAB_INDEX_INVALID');
-    }
-    const selection = await selectEnvironmentRpaTab(this.session!.envUuid, index);
-    this.context = this.requireContext(selection.target_id);
+  protected async evaluateIn(id: string, expression: string, world: World): Promise<unknown> {
+    return fromRemote(await this.evaluateRemote(id, expression, world));
   }
 
-  async closeTab(index: number): Promise<void> {
-    this.assertConnected();
-    if (!Number.isInteger(index) || index < 1) {
-      throw new Error('TAB_INDEX_INVALID');
-    }
-    const result = await closeEnvironmentRpaTab(this.session!.envUuid, index);
-    // 关掉之后当前的是运行时报告的活动标签页
-    const tree = await this.client.send<{ contexts: { context: string }[] }>('browsingContext.getTree', { maxDepth: 0 });
-    const active = tree.contexts[result.active_position];
-    this.context = active?.context ?? tree.contexts[0]?.context ?? null;
-    if (!this.context) {
-      throw new Error('TAB_TARGET_UNAVAILABLE');
-    }
-  }
-
-  async screenshot(options?: { fullPage?: boolean; target?: RpaWorkflowSelector }): Promise<string> {
-    const context = this.assertContext();
-    const params: Record<string, unknown> = {
-      context,
-      origin: options?.fullPage === true || options?.target ? 'document' : 'viewport',
-    };
-    if (options?.target) {
-      const clip = (await this.evaluate(buildScreenshotClipExpression(options.target))) as Record<string, unknown> | null;
-      const [x, y, width, height] = [clip?.x, clip?.y, clip?.width, clip?.height].map(Number);
-      if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) {
-        throw new Error(`Failed to resolve screenshot area: ${JSON.stringify(options.target)}`);
-      }
-      params.clip = { type: 'box', x, y, width, height };
-    }
-    const result = await this.client.send<{ data?: string }>('browsingContext.captureScreenshot', params);
-    return result.data ?? '';
-  }
-
-  async click(target: RpaWorkflowSelector): Promise<void> {
-    if (!(await this.evaluate(buildClickExpression(target)))) {
-      throw new Error(`Failed to click target: ${JSON.stringify(target)}`);
-    }
-  }
-
-  async captureClickTarget(timeoutMs = 60000): Promise<RpaCapturedSelector> {
-    await this.evaluate(INSTALL_CLICK_CAPTURE);
-    const startedAt = Date.now();
-    while (Date.now() - startedAt < timeoutMs) {
-      const value = (await this.evaluate(READ_CLICK_CAPTURE)) as Record<string, unknown> | null;
-      if (value && typeof value.xpath === 'string' && value.xpath.trim()) {
-        await this.evaluate(CLEAR_CLICK_CAPTURE).catch(() => undefined);
-        const primary: RpaWorkflowSelector = { by: 'xpath', value: value.xpath.trim() };
-        const text = (key: string) => (typeof value[key] === 'string' ? (value[key] as string) : '');
-        return {
-          primary,
-          candidates: [primary],
-          snapshot: {
-            tag: text('tag'),
-            text: text('text'),
-            id: text('id'),
-            className: text('className'),
-            role: text('role'),
-            name: text('name'),
-            placeholder: text('placeholder'),
-            ariaLabel: text('ariaLabel'),
-          },
-        };
-      }
-      await new Promise((resolve) => window.setTimeout(resolve, 250));
-    }
-    await this.evaluate(CLEAR_CLICK_CAPTURE).catch(() => undefined);
-    throw new Error('Timed out waiting for a browser click');
-  }
-
-  async fill(target: RpaWorkflowSelector, value: string): Promise<void> {
-    if (!(await this.evaluate(buildFillExpression(target, value)))) {
-      throw new Error(`Failed to fill target: ${JSON.stringify(target)}`);
-    }
-  }
-
-  async uploadFile(target: RpaWorkflowSelector, filePath: string): Promise<void> {
-    const context = this.assertContext();
-    const input = (await this.evaluate(buildUploadTargetExpression(target))) as { sharedId?: string } | null;
-    if (!input?.sharedId) {
-      throw new Error(`Failed to resolve upload target: ${JSON.stringify(target)}`);
-    }
-    // input.setFiles 自己会触发 input 和 change 事件
-    await this.client.send('input.setFiles', { context, element: { sharedId: input.sharedId }, files: [filePath] });
-  }
-
-  async extract(options: BrowserExtractOptions): Promise<BrowserExtractResult> {
-    const value = await this.evaluate(buildExtractExpression(options));
-    return { value: typeof value === 'string' ? value : String(value ?? '') };
-  }
-
-  async executeScript(script: string): Promise<BrowserScriptResult> {
-    const value = (await this.evaluate(buildExecuteScriptExpression(script))) as
-      | { ok?: boolean; value?: unknown; error?: unknown }
-      | undefined;
-    if (!value?.ok) {
-      throw new Error(typeof value?.error === 'string' ? value.error : 'SCRIPT_EXECUTION_FAILED');
-    }
-    return { value: typeof value.value === 'string' ? value.value : String(value.value ?? '') };
-  }
-
-  async scroll(options: {
-    mode: 'to_element' | 'by_viewport' | 'to_edge';
-    target?: RpaWorkflowSelector;
-    direction?: 'down' | 'up';
-    viewportCount?: number;
-    edge?: 'top' | 'bottom';
-    block?: 'start' | 'center' | 'end' | 'nearest';
-  }): Promise<void> {
-    if (!(await this.evaluate(buildScrollExpression(options)))) {
-      throw new Error(`Failed to scroll with options: ${JSON.stringify(options)}`);
-    }
-  }
-
-  async waitFor(target: RpaWorkflowSelector, timeoutMs = 10000): Promise<void> {
-    const startedAt = Date.now();
-    while (Date.now() - startedAt < timeoutMs) {
-      if (await this.evaluate(buildWaitForExpression(target))) {
-        return;
-      }
-      await new Promise((resolve) => window.setTimeout(resolve, 250));
-    }
-    throw new Error(`Timed out waiting for target: ${JSON.stringify(target)}`);
-  }
-
-  async evaluateCondition(condition: BrowserConditionCheck): Promise<boolean> {
-    return Boolean(await this.evaluate(buildConditionExpression(condition)));
-  }
-
-  close(): void {
-    this.client.close();
-    this.session = null;
-    this.context = null;
-  }
-
-  /** 在页面里执行表达式（和 Chromium 版一样在页面自己的环境里，脚本能用页面的变量） */
-  private async evaluate(expression: string): Promise<unknown> {
-    const context = this.assertContext();
+  private async evaluateRemote(id: string, expression: string, world: World): Promise<RemoteValue | undefined> {
     const result = await this.client.send<EvaluateResult>('script.evaluate', {
       expression,
-      target: { context },
+      target: world === 'isolated' ? { context: id, sandbox: SANDBOX } : { context: id },
       awaitPromise: true,
       resultOwnership: 'none',
       serializationOptions: { maxDomDepth: 0, maxObjectDepth: 4 },
     });
     if (result.type === 'exception') {
-      throw new Error(result.exceptionDetails?.text || 'SCRIPT_EXECUTION_FAILED');
+      throw new Error(result.exceptionDetails?.text || 'evaluate failed');
     }
-    return fromRemote(result.result);
+    return result.result;
   }
 
-  private requireContext(value: unknown): string {
-    const context = typeof value === 'string' ? value.trim() : '';
-    if (!context) {
-      throw new Error('TAB_TARGET_UNAVAILABLE');
-    }
-    return context;
+  private perform(id: string, source: Record<string, unknown>): Promise<unknown> {
+    return this.client.send('input.performActions', { context: id, actions: [source] });
   }
 
-  private assertConnected(): void {
-    if (!this.session) {
-      throw new Error('Browser session has not been connected');
+  protected async dispatchMouse(id: string, event: MouseEventSpec): Promise<void> {
+    const x = Math.round(event.x);
+    const y = Math.round(event.y);
+    if (event.type === 'wheel') {
+      await this.perform(id, {
+        type: 'wheel',
+        id: 'mz-wheel',
+        actions: [{ type: 'scroll', x, y, deltaX: 0, deltaY: Math.round(event.deltaY) }],
+      });
+      return;
+    }
+    const pointer = { type: 'pointer', id: 'mz-mouse', parameters: { pointerType: 'mouse' } };
+    if (event.type === 'move') {
+      await this.perform(id, { ...pointer, actions: [{ type: 'pointerMove', x, y, duration: 0, origin: 'viewport' }] });
+      return;
+    }
+    const button = event.button === 'right' ? 2 : 0;
+    await this.perform(id, { ...pointer, actions: [{ type: event.type === 'down' ? 'pointerDown' : 'pointerUp', button }] });
+  }
+
+  /** BiDi 按两次是否算双击取决于同一动作序列，所以一次发完 */
+  protected async dispatchDoubleClick(id: string, point: { x: number; y: number }, button: 'left' | 'right'): Promise<void> {
+    const code = button === 'right' ? 2 : 0;
+    const press = [
+      { type: 'pointerDown', button: code },
+      { type: 'pause', duration: 70 },
+      { type: 'pointerUp', button: code },
+    ];
+    await this.perform(id, {
+      type: 'pointer',
+      id: 'mz-mouse',
+      parameters: { pointerType: 'mouse' },
+      actions: [
+        { type: 'pointerMove', x: Math.round(point.x), y: Math.round(point.y), duration: 0, origin: 'viewport' },
+        ...press,
+        { type: 'pause', duration: 90 },
+        ...press,
+      ],
+    });
+  }
+
+  protected async dispatchKey(id: string, key: KeySpec): Promise<void> {
+    const press = (value: string) => [
+      { type: 'keyDown', value },
+      { type: 'keyUp', value },
+    ];
+    const keyboard = (actions: unknown[]) => this.perform(id, { type: 'key', id: 'mz-keyboard', actions });
+    if (key.kind === 'select_all') {
+      await keyboard([{ type: 'keyDown', value: CONTROL_KEY }, ...press('a'), { type: 'keyUp', value: CONTROL_KEY }]);
+    } else if (key.kind === 'named') {
+      await keyboard(press(key.key.bidi));
+    } else if (key.description.shift) {
+      await keyboard([{ type: 'keyDown', value: SHIFT_KEY }, ...press(key.text), { type: 'keyUp', value: SHIFT_KEY }]);
+    } else {
+      await keyboard(press(key.text));
     }
   }
 
-  private assertContext(): string {
-    if (!this.context) {
-      throw new Error('OPEN_PAGE_REQUIRED');
-    }
-    return this.context;
+  protected async insertText(id: string, text: string): Promise<void> {
+    const actions = Array.from(text).flatMap((value) => [
+      { type: 'keyDown', value },
+      { type: 'keyUp', value },
+    ]);
+    await this.perform(id, { type: 'key', id: 'mz-keyboard', actions });
+  }
+
+  protected async setInputFiles(id: string, elementExpression: string, filePath: string): Promise<boolean> {
+    const remote = await this.evaluateRemote(id, elementExpression, 'isolated');
+    if (!remote?.sharedId) return false;
+    // input.setFiles 自己会触发 input 和 change 事件
+    await this.client.send('input.setFiles', { context: id, element: { sharedId: remote.sharedId }, files: [filePath] });
+    return true;
+  }
+
+  protected async captureScreenshot(
+    id: string,
+    options: { fullPage: boolean; clip?: { x: number; y: number; width: number; height: number } }
+  ): Promise<string> {
+    const result = await this.client.send<{ data?: string }>('browsingContext.captureScreenshot', {
+      context: id,
+      origin: options.fullPage ? 'document' : 'viewport',
+      ...(options.clip ? { clip: { type: 'box', ...options.clip } } : {}),
+    });
+    return result.data ?? '';
   }
 }

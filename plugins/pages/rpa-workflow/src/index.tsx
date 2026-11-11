@@ -16,6 +16,7 @@ import { RpaExportDialog } from './components/rpa-export-dialog';
 import { RpaImportDialog } from './components/rpa-import-dialog';
 import { RpaRunDialog } from './components/rpa-run-dialog';
 import { RpaExecutionDrawer } from './components/rpa-execution-drawer';
+import { RpaRunsDrawer } from './components/rpa-runs-drawer';
 import { TaskEditor } from './components/task-editor';
 import { useRpaTasks } from './hooks/use-rpa-tasks';
 import { useRpaStats } from './hooks/use-rpa-stats';
@@ -30,6 +31,7 @@ import {
   type PortableRpaTaskDocument,
 } from './lib/rpa-transfer';
 import { useNavigate } from 'react-router';
+import { toast } from 'sonner';
 
 const RPAWorkflowPage: React.FC = () => {
   const { t } = useTranslation('rpa');
@@ -45,7 +47,6 @@ const RPAWorkflowPage: React.FC = () => {
     loading,
     error,
     refresh,
-    total,
     currentPage: resolvedPage,
     totalPages,
   } = useRpaTasks({
@@ -55,7 +56,7 @@ const RPAWorkflowPage: React.FC = () => {
     statusFilter,
   });
 
-  const stats = useRpaStats({ tasks, total });
+  const stats = useRpaStats(tasks);
 
   const handlers = useRpaHandlers({
     tasks,
@@ -89,7 +90,7 @@ const RPAWorkflowPage: React.FC = () => {
       const selected = await open({
         multiple: false,
         directory: false,
-        filters: [{ name: 'JSON 文件', extensions: ['json'] }],
+        filters: [{ name: 'JSON', extensions: ['json'] }],
       });
 
       if (!selected || Array.isArray(selected)) {
@@ -101,8 +102,7 @@ const RPAWorkflowPage: React.FC = () => {
       setImportedDocument(document);
       setImportDialogOpen(true);
     } catch (error) {
-      const message = error instanceof Error ? error.message : '导入文件读取失败';
-      window.alert(message);
+      toast.error(error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -232,6 +232,15 @@ const RPAWorkflowPage: React.FC = () => {
           }
         }}
         onStop={handlers.execution.executionDrawer.stopExecution}
+      />
+
+      <RpaRunsDrawer
+        task={handlers.runsDrawer.task}
+        onOpenChange={(open) => {
+          if (!open) {
+            handlers.runsDrawer.closeDrawer();
+          }
+        }}
       />
     </div>
   );

@@ -1,29 +1,26 @@
-﻿import { useMemo } from 'react';
-import type { RpaTask } from '../types';
+import { useEffect, useState } from 'react';
+import { useStore } from 'zustand';
+import { getRpaTaskStats, type RpaTaskStats } from '../api';
+import { rpaExecutionStore } from '../runtime/execution-manager';
 
-interface UseRpaStatsParams {
-  tasks: RpaTask[];
-  total?: number;
-}
+const EMPTY: RpaTaskStats = { total: 0, running: 0, completed: 0, failed: 0, scheduled: 0 };
 
-interface UseRpaStatsReturn {
-  total: number;
-  running: number;
-  completed: number;
-  failed: number;
-  scheduled: number;
-}
+/** 全部任务的统计，不受当前页和筛选影响。tasks 变化（增删、刷新）时重新读取 */
+export function useRpaStats(refreshKey: unknown): RpaTaskStats {
+  const revision = useStore(rpaExecutionStore, (state) => state.revision);
+  const [stats, setStats] = useState(EMPTY);
 
-export function useRpaStats(params: UseRpaStatsParams): UseRpaStatsReturn {
-  const { tasks, total } = params;
-
-  return useMemo(() => {
-    return {
-      total: total ?? tasks.length,
-      running: tasks.filter((t) => t.status === 'running').length,
-      completed: tasks.filter((t) => t.status === 'completed').length,
-      failed: tasks.filter((t) => t.status === 'failed').length,
-      scheduled: tasks.filter((t) => t.triggerType === 'scheduled').length,
+  useEffect(() => {
+    let cancelled = false;
+    void getRpaTaskStats()
+      .then((next) => {
+        if (!cancelled) setStats(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
     };
-  }, [tasks, total]);
+  }, [refreshKey, revision]);
+
+  return stats;
 }

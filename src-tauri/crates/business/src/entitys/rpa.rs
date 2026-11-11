@@ -73,12 +73,6 @@ pub struct UpdateRpaTaskRequest {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct RunRpaTaskRequest {
-    pub uuid: Uuid,
-    pub environment_uuids: Option<Vec<Uuid>>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DuplicateRpaTaskRequest {
     pub uuid: Uuid,
     pub new_name: Option<String>,
@@ -101,6 +95,38 @@ pub struct ListRpaRunsRequest {
     #[serde(flatten)]
     pub pagination: Pagination,
     pub status: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct StartRpaRunRequest {
+    pub task_uuid: Uuid,
+    pub environment_uuid: Uuid,
+    pub environment_name: Option<String>,
+    pub trigger_source: String,
+    pub total_steps: i32,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct FinishRpaRunRequest {
+    pub uuid: Uuid,
+    pub status: String,
+    pub completed_steps: i32,
+    pub failed_steps: i32,
+    pub duration_ms: i64,
+    pub result_summary: Option<String>,
+    pub error_message: Option<String>,
+    pub logs: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RpaRunDetailRequest {
+    pub uuid: Uuid,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SetRpaTaskStatusRequest {
+    pub uuid: Uuid,
+    pub status: String,
 }
 
 use crate::dto::{RpaTaskDto, RpaTaskRunDto, RpaTaskStepDto};
@@ -132,4 +158,10 @@ pub struct RpaRunsListResponse {
 pub struct ExportRpaTaskResponse {
     pub content: String,
     pub filename: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct StartRpaRunResponse {
+    pub uuid: Uuid,
+    pub pruned: Vec<Uuid>,
 }

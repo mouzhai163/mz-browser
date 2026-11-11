@@ -1,5 +1,5 @@
 ﻿import { isSuccess, post } from '@/lib/request';
-import type { RpaTask, RpaWorkflowSchema } from '../types';
+import type { RpaTask } from '../types';
 
 export const API_ENDPOINTS = {
   LIST_TASKS: 'rpa/tasks',
@@ -8,9 +8,15 @@ export const API_ENDPOINTS = {
   UPDATE_TASK: 'rpa/tasks/update',
   DELETE_TASK: 'rpa/tasks/delete',
   BATCH_DELETE_TASKS: 'rpa/tasks/batch-delete',
-  RUN_TASK: 'rpa/tasks/run',
-  STOP_TASK: 'rpa/tasks/stop',
   DUPLICATE_TASK: 'rpa/tasks/duplicate',
+  TASK_STATS: 'rpa/tasks/stats',
+  TASK_STATUS: 'rpa/tasks/status',
+  TASKS_DUE: 'rpa/tasks/due',
+  RUN_START: 'rpa/runs/start',
+  RUN_FINISH: 'rpa/runs/finish',
+  RUN_LIST: 'rpa/runs/list',
+  RUN_DETAIL: 'rpa/runs/detail',
+  RUN_RECOVER: 'rpa/runs/recover',
   LIST_ENVIRONMENTS: 'environments/list',
 } as const;
 
@@ -64,10 +70,6 @@ export interface RpaTaskInputVariable {
   value: string;
   promptOnRun: boolean;
   required: boolean;
-}
-
-export interface RpaTaskRunOptions {
-  closeBrowserOnComplete: boolean;
 }
 
 export interface PaginatedRpaTaskList {
@@ -127,13 +129,6 @@ export interface UpsertRpaTaskRequest {
   }>;
 }
 
-function toStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.map(String).filter(Boolean);
-}
-
 interface StoredWorkflowMetaVariable {
   name?: string;
   value?: string;
@@ -142,9 +137,7 @@ interface StoredWorkflowMetaVariable {
 }
 
 interface StoredWorkflowMeta {
-  start_step_id?: string | null;
   global_variables?: StoredWorkflowMetaVariable[];
-  close_browser_on_complete?: boolean;
 }
 
 function normalizeStatus(status: string): RpaTask['status'] {
@@ -200,7 +193,7 @@ export async function listRpaTasksPage(request?: {
   });
 
   if (!isSuccess(result)) {
-    throw new Error(result.message || '获取 RPA 任务列表失败');
+    throw new Error(result.message || 'Failed to load RPA tasks');
   }
 
   const items = (result.data?.items || []).map(transformRpaTaskDto);
@@ -213,24 +206,10 @@ export async function listRpaTasksPage(request?: {
   };
 }
 
-export async function listRpaTasks(request?: {
-  page?: number;
-  page_size?: number;
-  filters?: {
-    keyword?: string;
-    status?: string;
-    trigger_type?: string;
-    tags?: string[];
-  };
-}): Promise<RpaTask[]> {
-  const result = await listRpaTasksPage(request);
-  return result.items;
-}
-
 export async function getRpaTaskDetail(uuid: string): Promise<RpaTaskDetailDto> {
   const result = await post<RpaTaskDetailDto>(API_ENDPOINTS.GET_TASK_DETAIL, { uuid });
   if (!isSuccess(result) || !result.data) {
-    throw new Error(result.message || '获取 RPA 任务详情失败');
+    throw new Error(result.message || 'Failed to load RPA task');
   }
   return result.data;
 }
@@ -238,7 +217,7 @@ export async function getRpaTaskDetail(uuid: string): Promise<RpaTaskDetailDto> 
 export async function createRpaTask(data: UpsertRpaTaskRequest): Promise<string> {
   const result = await post<{ uuid: string }>(API_ENDPOINTS.CREATE_TASK, data);
   if (!isSuccess(result) || !result.data?.uuid) {
-    throw new Error(result.message || '创建 RPA 任务失败');
+    throw new Error(result.message || 'Failed to create RPA task');
   }
   return result.data.uuid;
 }
@@ -246,28 +225,28 @@ export async function createRpaTask(data: UpsertRpaTaskRequest): Promise<string>
 export async function updateRpaTask(data: UpsertRpaTaskRequest & { uuid: string }): Promise<void> {
   const result = await post(API_ENDPOINTS.UPDATE_TASK, data);
   if (!isSuccess(result)) {
-    throw new Error(result.message || '更新 RPA 任务失败');
+    throw new Error(result.message || 'Failed to update RPA task');
   }
 }
 
 export async function deleteRpaTask(uuid: string): Promise<void> {
   const result = await post(API_ENDPOINTS.DELETE_TASK, { uuid });
   if (!isSuccess(result)) {
-    throw new Error(result.message || '删除 RPA 任务失败');
+    throw new Error(result.message || 'Failed to delete RPA task');
   }
 }
 
 export async function batchDeleteRpaTasks(uuids: string[]): Promise<void> {
   const result = await post(API_ENDPOINTS.BATCH_DELETE_TASKS, { uuids });
   if (!isSuccess(result)) {
-    throw new Error(result.message || '批量删除 RPA 任务失败');
+    throw new Error(result.message || 'Failed to delete RPA tasks');
   }
 }
 
 export async function duplicateRpaTask(uuid: string): Promise<string> {
   const result = await post<{ uuid: string }>(API_ENDPOINTS.DUPLICATE_TASK, { uuid });
   if (!isSuccess(result) || !result.data?.uuid) {
-    throw new Error(result.message || '复制 RPA 任务失败');
+    throw new Error(result.message || 'Failed to duplicate RPA task');
   }
   return result.data.uuid;
 }
@@ -279,7 +258,7 @@ export async function listRpaEnvironments(): Promise<EnvironmentListItem[]> {
   });
 
   if (!isSuccess(result)) {
-    throw new Error(result.message || '获取环境列表失败');
+    throw new Error(result.message || 'Failed to load environments');
   }
 
   return (result.data?.items || []).map((item) => ({
@@ -310,14 +289,16 @@ export async function listRpaEnvironmentsPage(request?: {
   });
 
   if (!isSuccess(result)) {
-    throw new Error(result.message || '获取环境列表失败');
+    throw new Error(result.message || 'Failed to load environments');
   }
 
-  const items = (result.data?.items || []).map((item) => ({
-    id: String(item.environment?.uuid || item.environment?.id || ''),
-    name: String(item.environment?.name || ''),
-    status: item.environment?.status === 'running' ? 'running' : 'ready',
-  }));
+  const items = (result.data?.items || []).map(
+    (item): EnvironmentListItem => ({
+      id: String(item.environment?.uuid || item.environment?.id || ''),
+      name: String(item.environment?.name || ''),
+      status: item.environment?.status === 'running' ? 'running' : 'ready',
+    })
+  );
 
   return {
     items,
@@ -356,82 +337,112 @@ export function extractTaskInputVariables(detail: RpaTaskDetailDto): RpaTaskInpu
     .filter((variable) => variable.name && variable.promptOnRun);
 }
 
-export function extractTaskRunOptions(detail: RpaTaskDetailDto): RpaTaskRunOptions {
-  const workflowMeta = extractStoredWorkflowMeta(detail);
-
-  return {
-    closeBrowserOnComplete: workflowMeta?.close_browser_on_complete === true,
-  };
+export interface RpaTaskStats {
+  total: number;
+  running: number;
+  completed: number;
+  failed: number;
+  scheduled: number;
 }
 
-export function extractWorkflowSchema(detail: RpaTaskDetailDto): RpaWorkflowSchema | null {
-  const tags = toStringArray(detail.task.tags);
-  const orderedSteps = [...detail.steps].sort(
-    (a, b) => (a.sort_order ?? Number.MAX_SAFE_INTEGER) - (b.sort_order ?? Number.MAX_SAFE_INTEGER)
-  );
-  const workflowMeta = extractStoredWorkflowMeta(detail);
-
-  const workflowSteps = orderedSteps
-    .map((step, index) => {
-      const storedStep = step.config?.workflow_step;
-      if (storedStep && typeof storedStep === 'object') {
-        return storedStep;
-      }
-
-      return {
-        id: step.uuid,
-        type: step.step_type,
-        name: step.name,
-        enabled: step.enabled ?? true,
-        next: orderedSteps[index + 1]?.uuid ?? null,
-        ui: {
-          position: {
-            x: step.position_x ?? 0,
-            y: step.position_y ?? 0,
-          },
-        },
-        config: step.config ?? {},
-      };
-    })
-    .filter(Boolean);
-
-  return {
-    schema_version: '1.0',
-    name: detail.task.name,
-    description: detail.task.description ?? '',
-    tags,
-    trigger: {
-      type:
-        detail.task.trigger_type === 'scheduled' || detail.task.trigger_type === 'event'
-          ? detail.task.trigger_type
-          : 'manual',
-      schedule: detail.task.schedule ?? undefined,
-      cron_expression: detail.task.cron_expression ?? undefined,
-    },
-    environments: detail.environment_uuids || [],
-    settings: {
-      run_mode: detail.task.run_mode === 'parallel' ? 'parallel' : 'sequential',
-      retry_count: detail.task.retry_count ?? 3,
-      retry_interval_seconds: detail.task.retry_interval ?? 5,
-      timeout_seconds: detail.task.timeout ?? 300,
-      concurrency: detail.task.concurrency ?? 1,
-      stop_on_error: detail.task.stop_on_error ?? true,
-      notify_on_complete: detail.task.notify_on_complete ?? false,
-      notify_on_error: detail.task.notify_on_error ?? true,
-    },
-    variables: Array.isArray(workflowMeta?.global_variables)
-      ? workflowMeta.global_variables
-          .map((variable) => ({
-            name: typeof variable?.name === 'string' ? variable.name.trim() : '',
-            value: typeof variable?.value === 'string' ? variable.value : '',
-          }))
-          .filter((variable) => variable.name)
-      : [],
-    start_step_id:
-      typeof workflowMeta?.start_step_id === 'string'
-        ? workflowMeta.start_step_id
-        : workflowSteps[0]?.id ?? null,
-    steps: workflowSteps as RpaWorkflowSchema['steps'],
-  };
+export async function getRpaTaskStats(): Promise<RpaTaskStats> {
+  const result = await post<RpaTaskStats>(API_ENDPOINTS.TASK_STATS, {});
+  if (!isSuccess(result) || !result.data) {
+    throw new Error(result.message || 'Failed to load RPA stats');
+  }
+  return result.data;
 }
 
+export async function setRpaTaskStatus(uuid: string, status: string): Promise<void> {
+  const result = await post(API_ENDPOINTS.TASK_STATUS, { uuid, status });
+  if (!isSuccess(result)) {
+    throw new Error(result.message || 'Failed to update RPA task status');
+  }
+}
+
+export async function takeDueRpaTasks(): Promise<string[]> {
+  const result = await post<{ uuids?: string[] }>(API_ENDPOINTS.TASKS_DUE, {});
+  if (!isSuccess(result)) {
+    throw new Error(result.message || 'Failed to load due RPA tasks');
+  }
+  return result.data?.uuids ?? [];
+}
+
+export interface RpaRunDto {
+  uuid: string;
+  task_uuid: string;
+  environment_uuid?: string | null;
+  environment_name?: string | null;
+  trigger_source: string;
+  status: string;
+  total_steps: number;
+  completed_steps: number;
+  failed_steps: number;
+  started_at: string;
+  finished_at?: string | null;
+  duration_ms?: number | null;
+  result_summary?: string | null;
+  error_message?: string | null;
+  logs?: unknown;
+}
+
+export async function startRpaRun(request: {
+  task_uuid: string;
+  environment_uuid: string;
+  environment_name?: string;
+  trigger_source: string;
+  total_steps: number;
+}): Promise<{ uuid: string; pruned: string[] }> {
+  const result = await post<{ uuid: string; pruned: string[] }>(API_ENDPOINTS.RUN_START, request);
+  if (!isSuccess(result) || !result.data?.uuid) {
+    throw new Error(result.message || 'Failed to create RPA run');
+  }
+  return result.data;
+}
+
+export async function finishRpaRun(request: {
+  uuid: string;
+  status: string;
+  completed_steps: number;
+  failed_steps: number;
+  duration_ms: number;
+  result_summary?: string;
+  error_message?: string;
+  logs: unknown;
+}): Promise<void> {
+  const result = await post(API_ENDPOINTS.RUN_FINISH, request);
+  if (!isSuccess(result)) {
+    throw new Error(result.message || 'Failed to save RPA run');
+  }
+}
+
+export async function listRpaRuns(
+  taskUuid: string,
+  page: number,
+  pageSize: number
+): Promise<{ items: RpaRunDto[]; total: number }> {
+  const result = await post<{ items?: RpaRunDto[]; total?: number }>(API_ENDPOINTS.RUN_LIST, {
+    task_uuid: taskUuid,
+    page,
+    page_size: pageSize,
+  });
+  if (!isSuccess(result)) {
+    throw new Error(result.message || 'Failed to load RPA runs');
+  }
+  return { items: result.data?.items ?? [], total: result.data?.total ?? 0 };
+}
+
+export async function getRpaRunDetail(uuid: string): Promise<RpaRunDto> {
+  const result = await post<RpaRunDto>(API_ENDPOINTS.RUN_DETAIL, { uuid });
+  if (!isSuccess(result) || !result.data) {
+    throw new Error(result.message || 'Failed to load RPA run');
+  }
+  return result.data;
+}
+
+export async function recoverRpaRuns(): Promise<void> {
+  const result = await post(API_ENDPOINTS.RUN_RECOVER, {});
+  if (!isSuccess(result)) {
+    throw new Error(result.message || 'Failed to recover RPA runs');
+  }
+}

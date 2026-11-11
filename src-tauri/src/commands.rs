@@ -71,6 +71,11 @@ pub fn register_handles() -> impl Fn(Invoke<tauri::Wry>) -> bool + Send + Sync +
         network::detect_proxy_ip,
         network::download_files,
         rpa::execute_local_rpa_script,
+        rpa::save_rpa_run_screenshot,
+        rpa::read_rpa_run_screenshot,
+        rpa::delete_rpa_run_files,
+        rpa::delete_rpa_task_files,
+        rpa::send_rpa_notification,
         // Auth commands
         // Core utilities
         crate::core::utils::process::kill_process,
@@ -89,6 +94,7 @@ pub fn register_handles() -> impl Fn(Invoke<tauri::Wry>) -> bool + Send + Sync +
         mcp::get_mcp_config,
         mcp::get_mcp_access_token,
         mcp::rotate_mcp_access_token,
+        mcp::mcp_rpa_respond,
         mcp::update_mcp_config,
         mcp::start_mcp_runtime,
         mcp::reload_mcp_runtime,

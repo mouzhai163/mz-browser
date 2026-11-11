@@ -1,4 +1,5 @@
 import { startEnvironmentRuntime } from '../../../../services/environment/src';
+import { RpaError } from './errors';
 import { getEnvironmentCdpEndpoint, getEnvironmentStatus, type CdpEndpoint } from './tauri';
 
 export async function waitForCdpEndpoint(envUuid: string, timeoutMs = 30000): Promise<CdpEndpoint> {
@@ -11,7 +12,7 @@ export async function waitForCdpEndpoint(envUuid: string, timeoutMs = 30000): Pr
     await new Promise((resolve) => window.setTimeout(resolve, 500));
   }
 
-  throw new Error('浏览器调试连接未及时就绪');
+  throw new RpaError('BROWSER_TIMEOUT');
 }
 
 /** 连接任务绑定的环境：已经在运行就直接用，没有运行就先启动。 */

@@ -1,12 +1,18 @@
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::Serialize;
 use serde_json::Value;
 use std::env;
 use std::path::PathBuf;
 use std::time::Duration;
+use tauri::AppHandle;
+use tauri_plugin_notification::NotificationExt;
 use tokio::fs;
 use tokio::process::Command;
 use tokio::time::timeout;
 use uuid::Uuid;
+
+use crate::core::paths::PathManager;
 
 #[derive(Debug, Serialize)]
 pub struct LocalRpaScriptExecutionResult {
@@ -85,6 +91,98 @@ pub async fn execute_local_rpa_script(
     Ok(LocalRpaScriptExecutionResult {
         value: String::new(),
     })
+}
+
+/// 运行记录的文件都放在 data/rpa-runs/<任务>/<运行>/ 下。
+/// 路径只由解析过的 UUID 拼成，前端传不出这个目录。
+fn rpa_task_dir(task_uuid: &str) -> std::result::Result<PathBuf, String> {
+    let task = Uuid::parse_str(task_uuid).map_err(|_| "RPA_INVALID_ID".to_string())?;
+    let data = PathManager::get_data_dir().map_err(|error| error.to_string())?;
+    Ok(data.join("rpa-runs").join(task.to_string()))
+}
+
+fn rpa_run_dir(task_uuid: &str, run_uuid: &str) -> std::result::Result<PathBuf, String> {
+    let run = Uuid::parse_str(run_uuid).map_err(|_| "RPA_INVALID_ID".to_string())?;
+    Ok(rpa_task_dir(task_uuid)?.join(run.to_string()))
+}
+
+async fn remove_dir_if_present(dir: PathBuf) -> std::result::Result<(), String> {
+    match fs::remove_dir_all(&dir).await {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+/// 保存一张运行截图，返回文件名
+#[tauri::command]
+pub async fn save_rpa_run_screenshot(
+    task_uuid: String,
+    run_uuid: String,
+    image_base64: String,
+) -> std::result::Result<String, String> {
+    let bytes = BASE64
+        .decode(image_base64.as_bytes())
+        .map_err(|_| "RPA_INVALID_IMAGE".to_string())?;
+    let dir = rpa_run_dir(&task_uuid, &run_uuid)?;
+    fs::create_dir_all(&dir).await.map_err(|error| error.to_string())?;
+    let file = format!("{}.png", Uuid::new_v4());
+    fs::write(dir.join(&file), bytes)
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(file)
+}
+
+/// 读取一张运行截图，返回 base64
+#[tauri::command]
+pub async fn read_rpa_run_screenshot(
+    task_uuid: String,
+    run_uuid: String,
+    file: String,
+) -> std::result::Result<String, String> {
+    let id = file
+        .strip_suffix(".png")
+        .and_then(|stem| Uuid::parse_str(stem).ok())
+        .ok_or_else(|| "RPA_INVALID_ID".to_string())?;
+    let path = rpa_run_dir(&task_uuid, &run_uuid)?.join(format!("{id}.png"));
+    let bytes = fs::read(path).await.map_err(|error| error.to_string())?;
+    Ok(BASE64.encode(bytes))
+}
+
+/// 删除运行记录的文件
+#[tauri::command]
+pub async fn delete_rpa_run_files(
+    task_uuid: String,
+    run_uuids: Vec<String>,
+) -> std::result::Result<(), String> {
+    for run_uuid in run_uuids {
+        remove_dir_if_present(rpa_run_dir(&task_uuid, &run_uuid)?).await?;
+    }
+    Ok(())
+}
+
+/// 删除任务的全部运行文件
+#[tauri::command]
+pub async fn delete_rpa_task_files(task_uuids: Vec<String>) -> std::result::Result<(), String> {
+    for task_uuid in task_uuids {
+        remove_dir_if_present(rpa_task_dir(&task_uuid)?).await?;
+    }
+    Ok(())
+}
+
+/// 发送系统通知
+#[tauri::command]
+pub async fn send_rpa_notification(
+    app: AppHandle,
+    title: String,
+    body: String,
+) -> std::result::Result<(), String> {
+    app.notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show()
+        .map_err(|error| error.to_string())
 }
 
 async fn ensure_node_runtime() -> std::result::Result<(), String> {

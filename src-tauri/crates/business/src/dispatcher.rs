@@ -773,6 +773,69 @@ pub async fn dispatch_post(
             }
             .await
         }
+        "rpa/tasks/stats" => {
+            async { value(services::rpa::get_rpa_task_stats_service(context).await?) }.await
+        }
+        "rpa/tasks/status" => {
+            async {
+                let request: SetRpaTaskStatusRequest = payload(data)?;
+                services::rpa::set_rpa_task_status_service(context, request.uuid, &request.status)
+                    .await?;
+                Ok(Value::Null)
+            }
+            .await
+        }
+        "rpa/tasks/due" => {
+            async {
+                let due =
+                    services::rpa::take_due_rpa_tasks_service(context, chrono::Utc::now()).await?;
+                Ok(json!({ "uuids": due }))
+            }
+            .await
+        }
+        "rpa/runs/start" => {
+            async {
+                let request: StartRpaRunRequest = payload(data)?;
+                value(services::rpa::start_rpa_run_service(context, &request).await?)
+            }
+            .await
+        }
+        "rpa/runs/finish" => {
+            async {
+                let request: FinishRpaRunRequest = payload(data)?;
+                services::rpa::finish_rpa_run_service(context, &request).await?;
+                Ok(Value::Null)
+            }
+            .await
+        }
+        "rpa/runs/list" => {
+            async {
+                let request: ListRpaRunsRequest = payload(data)?;
+                let (items, total) =
+                    services::rpa::list_rpa_runs_service(context, &request).await?;
+                value(RpaRunsListResponse {
+                    items,
+                    total,
+                    page: request.pagination.page,
+                    page_size: request.pagination.page_size,
+                })
+            }
+            .await
+        }
+        "rpa/runs/detail" => {
+            async {
+                let request: RpaRunDetailRequest = payload(data)?;
+                value(services::rpa::get_rpa_run_service(context, request.uuid).await?)
+            }
+            .await
+        }
+        "rpa/runs/recover" => {
+            async {
+                services::rpa::recover_rpa_runs_service(context).await?;
+                Ok(Value::Null)
+            }
+            .await
+        }
 
         _ => return None,
     };
@@ -1021,6 +1084,78 @@ mod tests {
         call(&context, "accounts/delete", json!({ "uuid": account })).await;
         call(&context, "proxies/delete", json!({ "uuid": proxy })).await;
         call(&context, "templates/delete", json!({ "uuid": template })).await;
+        let environment = "11111111-1111-4111-8111-111111111111";
+        let run = call(
+            &context,
+            "rpa/runs/start",
+            json!({
+                "task_uuid": task,
+                "environment_uuid": environment,
+                "environment_name": "env",
+                "trigger_source": "manual",
+                "total_steps": 2,
+            }),
+        )
+        .await;
+        let run_uuid = run["uuid"].as_str().unwrap().to_string();
+        assert_eq!(call(&context, "rpa/tasks/stats", json!({})).await["running"], 1);
+        let finish = json!({
+            "uuid": run_uuid,
+            "status": "completed",
+            "completed_steps": 2,
+            "failed_steps": 0,
+            "duration_ms": 1234,
+            "result_summary": "{}",
+            "logs": [{ "step": "a" }],
+        });
+        call(&context, "rpa/runs/finish", finish.clone()).await;
+        // 重复结束不会重复计数
+        call(&context, "rpa/runs/finish", finish).await;
+        call(&context, "rpa/tasks/status", json!({ "uuid": task, "status": "completed" })).await;
+        let detail = call(&context, "rpa/runs/detail", json!({ "uuid": run_uuid })).await;
+        assert_eq!(detail["status"], "completed");
+        assert_eq!(detail["duration_ms"], 1234);
+        assert_eq!(detail["logs"][0]["step"], "a");
+        assert_eq!(detail["environment_uuid"], environment);
+        let runs = call(
+            &context,
+            "rpa/runs/list",
+            json!({ "task_uuid": task, "page": 1, "page_size": 20 }),
+        )
+        .await;
+        assert_eq!(runs["total"], 1);
+        assert!(runs["items"][0]["logs"].is_null());
+        let reloaded = call(&context, "rpa/tasks/detail", json!({ "uuid": task })).await;
+        assert_eq!(reloaded["task"]["run_count"], 1);
+        assert_eq!(reloaded["task"]["success_count"], 1);
+        assert_eq!(reloaded["task"]["status"], "completed");
+
+        // 中断的运行在下次启动时收尾
+        call(
+            &context,
+            "rpa/runs/start",
+            json!({
+                "task_uuid": task,
+                "environment_uuid": environment,
+                "trigger_source": "scheduled",
+                "total_steps": 1,
+            }),
+        )
+        .await;
+        call(&context, "rpa/runs/recover", json!({})).await;
+        assert_eq!(call(&context, "rpa/tasks/stats", json!({})).await["running"], 0);
+
+        // 定时：保存时算出下次时间；还没到不会返回
+        call(
+            &context,
+            "rpa/tasks/update",
+            json!({ "uuid": task, "trigger_type": "scheduled", "schedule": "daily" }),
+        )
+        .await;
+        let scheduled = call(&context, "rpa/tasks/detail", json!({ "uuid": task })).await;
+        assert!(scheduled["task"]["next_run_at"].is_string());
+        assert_eq!(call(&context, "rpa/tasks/due", json!({})).await["uuids"], json!([]));
+
         call(&context, "rpa/tasks/delete", json!({ "uuid": task })).await;
     }
 }

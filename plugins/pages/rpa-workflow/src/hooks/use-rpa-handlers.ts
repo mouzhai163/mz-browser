@@ -1,10 +1,12 @@
 ﻿import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import type { RpaTask } from '../types';
 import { useRpaOperations } from './use-rpa-operations';
 import { useRpaSelection } from './use-rpa-selection';
 import { useRpaExecution } from './use-rpa-execution';
+import { startRpaExecution } from '../runtime/execution-manager';
 
 interface UseRpaHandlersParams {
   tasks: RpaTask[];
@@ -25,6 +27,10 @@ interface UseRpaHandlersReturn {
   handleDuplicate: (id: string) => Promise<void>;
   handleExport: (id: string, name: string) => void;
   handleViewLogs: (id: string) => void;
+  runsDrawer: {
+    task: { id: string; name: string } | null;
+    closeDrawer: () => void;
+  };
   handleBatchRun: () => Promise<void>;
   handleBatchDelete: () => void;
   deleteDialog: {
@@ -52,6 +58,7 @@ interface UseRpaHandlersReturn {
 export function useRpaHandlers(params: UseRpaHandlersParams): UseRpaHandlersReturn {
   const { tasks, paginatedTasks, onRefresh } = params;
   const navigate = useNavigate();
+  const { t } = useTranslation('rpa');
 
   const operations = useRpaOperations({
     onSuccess: () => {
@@ -59,7 +66,7 @@ export function useRpaHandlers(params: UseRpaHandlersParams): UseRpaHandlersRetu
     },
   });
 
-  const execution = useRpaExecution({ tasks });
+  const execution = useRpaExecution({ tasks, onChange: () => void onRefresh() });
   const selection = useRpaSelection({ paginatedTasks });
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -67,6 +74,7 @@ export function useRpaHandlers(params: UseRpaHandlersParams): UseRpaHandlersRetu
   const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = useState(false);
   const [deletingTask, setDeletingTask] = useState<{ id: string; name: string } | null>(null);
   const [exportingTask, setExportingTask] = useState<{ id: string; name: string } | null>(null);
+  const [runsTask, setRunsTask] = useState<{ id: string; name: string } | null>(null);
 
   const handleCreateTask = useCallback(() => {
     navigate('/rpa/create');
@@ -132,13 +140,13 @@ export function useRpaHandlers(params: UseRpaHandlersParams): UseRpaHandlersRetu
     [operations]
   );
 
-  const handleViewLogs = useCallback((id: string) => {
-    if (execution.isTaskExecuting(id)) {
-      execution.executionDrawer.openDrawer();
-      return;
-    }
-    toast.info(`View execution logs for task ${id}`);
-  }, [execution]);
+  const handleViewLogs = useCallback(
+    (id: string) => {
+      const task = tasks.find((item) => item.id === id);
+      if (task) setRunsTask({ id: task.id, name: task.name });
+    },
+    [tasks]
+  );
 
   const handleViewExecution = useCallback(
     (id: string) => {
@@ -148,8 +156,16 @@ export function useRpaHandlers(params: UseRpaHandlersParams): UseRpaHandlersRetu
   );
 
   const handleBatchRun = useCallback(async () => {
-    toast.info('批量执行将在正式执行抽屉完成后再接入');
-  }, []);
+    const ids = Array.from(selection.selectedIds);
+    const results = await Promise.allSettled(ids.map((id) => startRpaExecution(id)));
+    const started = results.filter((result) => result.status === 'fulfilled').length;
+    if (started > 0) toast.success(t('toast.batchRunStarted', { count: started }));
+    const failure = results.find((result) => result.status === 'rejected');
+    if (failure?.status === 'rejected') {
+      toast.error(failure.reason instanceof Error ? failure.reason.message : String(failure.reason));
+    }
+    selection.clearSelection();
+  }, [selection, t]);
 
   const handleBatchDelete = useCallback(() => {
     setBatchDeleteDialogOpen(true);
@@ -178,6 +194,10 @@ export function useRpaHandlers(params: UseRpaHandlersParams): UseRpaHandlersRetu
     handleDuplicate,
     handleExport,
     handleViewLogs,
+    runsDrawer: {
+      task: runsTask,
+      closeDrawer: () => setRunsTask(null),
+    },
     handleBatchRun,
     handleBatchDelete,
     deleteDialog: {

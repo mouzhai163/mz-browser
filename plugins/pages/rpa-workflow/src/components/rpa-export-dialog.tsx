@@ -39,9 +39,8 @@ export function RpaExportDialog({ open, task, onOpenChange, onConfirm }: RpaExpo
       header={{
         icon: Download,
         iconColor: 'text-primary',
-        title: t('dialog.export.title', { defaultValue: '导出 RPA 任务' }),
+        title: t('dialog.export.title'),
         description: t('dialog.export.description', {
-          defaultValue: '将导出 {{name}} 的完整配置数据。',
           name: task?.name || '-',
         }),
         gradient: 'bg-gradient-to-r from-primary/10 via-blue-500/10 to-primary/10',
@@ -56,12 +55,10 @@ export function RpaExportDialog({ open, task, onOpenChange, onConfirm }: RpaExpo
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-foreground">
-              {t('dialog.export.fileFormat', { defaultValue: '导出文件格式' })}
+              {t('dialog.export.fileFormat')}
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {t('dialog.export.fileFormatDesc', {
-                defaultValue: '将以 JSON 文件导出，并保存到你选择的位置。',
-              })}
+              {t('dialog.export.fileFormatDesc')}
             </p>
           </div>
         </div>
@@ -70,18 +67,18 @@ export function RpaExportDialog({ open, task, onOpenChange, onConfirm }: RpaExpo
       <FormattedDialogFooter>
         <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} disabled={exporting}>
           <X className="mr-1.5 h-4 w-4" />
-          {t('dialog.export.cancel', { defaultValue: '取消' })}
+          {t('dialog.export.cancel')}
         </Button>
         <Button size="sm" onClick={handleExport} disabled={exporting || !task}>
           {exporting ? (
             <>
               <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-              {t('dialog.export.exporting', { defaultValue: '导出中...' })}
+              {t('dialog.export.exporting')}
             </>
           ) : (
             <>
               <Download className="mr-1.5 h-4 w-4" />
-              {t('dialog.export.confirm', { defaultValue: '导出' })}
+              {t('dialog.export.confirm')}
             </>
           )}
         </Button>

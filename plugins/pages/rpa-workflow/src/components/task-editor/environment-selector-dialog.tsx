@@ -166,8 +166,8 @@ export function EnvironmentSelectorDialog({
     }
   };
 
-  const statusRunningLabel = t('editor.environments.running', { defaultValue: '运行中' });
-  const statusReadyLabel = t('editor.environments.ready', { defaultValue: '就绪' });
+  const statusRunningLabel = t('editor.environments.running');
+  const statusReadyLabel = t('editor.environments.ready');
 
   return (
     <FormattedDialog
@@ -176,9 +176,7 @@ export function EnvironmentSelectorDialog({
       header={{
         icon: BadgeCheck,
         title: t('editor.environments.selectTitle'),
-        description: t('editor.environments.selectHint', {
-          defaultValue: '选择需要绑定到当前任务的环境，可多选。',
-        }),
+        description: t('editor.environments.selectHint'),
       }}
       contentClassName="space-y-3"
     >
@@ -197,7 +195,6 @@ export function EnvironmentSelectorDialog({
         <span>
           {t('editor.environments.selected', {
             count: localSelectedIds.length,
-            defaultValue: `已选择 ${localSelectedIds.length} 个环境`,
           })}
         </span>
       </div>
@@ -211,12 +208,8 @@ export function EnvironmentSelectorDialog({
           title={t('editor.environments.noResults')}
           description={
             searchQuery.trim()
-              ? t('editor.environments.searchEmptyDescription', {
-                  defaultValue: '没有找到匹配的环境，请尝试调整搜索关键词。',
-                })
-              : t('editor.environments.emptyDescription', {
-                  defaultValue: '当前没有可用环境，请先在环境管理中创建环境。',
-                })
+              ? t('editor.environments.searchEmptyDescription')
+              : t('editor.environments.emptyDescription')
           }
         />
       ) : (
@@ -248,14 +241,14 @@ export function EnvironmentSelectorDialog({
                 {loadingMore ? (
                   <>
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    加载中
+                    {t('editor.environments.loadingMore')}
                   </>
                 ) : (
-                  '加载更多'
+                  t('editor.environments.loadMore')
                 )}
               </Button>
             ) : (
-              <span className="text-xs text-muted-foreground">没有更多环境了</span>
+              <span className="text-xs text-muted-foreground">{t('editor.environments.noMore')}</span>
             )}
           </div>
         </>

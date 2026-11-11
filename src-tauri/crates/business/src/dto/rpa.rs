@@ -68,6 +68,9 @@ pub struct RpaTaskRunDto {
     pub id: i64,
     pub uuid: Uuid,
     pub task_uuid: Uuid,
+    pub environment_uuid: Option<Uuid>,
+    pub environment_name: Option<String>,
+    pub trigger_source: String,
     pub status: String,
     pub total_steps: i32,
     pub completed_steps: i32,
@@ -78,4 +81,14 @@ pub struct RpaTaskRunDto {
     pub result_summary: Option<String>,
     pub error_message: Option<String>,
     pub logs: Option<serde_json::Value>,
+}
+
+/// RPA 任务统计 DTO
+#[derive(Debug, Clone, FromRow, Serialize)]
+pub struct RpaTaskStatsDto {
+    pub total: i64,
+    pub running: i64,
+    pub completed: i64,
+    pub failed: i64,
+    pub scheduled: i64,
 }

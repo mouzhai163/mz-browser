@@ -117,6 +117,7 @@ impl ServerHandler for McpServer {
         }
         if access.manage_tools_enabled {
             text.push_str(" Management is enabled: you can create, change, start, stop and delete environments, groups, proxies and tags. Confirm destructive actions with the user.");
+            text.push_str(" RPA tasks can be edited too (read mz_rpa_step_reference first). Running one needs page actions and every bound environment authorized; script and upload steps need full page access.");
         }
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(text)
     }

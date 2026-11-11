@@ -29,8 +29,8 @@ export function useRpaTasks(params: UseRpaTasksParams): UseRpaTasksReturn {
   const [resolvedPage, setResolvedPage] = useState(page);
   const [resolvedPageSize, setResolvedPageSize] = useState(pageSize);
 
+  // 手动刷新和运行状态变化时不显示骨架屏，否则运行中列表会一直闪
   const fetchTasks = useCallback(async () => {
-    setLoading(true);
     setError(null);
     try {
       const data = await listRpaTasksPage({
@@ -50,7 +50,7 @@ export function useRpaTasks(params: UseRpaTasksParams): UseRpaTasksReturn {
       setResolvedPage(data.page);
       setResolvedPageSize(data.page_size);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '未知错误');
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -83,7 +83,7 @@ export function useRpaTasks(params: UseRpaTasksParams): UseRpaTasksReturn {
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : '未知错误');
+          setError(e instanceof Error ? e.message : String(e));
         }
       } finally {
         if (!cancelled) {

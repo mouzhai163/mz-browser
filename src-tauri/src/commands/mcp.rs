@@ -54,6 +54,16 @@ pub async fn get_mcp_access_token(app: AppHandle) -> Result<String, String> {
     Ok(load_config(&app)?.access_token)
 }
 
+/// 主窗口对 MCP 的 RPA 请求的回复
+#[tauri::command]
+pub fn mcp_rpa_respond(id: String, data: Option<serde_json::Value>, error: Option<String>) {
+    let reply = match error {
+        Some(message) => Err(message),
+        None => Ok(data.unwrap_or(serde_json::Value::Null)),
+    };
+    crate::mcp::rpa_bridge::respond(&id, reply);
+}
+
 #[tauri::command]
 pub async fn rotate_mcp_access_token(app: AppHandle) -> Result<(), String> {
     let mut config = load_config(&app)?;

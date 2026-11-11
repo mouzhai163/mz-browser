@@ -7,7 +7,6 @@ import {
   MoreVertical,
   Copy,
   Clock,
-  Zap,
   Hand,
   Monitor,
   FileText,
@@ -73,7 +72,7 @@ export function RpaTableRow({
         className: 'bg-secondary text-muted-foreground border-border',
       },
       running: {
-        label: isStopping ? '停止中' : t('status.running'),
+        label: isStopping ? t('execution.status.stopping') : t('status.running'),
         className: 'bg-amber-500/10 text-amber-500 border-amber-500/30',
       },
       completed: {
@@ -99,8 +98,6 @@ export function RpaTableRow({
         return <Hand className="h-3.5 w-3.5 text-muted-foreground" />;
       case 'scheduled':
         return <Clock className="h-3.5 w-3.5 text-blue-500" />;
-      case 'event':
-        return <Zap className="h-3.5 w-3.5 text-amber-500" />;
     }
   };
 
@@ -109,16 +106,14 @@ export function RpaTableRow({
       case 'manual':
         return t('trigger.manual');
       case 'scheduled':
-        return task.schedule || t('trigger.scheduled');
-      case 'event':
-        return t('trigger.event');
+        return task.schedule ? t(`editor.trigger.${task.schedule}`) : t('trigger.scheduled');
     }
   };
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return '-';
     const date = new Date(dateString);
-    return date.toLocaleString('zh-CN', {
+    return date.toLocaleString(undefined, {
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
@@ -179,7 +174,7 @@ export function RpaTableRow({
           <button
             onClick={() => onStop?.(task.id)}
             className="h-7 w-7 flex items-center justify-center cursor-pointer transition-all border bg-amber-500/10 text-amber-500 border-amber-500/30 hover:bg-amber-500/20"
-            title={isStopping ? '停止中' : t('table.actions.stop')}
+            title={isStopping ? t('execution.status.stopping') : t('table.actions.stop')}
           >
             {isStopping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />}
           </button>
@@ -197,7 +192,7 @@ export function RpaTableRow({
           onClick={() => onViewExecution?.(task.id)}
           disabled={!canViewExecution}
           className="h-7 w-7 flex items-center justify-center transition-all border bg-secondary/40 text-muted-foreground border-border enabled:cursor-pointer enabled:hover:bg-accent enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-          title="查看执行"
+          title={t('table.actions.viewExecution')}
         >
           <Eye className="h-3.5 w-3.5" />
         </button>
@@ -230,7 +225,7 @@ export function RpaTableRow({
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onExport?.(task.id, task.name)} className="cursor-pointer">
               <Download className="w-4 h-4 mr-2" />
-              <span>{t('table.actions.export', { defaultValue: '导出' })}</span>
+              <span>{t('table.actions.export')}</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem

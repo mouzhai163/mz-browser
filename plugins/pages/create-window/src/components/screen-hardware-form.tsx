@@ -202,8 +202,8 @@ export function ScreenHardwareForm({
 
       {/* 硬件配置分隔线 */}
       <div className="pt-2 border-t border-border space-y-4">
-        {/* CPU & 内存 */}
-        <div className="grid grid-cols-2 gap-x-12 gap-y-4">
+        {/* CPU & 内存：各占一行。CPU 有 8 档，窗口窄时半栏放不下，会和右边挤在一起 */}
+        <div className="space-y-4">
           <div className="flex items-center justify-between gap-4">
             <Label className="text-xs shrink-0">
               {t('deviceSettings.hardwareConcurrency')}

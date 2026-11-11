@@ -52,7 +52,7 @@ export function NumberStepInput({
           type="button"
           className="inline-flex flex-1 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
           onClick={() => onChange(value + step)}
-          aria-label={increaseLabel ?? '增加数值'}
+          aria-label={increaseLabel}
         >
           <ChevronUp className="h-3.5 w-3.5" />
         </button>
@@ -60,7 +60,7 @@ export function NumberStepInput({
           type="button"
           className="inline-flex flex-1 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
           onClick={() => onChange(Math.max(min, value - step))}
-          aria-label={decreaseLabel ?? '减少数值'}
+          aria-label={decreaseLabel}
         >
           <ChevronDown className="h-3.5 w-3.5" />
         </button>

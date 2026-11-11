@@ -1,566 +1,476 @@
 ﻿import { open as openFileDialog } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
-import { Settings, Trash2 } from 'lucide-react';
+import { Crosshair, Loader2, Settings } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { NumberStepInput } from '../number-step-input';
-import type { FlowStep } from './flow-canvas';
+import type { EditorStep } from '../../lib/step-tree';
+import type { StepPreview } from '../../hooks/use-editor-run';
+import { NAMED_KEYS } from '../../runtime/human-input';
+import type { RpaValidationCode } from '../../runtime/validate-workflow';
 
 interface PropertyPanelProps {
-  step: FlowStep | null;
-  onUpdateStep: (step: FlowStep) => void;
-  onDeleteStep: (id: string) => void;
-  embedded?: boolean;
+  step: EditorStep | null;
+  preview?: StepPreview;
+  issue?: RpaValidationCode;
+  picking: boolean;
+  pickDisabled: boolean;
+  onUpdateStep: (step: EditorStep, mergeKey?: string) => void;
+  onPick: (step: EditorStep) => void;
 }
 
-export function PropertyPanel({ step, onUpdateStep, onDeleteStep, embedded = false }: PropertyPanelProps) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
+      {children}
+    </div>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: Array<[string, string]>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Field label={label}>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="h-8 w-full text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map(([optionValue, optionLabel]) => (
+            <SelectItem key={optionValue} value={optionValue}>
+              {optionLabel}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </Field>
+  );
+}
+
+function SwitchField({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <Label className="text-xs">{label}</Label>
+      <Switch checked={checked} onCheckedChange={onChange} />
+    </div>
+  );
+}
+
+const SELECTOR_TYPES = ['css', 'xpath', 'text', 'role', 'label', 'placeholder', 'testid'] as const;
+
+export function PropertyPanel({ step, preview, issue, picking, pickDisabled, onUpdateStep, onPick }: PropertyPanelProps) {
   const { t } = useTranslation('rpa');
 
   if (!step) {
     return (
-      <div className={embedded ? 'bg-background flex flex-col min-h-0 overflow-hidden h-full' : 'w-72 border-l border-border bg-background flex flex-col min-h-0 overflow-hidden'}>
-        {!embedded ? (
-          <div className="px-3 py-2 border-b border-border shrink-0">
-            <h3 className="text-xs font-semibold text-foreground">{t('editor.properties')}</h3>
-          </div>
-        ) : null}
-        <div className="flex-1 flex items-center justify-center p-4 min-h-0">
-          <div className="text-center">
-            <Settings className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-            <p className="text-xs text-muted-foreground">{t('editor.selectStepToEdit')}</p>
-          </div>
-        </div>
+      <div className="flex h-full min-h-0 flex-col items-center justify-center overflow-hidden bg-background p-4">
+        <Settings className="mx-auto mb-2 h-8 w-8 text-muted-foreground/30" />
+        <p className="text-xs text-muted-foreground">{t('editor.selectStepToEdit')}</p>
       </div>
     );
   }
 
-  const handleConfigChange = (key: string, value: unknown) => {
-    onUpdateStep({
-      ...step,
-      config: {
-        ...step.config,
-        [key]: value,
-      },
-    });
-  };
+  const config = step.config;
+  const text = (key: string, fallback = '') => (typeof config[key] === 'string' ? (config[key] as string) : fallback);
+  const number = (key: string, fallback: number) => (typeof config[key] === 'number' ? (config[key] as number) : fallback);
+  const set = (key: string, value: unknown) => onUpdateStep({ ...step, config: { ...config, [key]: value } });
+  // 连续打字合并成一步撤销
+  const typeInto = (key: string, value: string) =>
+    onUpdateStep({ ...step, config: { ...config, [key]: value } }, `${step.id}:${key}`);
 
-  const hasRecordedSelector = typeof step.config.selector === 'string' && step.config.selector.trim();
+  const textField = (key: string, label: string, placeholder?: string) => (
+    <Field label={label}>
+      <Input
+        value={text(key)}
+        onChange={(event) => typeInto(key, event.target.value)}
+        placeholder={placeholder}
+        className="h-8 text-xs"
+      />
+    </Field>
+  );
 
-  const clearRecordedTarget = () => {
-    onUpdateStep({
-      ...step,
-      config: {
-        ...step.config,
-        selector: '',
-        selectorCandidates: [],
-        selectorSnapshot: undefined,
-      },
-    });
-  };
+  const numberField = (key: string, label: string, fallback: number, min: number, suffix?: string) => (
+    <Field label={label}>
+      <div className="flex items-center gap-2">
+        <NumberStepInput
+          value={number(key, fallback)}
+          min={min}
+          onChange={(value) => set(key, Math.max(min, Math.trunc(value)))}
+          className="w-full"
+          inputClassName="w-full px-3 text-left text-xs"
+          decreaseLabel={t('editor.config.decrease', { label })}
+          increaseLabel={t('editor.config.increase', { label })}
+        />
+        {suffix ? <span className="text-xs text-muted-foreground">{suffix}</span> : null}
+      </div>
+    </Field>
+  );
 
-  const renderRecordedTargetAction = () => {
-    if (!hasRecordedSelector) {
-      return null;
-    }
+  const timeoutField = numberField('timeout', t('editor.config.elementTimeout'), 10000, 0, 'ms');
 
+  const targetField = () => {
+    const by = text('selectorBy') || (text('selector').startsWith('/') ? 'xpath' : 'css');
+    const candidates = Array.isArray(config.selectorCandidates) ? config.selectorCandidates.length : 0;
+    const inFrame = Array.isArray(config.selectorFrames) && config.selectorFrames.length > 0;
     return (
-      <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-        <span className="text-xs text-muted-foreground">
-          {t('editor.condition.targetRecorded', { defaultValue: '已记录目标' })}
-        </span>
+      <Field label={t('editor.config.selector')}>
+        <div className="flex gap-1.5">
+          <Select value={by} onValueChange={(value) => set('selectorBy', value)}>
+            <SelectTrigger className="h-8 w-24 shrink-0 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SELECTOR_TYPES.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {t(`editor.config.selectorTypes.${type}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            value={text('selector')}
+            onChange={(event) =>
+              onUpdateStep(
+                {
+                  ...step,
+                  config: {
+                    ...config,
+                    selector: event.target.value,
+                    selectorCandidates: [],
+                    selectorFrames: [],
+                    similarSelector: '',
+                    similarCount: 0,
+                  },
+                },
+                `${step.id}:selector`
+              )
+            }
+            placeholder={t('editor.config.selectorPlaceholder')}
+            className="h-8 min-w-0 flex-1 text-xs"
+          />
+        </div>
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="h-7 px-2 text-[10px]"
-          onClick={clearRecordedTarget}
+          className="h-7 w-full gap-1.5 text-xs"
+          disabled={pickDisabled}
+          onClick={() => onPick(step)}
         >
-          {t('editor.condition.clearTarget', { defaultValue: '清除目标' })}
+          {picking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Crosshair className="h-3.5 w-3.5" />}
+          {picking ? t('editor.config.picking') : t('editor.config.pick')}
         </Button>
-      </div>
+        {candidates > 0 || inFrame ? (
+          <p className="text-[11px] text-muted-foreground">
+            {inFrame ? `${t('editor.config.inFrame')} ` : ''}
+            {candidates > 0 ? t('editor.config.candidates', { count: candidates }) : ''}
+          </p>
+        ) : null}
+      </Field>
     );
   };
 
   const handlePickUploadFile = async () => {
-    const selected = await openFileDialog({
-      multiple: false,
-      directory: false,
-    });
-
-    if (typeof selected !== 'string' || !selected.trim()) {
-      return;
-    }
-
-    onUpdateStep({
-      ...step,
-      config: {
-        ...step.config,
-        filePath: selected,
-      },
-    });
+    const selected = await openFileDialog({ multiple: false, directory: false });
+    if (typeof selected === 'string' && selected.trim()) set('filePath', selected);
   };
 
-  const renderStepConfig = () => {
+  const outputField = textField('outputKey', t('editor.config.outputKey'), t('editor.config.outputKeyPlaceholder'));
+  const valuePreview = (
+    <Field label={t('editor.config.resultPreview')}>
+      <div className="break-all rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+        {preview?.value || t('editor.config.noPreview')}
+      </div>
+    </Field>
+  );
+
+  const renderConfig = () => {
     switch (step.type) {
-      case 'click':
-        return (
-          <>
-            <div className="space-y-2">
-              <Label className="text-xs">{t('editor.config.selector')}</Label>
-              <Input
-                value={(step.config.selector as string) || ''}
-                onChange={(e) => handleConfigChange('selector', e.target.value)}
-                placeholder="#button, .class, xpath..."
-                className="h-8 text-xs"
-              />
-              {renderRecordedTargetAction()}
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs">{t('editor.config.clickType')}</Label>
-              <Select
-                value={(step.config.clickType as string) || 'single'}
-                onValueChange={(v) => handleConfigChange('clickType', v)}
-              >
-                <SelectTrigger className="h-8 text-xs w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="single">{t('editor.config.singleClick')}</SelectItem>
-                  <SelectItem value="double">{t('editor.config.doubleClick')}</SelectItem>
-                  <SelectItem value="right">{t('editor.config.rightClick')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center justify-between">
-              <Label className="text-xs">{t('editor.config.waitForElement')}</Label>
-              <Switch
-                checked={(step.config.waitForElement as boolean) ?? true}
-                onCheckedChange={(v) => handleConfigChange('waitForElement', v)}
-              />
-            </div>
-          </>
-        );
-
-      case 'input':
-        return (
-          <>
-            <div className="space-y-2">
-              <Label className="text-xs">{t('editor.config.selector')}</Label>
-              <Input
-                value={(step.config.selector as string) || ''}
-                onChange={(e) => handleConfigChange('selector', e.target.value)}
-                placeholder="#input, .class, xpath..."
-                className="h-8 text-xs"
-              />
-              {renderRecordedTargetAction()}
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs">{t('editor.config.inputText')}</Label>
-              <Textarea
-                value={(step.config.text as string) || ''}
-                onChange={(e) => handleConfigChange('text', e.target.value)}
-                placeholder={t('editor.config.inputTextPlaceholder')}
-                className="text-xs min-h-[60px] resize-none"
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <Label className="text-xs">{t('editor.config.clearFirst')}</Label>
-              <Switch
-                checked={(step.config.clearFirst as boolean) ?? true}
-                onCheckedChange={(v) => handleConfigChange('clearFirst', v)}
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <Label className="text-xs">{t('editor.config.typeSlowly')}</Label>
-              <Switch
-                checked={(step.config.typeSlowly as boolean) ?? false}
-                onCheckedChange={(v) => handleConfigChange('typeSlowly', v)}
-              />
-            </div>
-          </>
-        );
-
-      case 'screenshot':
-        return (
-          <>
-            <div className="space-y-2">
-              <Label className="text-xs">{t('editor.config.captureMode', { defaultValue: '截图模式' })}</Label>
-              <Select
-                value={(step.config.captureMode as string) || 'viewport'}
-                onValueChange={(v) => handleConfigChange('captureMode', v)}
-              >
-                <SelectTrigger className="h-8 text-xs w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="viewport">{t('editor.config.viewportScreenshot', { defaultValue: '视口截图' })}</SelectItem>
-                  <SelectItem value="full_page">{t('editor.config.fullPageScreenshot', { defaultValue: '全页截图' })}</SelectItem>
-                  <SelectItem value="element">{t('editor.config.elementScreenshot', { defaultValue: '区域截图' })}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {(step.config.captureMode as string) === 'element' && (
-              <div className="space-y-2">
-                <div className="rounded-md border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">
-                  {t('editor.config.elementScreenshotHint', { defaultValue: '运行时在打开的浏览器中点击目标区域，系统会自动记录并提交。' })}
-                </div>
-                {renderRecordedTargetAction()}
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label className="text-xs">{t('editor.config.screenshotPreview', { defaultValue: '截图预览' })}</Label>
-              {typeof step.config.lastScreenshot === 'string' && step.config.lastScreenshot ? (
-                <div className="rounded-md border border-border overflow-hidden bg-muted/20">
-                  <img
-                    src={step.config.lastScreenshot as string}
-                    alt={t('editor.config.screenshotPreview', { defaultValue: '截图预览' })}
-                    className="block w-full h-auto"
-                  />
-                </div>
-              ) : (
-                <div className="rounded-md border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
-                  {t('editor.config.noScreenshotYet', { defaultValue: '运行后将在这里显示截图结果' })}
-                </div>
-              )}
-            </div>
-          </>
-        );
-
-      case 'scroll':
-        return (
-          <>
-            <div className="space-y-2">
-              <Label className="text-xs">{t('editor.config.scrollMode', { defaultValue: '滚动模式' })}</Label>
-              <Select
-                value={(step.config.scrollMode as string) || 'to_element'}
-                onValueChange={(v) => handleConfigChange('scrollMode', v)}
-              >
-                <SelectTrigger className="h-8 text-xs w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="to_element">{t('editor.config.scrollToElement', { defaultValue: '滚动到元素' })}</SelectItem>
-                  <SelectItem value="by_viewport">{t('editor.config.scrollByViewport', { defaultValue: '按屏滚动' })}</SelectItem>
-                  <SelectItem value="to_edge">{t('editor.config.scrollToEdge', { defaultValue: '滚动到边缘' })}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {((step.config.scrollMode as string) || 'to_element') === 'to_element' && (
-              <div className="space-y-2">
-                <div className="rounded-md border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">
-                  {t('editor.config.scrollElementHint', { defaultValue: '运行时在打开的浏览器中点击目标位置，系统会自动记录并提交。' })}
-                </div>
-                {renderRecordedTargetAction()}
-              </div>
-            )}
-            {((step.config.scrollMode as string) || 'to_element') === 'by_viewport' && (
-              <>
-                <div className="space-y-2">
-                  <Label className="text-xs">{t('editor.config.scrollDirection', { defaultValue: '滚动方向' })}</Label>
-                  <Select
-                    value={(step.config.direction as string) || 'down'}
-                    onValueChange={(v) => handleConfigChange('direction', v)}
-                  >
-                    <SelectTrigger className="h-8 text-xs w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="down">{t('editor.config.scrollDown', { defaultValue: '向下' })}</SelectItem>
-                      <SelectItem value="up">{t('editor.config.scrollUp', { defaultValue: '向上' })}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-xs">{t('editor.config.viewportCount', { defaultValue: '滚动屏数' })}</Label>
-                  <NumberStepInput
-                    value={(step.config.viewportCount as number) || 1}
-                    min={1}
-                    onChange={(value) => handleConfigChange('viewportCount', value)}
-                    inputClassName="w-12 text-xs"
-                    decreaseLabel="减少滚动屏数"
-                    increaseLabel="增加滚动屏数"
-                  />
-                </div>
-              </>
-            )}
-            {((step.config.scrollMode as string) || 'to_element') === 'to_edge' && (
-              <div className="space-y-2">
-                <Label className="text-xs">{t('editor.config.scrollEdge', { defaultValue: '边缘位置' })}</Label>
-                <Select
-                  value={(step.config.edge as string) || 'bottom'}
-                  onValueChange={(v) => handleConfigChange('edge', v)}
-                >
-                  <SelectTrigger className="h-8 text-xs w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="top">{t('editor.config.scrollTop', { defaultValue: '顶部' })}</SelectItem>
-                    <SelectItem value="bottom">{t('editor.config.scrollBottom', { defaultValue: '底部' })}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </>
-        );
-
       case 'navigate':
         return (
           <>
-            <div className="space-y-2">
-              <Label className="text-xs">{t('editor.config.url')}</Label>
-              <Input
-                value={(step.config.url as string) || ''}
-                onChange={(e) => handleConfigChange('url', e.target.value)}
-                placeholder="https://example.com"
-                className="h-8 text-xs"
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <Label className="text-xs">{t('editor.config.waitForLoad')}</Label>
-              <Switch
-                checked={(step.config.waitForLoad as boolean) ?? true}
-                onCheckedChange={(v) => handleConfigChange('waitForLoad', v)}
-              />
-            </div>
+            {textField('url', t('editor.config.url'), 'https://example.com')}
+            <SwitchField
+              label={t('editor.config.newTab')}
+              checked={config.newTab !== false}
+              onChange={(value) => set('newTab', value)}
+            />
+            <SwitchField
+              label={t('editor.config.waitForLoad')}
+              checked={config.waitForLoad !== false}
+              onChange={(value) => set('waitForLoad', value)}
+            />
           </>
         );
-
+      case 'click':
+        return (
+          <>
+            {targetField()}
+            <SelectField
+              label={t('editor.config.clickType')}
+              value={text('clickType', 'single')}
+              onChange={(value) => set('clickType', value)}
+              options={[
+                ['single', t('editor.config.singleClick')],
+                ['double', t('editor.config.doubleClick')],
+                ['right', t('editor.config.rightClick')],
+              ]}
+            />
+            {timeoutField}
+          </>
+        );
+      case 'hover':
+        return (
+          <>
+            {targetField()}
+            {timeoutField}
+          </>
+        );
+      case 'input':
+        return (
+          <>
+            {targetField()}
+            <Field label={t('editor.config.inputText')}>
+              <Textarea
+                value={text('text')}
+                onChange={(event) => typeInto('text', event.target.value)}
+                placeholder={t('editor.config.inputTextPlaceholder', { token: `{{${t('editor.variablePanel.variableToken')}}}` })}
+                className="min-h-[60px] resize-none text-xs"
+              />
+            </Field>
+            <SwitchField
+              label={t('editor.config.clearFirst')}
+              checked={config.clearFirst !== false}
+              onChange={(value) => set('clearFirst', value)}
+            />
+            {timeoutField}
+          </>
+        );
+      case 'press_key':
+        return (
+          <SelectField
+            label={t('editor.config.key')}
+            value={text('key', 'Enter')}
+            onChange={(value) => set('key', value)}
+            options={Object.keys(NAMED_KEYS).map((key) => [key, key])}
+          />
+        );
+      case 'select_option':
+        return (
+          <>
+            {targetField()}
+            <SelectField
+              label={t('editor.config.optionBy')}
+              value={text('optionBy', 'label')}
+              onChange={(value) => set('optionBy', value)}
+              options={[
+                ['label', t('editor.config.optionByLabel')],
+                ['value', t('editor.config.optionByValue')],
+              ]}
+            />
+            {textField('optionValue', t('editor.config.optionValue'))}
+            {timeoutField}
+          </>
+        );
+      case 'screenshot':
+        return (
+          <>
+            <SelectField
+              label={t('editor.config.captureMode')}
+              value={text('captureMode', 'viewport')}
+              onChange={(value) => set('captureMode', value)}
+              options={[
+                ['viewport', t('editor.config.viewportScreenshot')],
+                ['full_page', t('editor.config.fullPageScreenshot')],
+                ['element', t('editor.config.elementScreenshot')],
+              ]}
+            />
+            {config.captureMode === 'element' ? targetField() : null}
+            <Field label={t('editor.config.screenshotPreview')}>
+              {preview?.screenshot ? (
+                <img src={preview.screenshot} alt="" className="block h-auto w-full rounded-md border border-border" />
+              ) : (
+                <div className="rounded-md border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
+                  {t('editor.config.noPreview')}
+                </div>
+              )}
+            </Field>
+          </>
+        );
+      case 'scroll': {
+        const mode = text('scrollMode', 'to_element');
+        return (
+          <>
+            <SelectField
+              label={t('editor.config.scrollMode')}
+              value={mode}
+              onChange={(value) => set('scrollMode', value)}
+              options={[
+                ['to_element', t('editor.config.scrollToElement')],
+                ['by_viewport', t('editor.config.scrollByViewport')],
+                ['to_edge', t('editor.config.scrollToEdge')],
+              ]}
+            />
+            {mode === 'to_element' ? targetField() : null}
+            {mode === 'by_viewport' ? (
+              <>
+                <SelectField
+                  label={t('editor.config.scrollDirection')}
+                  value={text('direction', 'down')}
+                  onChange={(value) => set('direction', value)}
+                  options={[
+                    ['down', t('editor.config.scrollDown')],
+                    ['up', t('editor.config.scrollUp')],
+                  ]}
+                />
+                {numberField('viewportCount', t('editor.config.viewportCount'), 1, 1)}
+              </>
+            ) : null}
+            {mode === 'to_edge' ? (
+              <SelectField
+                label={t('editor.config.scrollEdge')}
+                value={text('edge', 'bottom')}
+                onChange={(value) => set('edge', value)}
+                options={[
+                  ['top', t('editor.config.scrollTop')],
+                  ['bottom', t('editor.config.scrollBottom')],
+                ]}
+              />
+            ) : null}
+          </>
+        );
+      }
       case 'select_tab':
-        return (
-          <div className="space-y-2">
-            <Label className="text-xs">
-              {t('editor.config.tabIndex', { defaultValue: '标签页位置' })}
-            </Label>
-            <NumberStepInput
-              value={(step.config.tabIndex as number) || 1}
-              min={1}
-              onChange={(value) => handleConfigChange('tabIndex', Math.max(1, Math.trunc(value)))}
-              className="w-full"
-              inputClassName="w-full px-3 text-left text-xs"
-              decreaseLabel="减少标签页位置"
-              increaseLabel="增加标签页位置"
-            />
-          </div>
-        );
-
       case 'close_tab':
+        return numberField('tabIndex', t('editor.config.tabIndex'), 1, 1);
+      case 'wait': {
+        const waitType = text('waitType', 'time');
         return (
-          <div className="space-y-2">
-            <Label className="text-xs">
-              {t('editor.config.tabIndex', { defaultValue: '标签页位置' })}
-            </Label>
-            <NumberStepInput
-              value={(step.config.tabIndex as number) || 1}
-              min={1}
-              onChange={(value) => handleConfigChange('tabIndex', Math.max(1, Math.trunc(value)))}
-              className="w-full"
-              inputClassName="w-full px-3 text-left text-xs"
-              decreaseLabel="减少标签页位置"
-              increaseLabel="增加标签页位置"
+          <>
+            <SelectField
+              label={t('editor.config.waitType')}
+              value={waitType}
+              onChange={(value) => set('waitType', value)}
+              options={[
+                ['time', t('editor.config.waitTime')],
+                ['element', t('editor.config.waitElement')],
+              ]}
             />
-          </div>
-        );
-
-      case 'wait':
-        return (
-          <>
-            <div className="space-y-2">
-              <Label className="text-xs">{t('editor.config.waitType', { defaultValue: '等待类型' })}</Label>
-              <Select
-                value={(step.config.waitType as string) || 'time'}
-                onValueChange={(v) => handleConfigChange('waitType', v)}
-              >
-                <SelectTrigger className="h-8 text-xs w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="time">{t('editor.config.waitTime', { defaultValue: '等待时间' })}</SelectItem>
-                  <SelectItem value="element">{t('editor.config.waitElement', { defaultValue: '等待元素' })}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {((step.config.waitType as string) || 'time') === 'time' && (
-              <div className="space-y-2">
-                <Label className="text-xs">{t('editor.config.duration', { defaultValue: '等待时长' })}</Label>
-                <div className="flex items-center gap-2">
-                  <NumberStepInput
-                    value={(step.config.duration as number) || 1000}
-                    min={0}
-                    onChange={(value) => handleConfigChange('duration', value)}
-                    className="w-full"
-                    inputClassName="w-full px-3 text-left text-xs"
-                    decreaseLabel="减少等待时长"
-                    increaseLabel="增加等待时长"
-                  />
-                  <span className="text-xs text-muted-foreground">ms</span>
-                </div>
-              </div>
-            )}
-            {((step.config.waitType as string) || 'time') === 'element' && (
-              <div className="space-y-2">
-                <div className="rounded-md border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">
-                  {t('editor.config.waitElementHint', { defaultValue: '运行时在打开的浏览器中点击等待目标，系统会自动记录并提交。' })}
-                </div>
-                {renderRecordedTargetAction()}
-              </div>
-            )}
+            {waitType === 'time' ? numberField('duration', t('editor.config.duration'), 1000, 0, 'ms') : null}
+            {waitType === 'element' ? (
+              <>
+                {targetField()}
+                {timeoutField}
+              </>
+            ) : null}
           </>
         );
-
-      case 'condition':
+      }
+      case 'condition': {
+        const conditionType = text('conditionType', 'element_visible');
         return (
           <>
-            <div className="space-y-2">
-              <Label className="text-xs">{t('editor.condition.typeLabel', { defaultValue: '判断类型' })}</Label>
-              <Select
-                value={(step.config.conditionType as string) || 'element_visible'}
-                onValueChange={(v) => handleConfigChange('conditionType', v)}
-              >
-                <SelectTrigger className="h-8 text-xs w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="element_visible">{t('editor.condition.elementVisible', { defaultValue: '页面元素可见' })}</SelectItem>
-                  <SelectItem value="text_present">{t('editor.condition.textPresent', { defaultValue: '页面文本出现' })}</SelectItem>
-                  <SelectItem value="url_contains">{t('editor.condition.urlContains', { defaultValue: '页面地址包含' })}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {((step.config.conditionType as string) || 'element_visible') === 'element_visible' && (
-              <div className="space-y-2">
-                <div className="rounded-md border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">
-                  {t('editor.condition.elementHint', { defaultValue: '运行时在打开的浏览器中点击判断目标，系统会自动记录并提交。' })}
-                </div>
-                {renderRecordedTargetAction()}
-              </div>
-            )}
-            {((step.config.conditionType as string) || 'element_visible') === 'text_present' && (
-              <div className="space-y-2">
-                <Label className="text-xs">{t('editor.condition.textValue', { defaultValue: '目标文本' })}</Label>
-                <Input
-                  value={(step.config.expectedText as string) || ''}
-                  onChange={(e) => handleConfigChange('expectedText', e.target.value)}
-                  placeholder={t('editor.condition.textPlaceholder', { defaultValue: '请输入目标文本' })}
-                  className="h-8 text-xs"
-                />
-              </div>
-            )}
-            {((step.config.conditionType as string) || 'element_visible') === 'url_contains' && (
-              <div className="space-y-2">
-                <Label className="text-xs">{t('editor.condition.urlValue', { defaultValue: '地址片段' })}</Label>
-                <Input
-                  value={(step.config.urlFragment as string) || ''}
-                  onChange={(e) => handleConfigChange('urlFragment', e.target.value)}
-                  placeholder={t('editor.condition.urlPlaceholder', { defaultValue: '请输入地址片段' })}
-                  className="h-8 text-xs"
-                />
-              </div>
-            )}
-            <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-3 text-xs text-muted-foreground">
-              {t('editor.condition.branchHint', { defaultValue: '条件节点支持“是/否”两个子节点，请在画布上分别连接分支。' })}
-            </div>
+            <SelectField
+              label={t('editor.condition.typeLabel')}
+              value={conditionType}
+              onChange={(value) => set('conditionType', value)}
+              options={[
+                ['element_visible', t('editor.condition.elementVisible')],
+                ['text_present', t('editor.condition.textPresent')],
+                ['url_contains', t('editor.condition.urlContains')],
+              ]}
+            />
+            {conditionType === 'element_visible' ? targetField() : null}
+            {conditionType === 'text_present' ? textField('expectedText', t('editor.condition.textValue')) : null}
+            {conditionType === 'url_contains' ? textField('urlFragment', t('editor.condition.urlValue')) : null}
           </>
         );
-
+      }
       case 'loop':
-        return (
-          <>
-            <div className="space-y-2">
-              <Label className="text-xs">{t('editor.config.iterations', { defaultValue: '循环次数' })}</Label>
-              <NumberStepInput
-                value={(step.config.iterations as number) || 3}
-                min={1}
-                onChange={(value) => handleConfigChange('iterations', Math.max(1, value))}
-                className="w-full"
-                inputClassName="w-full px-3 text-left text-xs"
-                decreaseLabel="减少循环次数"
-                increaseLabel="增加循环次数"
-              />
-            </div>
-            <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-3 text-xs text-muted-foreground">
-              {t('editor.loop.regionHint', { defaultValue: '循环节点是一个区域容器。将需要重复执行的节点拖入该区域，区域外连线表示循环完成后继续执行。' })}
-            </div>
-          </>
-        );
-
-      case 'break_loop':
-        return (
-          <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-3 text-xs text-muted-foreground">
-            {t('editor.stepSubtitleDefaults.breakLoop', {
-              defaultValue: '满足条件时立即退出当前循环',
-            })}
-          </div>
-        );
-
+        return numberField('iterations', t('editor.config.iterations'), 3, 1);
       case 'extract':
         return (
           <>
-            <div className="space-y-2">
-              <Label className="text-xs">提取类型</Label>
-              <Select
-                value={(step.config.extractType as string) || 'text'}
-                onValueChange={(v) => handleConfigChange('extractType', v)}
-              >
-                <SelectTrigger className="h-8 text-xs w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="text">文本</SelectItem>
-                  <SelectItem value="href">链接</SelectItem>
-                  <SelectItem value="value">输入值</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-xs">变量名</Label>
-              <Input
-                value={(step.config.outputKey as string) || ''}
-                onChange={(e) => handleConfigChange('outputKey', e.target.value)}
-                placeholder="例如：extract_ab12cd"
-                className="h-8 text-xs"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <div className="rounded-md border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">
-                运行时在打开的浏览器中点击提取目标，系统会自动记录并预览提取结果。
-              </div>
-              {renderRecordedTargetAction()}
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-xs">提取预览</Label>
-              <div className="rounded-md border border-border bg-muted/20 px-3 py-3 text-xs text-muted-foreground break-all">
-                {(step.config.previewValue as string) || '运行后将在这里显示提取结果'}
-              </div>
-            </div>
+            {targetField()}
+            <SelectField
+              label={t('editor.config.extractType')}
+              value={text('extractType', 'text')}
+              onChange={(value) => set('extractType', value)}
+              options={[
+                ['text', t('editor.config.extractText')],
+                ['href', t('editor.config.extractHref')],
+                ['value', t('editor.config.extractValue')],
+                ['html', t('editor.config.extractHtml')],
+                ['attribute', t('editor.config.extractAttribute')],
+              ]}
+            />
+            {config.extractType === 'attribute' ? textField('attribute', t('editor.config.attributeName')) : null}
+            <SwitchField
+              label={t('editor.config.extractAll')}
+              checked={config.extractAll === true}
+              onChange={(checked) =>
+                onUpdateStep({
+                  ...step,
+                  config: {
+                    ...config,
+                    extractAll: checked,
+                    // 先拾取后打开开关时，换成拾取时算好的同类选择器
+                    ...(checked && text('similarSelector')
+                      ? { selector: text('similarSelector'), selectorBy: 'css', selectorCandidates: [] }
+                      : {}),
+                  },
+                })
+              }
+            />
+            {config.extractAll === true ? (
+              <p className="text-[11px] text-muted-foreground">
+                {number('similarCount', 0) > 0 && text('selector') === text('similarSelector')
+                  ? t('editor.config.similarCount', { count: number('similarCount', 0) })
+                  : t('editor.config.extractAllHint')}
+              </p>
+            ) : null}
+            {outputField}
+            {timeoutField}
+            {valuePreview}
           </>
         );
-
+      case 'set_variable':
+        return (
+          <>
+            {textField('variableName', t('editor.config.variableName'))}
+            {textField('variableValue', t('editor.config.variableValue'))}
+          </>
+        );
       case 'upload':
         return (
           <>
-            <div className="space-y-2">
-              <Label className="text-xs">本地文件</Label>
+            {targetField()}
+            <Field label={t('editor.config.localFile')}>
               <div className="flex gap-2">
-                <Input
-                  value={(step.config.filePath as string) || ''}
-                  readOnly
-                  placeholder="请选择要上传的本地文件"
-                  className="h-8 text-xs"
-                />
+                <Input value={text('filePath')} readOnly className="h-8 text-xs" />
                 <Button
                   type="button"
                   variant="outline"
@@ -568,114 +478,53 @@ export function PropertyPanel({ step, onUpdateStep, onDeleteStep, embedded = fal
                   className="h-8 px-3 text-xs"
                   onClick={() => void handlePickUploadFile()}
                 >
-                  选择文件
+                  {t('editor.config.chooseFile')}
                 </Button>
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="rounded-md border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">
-                运行时在打开的浏览器中点击上传控件，系统会自动记录目标并提交文件。
-              </div>
-              {renderRecordedTargetAction()}
-            </div>
+            </Field>
+            {timeoutField}
           </>
         );
-
       case 'script':
         return (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs">{t('editor.config.localExecution', { defaultValue: '是否本地执行' })}</Label>
-              <Switch
-                checked={(step.config.executionMode as string) === 'local'}
-                onCheckedChange={(checked) =>
-                  handleConfigChange('executionMode', checked ? 'local' : 'browser')
-                }
-              />
-            </div>
-            <Label className="text-xs">{t('editor.config.script')}</Label>
-            <Textarea
-              value={(step.config.script as string) || ''}
-              onChange={(e) => handleConfigChange('script', e.target.value)}
-              placeholder="return document.title;"
-              className="h-[120px] w-full overflow-y-auto font-mono text-xs resize-none break-all whitespace-pre-wrap"
+          <>
+            <SwitchField
+              label={t('editor.config.localExecution')}
+              checked={config.executionMode === 'local'}
+              onChange={(checked) => set('executionMode', checked ? 'local' : 'browser')}
             />
-            <div className="space-y-2">
-              <Label className="text-xs">变量名</Label>
-              <Input
-                value={(step.config.outputKey as string) || ''}
-                onChange={(e) => handleConfigChange('outputKey', e.target.value)}
-                placeholder="例如：script_ab12cd"
-                className="h-8 text-xs"
+            <Field label={t('editor.config.script')}>
+              <Textarea
+                value={text('script')}
+                onChange={(event) => typeInto('script', event.target.value)}
+                placeholder="return document.title;"
+                className="h-[120px] w-full resize-none overflow-y-auto whitespace-pre-wrap break-all font-mono text-xs"
               />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs">执行结果预览</Label>
-              <div className="rounded-md border border-border bg-muted/20 px-3 py-3 text-xs text-muted-foreground break-all">
-                {(step.config.previewValue as string) || '运行后将在这里显示脚本执行结果'}
-              </div>
-            </div>
-          </div>
+            </Field>
+            {outputField}
+            {valuePreview}
+          </>
         );
-
       default:
-        return (
-          <div className="text-xs text-muted-foreground text-center py-4">
-            {t('editor.configNotAvailable')}
-          </div>
-        );
+        return <p className="py-2 text-center text-xs text-muted-foreground">{t('editor.configNotAvailable')}</p>;
     }
   };
 
   return (
-    <div className={embedded ? 'bg-background flex flex-1 min-h-0 flex-col overflow-hidden' : 'w-72 border-l border-border bg-background flex flex-col min-h-0 overflow-hidden'}>
-      {!embedded ? (
-        <div className="px-3 py-2 border-b border-border flex items-center justify-between shrink-0">
-          <h3 className="text-xs font-semibold text-foreground">{t('editor.properties')}</h3>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-            onClick={() => onDeleteStep(step.id)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      ) : null}
-
-      <ScrollArea className="flex-1 min-h-0 overflow-y-auto">
-        <div className="p-3 space-y-4">
-          {step ? (
-            <>
-              <div className="space-y-2">
-                <Label className="text-xs">{t('editor.config.stepName')}</Label>
-                <Input
-                  value={step.name}
-                  onChange={(e) => onUpdateStep({ ...step, name: e.target.value })}
-                  className="h-8 text-xs"
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <Label className="text-xs">{t('editor.config.enabled')}</Label>
-                <Switch
-                  checked={step.enabled}
-                  onCheckedChange={(v) => onUpdateStep({ ...step, enabled: v })}
-                />
-              </div>
-            </>
-          ) : null}
-
-          <div className="space-y-2">
-            <Label className="text-xs">{t('editor.stepConfig')}</Label>
-            <div className="space-y-3 rounded-md border border-border bg-muted/10 p-3">
-              {renderStepConfig()}
-            </div>
-          </div>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      <ScrollArea className="min-h-0 flex-1 overflow-y-auto">
+        <div className="space-y-3 p-3">
+          <Field label={t('editor.config.stepName')}>
+            <Input
+              value={step.name}
+              onChange={(event) => onUpdateStep({ ...step, name: event.target.value }, `${step.id}:name`)}
+              className="h-8 text-xs"
+            />
+          </Field>
+          {renderConfig()}
+          {issue ? <p className="text-[11px] text-warning">{t(`editor.validation.${issue}`)}</p> : null}
         </div>
       </ScrollArea>
     </div>
   );
 }
-

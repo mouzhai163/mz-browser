@@ -1,15 +1,16 @@
-use sqlx::Error;
+use chrono::{DateTime, Utc};
+use sqlx::{Error, Executor};
 use uuid::Uuid;
 
 use crate::database::{Db, Pool, placeholders};
 
-use crate::dto::{RpaTaskDto, RpaTaskEnvironmentDto, RpaTaskRunDto, RpaTaskStepDto};
+use crate::dto::{RpaTaskDto, RpaTaskEnvironmentDto, RpaTaskRunDto, RpaTaskStatsDto, RpaTaskStepDto};
 
 // ============ RPA Tasks ============
 
 /// 创建 RPA 任务
-pub async fn insert_rpa_task(
-    pool: &Pool<Db>,
+pub async fn insert_rpa_task<'e, E: Executor<'e, Database = Db>>(
+    pool: E,
     name: &str,
     description: Option<&str>,
     tags: Option<&serde_json::Value>,
@@ -116,8 +117,8 @@ pub async fn fetch_rpa_tasks_count(
 }
 
 /// 根据 UUID 查询 RPA 任务
-pub async fn fetch_rpa_task_by_uuid(
-    pool: &Pool<Db>,
+pub async fn fetch_rpa_task_by_uuid<'e, E: Executor<'e, Database = Db>>(
+    pool: E,
     task_uuid: Uuid,
 ) -> Result<Option<RpaTaskDto>, Error> {
     let rec = sqlx::query_as::<_, RpaTaskDto>(
@@ -139,8 +140,8 @@ pub async fn fetch_rpa_task_by_uuid(
 }
 
 /// 更新 RPA 任务
-pub async fn update_rpa_task(
-    pool: &Pool<Db>,
+pub async fn update_rpa_task<'e, E: Executor<'e, Database = Db>>(
+    pool: E,
     task_uuid: Uuid,
     name: Option<&str>,
     description: Option<&str>,
@@ -260,8 +261,8 @@ pub async fn batch_delete_rpa_tasks(pool: &Pool<Db>, task_uuids: &[Uuid]) -> Res
 // ============ RPA Task Steps ============
 
 /// 插入任务步骤
-pub async fn insert_rpa_task_step(
-    pool: &Pool<Db>,
+pub async fn insert_rpa_task_step<'e, E: Executor<'e, Database = Db>>(
+    pool: E,
     task_uuid: Uuid,
     step_type: &str,
     name: &str,
@@ -276,8 +277,9 @@ pub async fn insert_rpa_task_step(
     let uuid: Uuid = sqlx::query_scalar(
         r#"
         INSERT INTO rpa_task_steps (task_uuid, step_type, name, config, enabled,
-                                     position_x, position_y, sort_order)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                                     position_x, position_y, sort_order,
+                                     next_step_uuid, branch_config)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING uuid;
         "#,
     )
@@ -320,7 +322,7 @@ pub async fn fetch_rpa_task_steps(
 }
 
 /// 删除任务所有步骤
-pub async fn delete_rpa_task_steps(pool: &Pool<Db>, task_uuid: Uuid) -> Result<(), Error> {
+pub async fn delete_rpa_task_steps<'e, E: Executor<'e, Database = Db>>(pool: E, task_uuid: Uuid) -> Result<(), Error> {
     sqlx::query("DELETE FROM rpa_task_steps WHERE task_uuid = $1")
         .bind(task_uuid)
         .execute(pool)
@@ -332,8 +334,8 @@ pub async fn delete_rpa_task_steps(pool: &Pool<Db>, task_uuid: Uuid) -> Result<(
 // ============ RPA Task Environments ============
 
 /// 添加任务环境关联
-pub async fn insert_rpa_task_environment(
-    pool: &Pool<Db>,
+pub async fn insert_rpa_task_environment<'e, E: Executor<'e, Database = Db>>(
+    pool: E,
     task_uuid: Uuid,
     environment_uuid: Uuid,
     sort_order: Option<i32>,
@@ -375,7 +377,7 @@ pub async fn fetch_rpa_task_environments(
 }
 
 /// 删除任务所有环境关联
-pub async fn delete_rpa_task_environments(pool: &Pool<Db>, task_uuid: Uuid) -> Result<(), Error> {
+pub async fn delete_rpa_task_environments<'e, E: Executor<'e, Database = Db>>(pool: E, task_uuid: Uuid) -> Result<(), Error> {
     sqlx::query("DELETE FROM rpa_task_environments WHERE task_uuid = $1")
         .bind(task_uuid)
         .execute(pool)
@@ -386,41 +388,125 @@ pub async fn delete_rpa_task_environments(pool: &Pool<Db>, task_uuid: Uuid) -> R
 
 // ============ RPA Task Runs ============
 
-/// 创建任务执行记录
+/// 每个任务保留的运行记录条数
+const MAX_RUNS_PER_TASK: i64 = 200;
+
+const RUN_COLUMNS: &str = "id, uuid, task_uuid, environment_uuid, environment_name, trigger_source, \
+    status, total_steps, completed_steps, failed_steps, started_at, finished_at, duration_ms";
+
+/// 创建一条运行记录（一个环境一条），同时更新任务状态，并清理超出保留条数的旧记录。
+/// 返回新记录的 uuid 和被清理记录的 uuid（调用方要删掉它们的截图文件）。
 pub async fn insert_rpa_task_run(
     pool: &Pool<Db>,
     task_uuid: Uuid,
+    environment_uuid: Uuid,
+    environment_name: Option<&str>,
+    trigger_source: &str,
     total_steps: i32,
-) -> Result<Uuid, Error> {
+) -> Result<(Uuid, Vec<Uuid>), Error> {
+    let mut tx = pool.begin().await?;
+
     let uuid: Uuid = sqlx::query_scalar(
         r#"
-        INSERT INTO rpa_task_runs (task_uuid, status, total_steps, completed_steps, failed_steps)
-        VALUES ($1, 'running', $2, 0, 0)
+        INSERT INTO rpa_task_runs (task_uuid, environment_uuid, environment_name, trigger_source,
+                                   status, total_steps, completed_steps, failed_steps)
+        VALUES ($1, $2, $3, $4, 'running', $5, 0, 0)
         RETURNING uuid;
         "#,
     )
     .bind(task_uuid)
+    .bind(environment_uuid)
+    .bind(environment_name)
+    .bind(trigger_source)
     .bind(total_steps)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
 
-    // 更新任务最后运行时间和运行次数
     sqlx::query(
         r#"
         UPDATE rpa_tasks
-        SET last_run_at = CURRENT_TIMESTAMP,
+        SET status = 'running',
+            last_run_at = CURRENT_TIMESTAMP,
             run_count = COALESCE(run_count, 0) + 1
         WHERE uuid = $1
         "#,
     )
     .bind(task_uuid)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
 
-    Ok(uuid)
+    let pruned: Vec<Uuid> = sqlx::query_scalar(
+        r#"
+        DELETE FROM rpa_task_runs
+        WHERE task_uuid = $1
+          AND status != 'running'
+          AND id NOT IN (
+            SELECT id FROM rpa_task_runs WHERE task_uuid = $1 ORDER BY id DESC LIMIT $2
+          )
+        RETURNING uuid;
+        "#,
+    )
+    .bind(task_uuid)
+    .bind(MAX_RUNS_PER_TASK)
+    .fetch_all(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok((uuid, pruned))
 }
 
-/// 查询任务执行记录列表
+/// 结束一条运行记录。只有还在运行的记录才会被更新，重复调用不会重复计数。
+#[allow(clippy::too_many_arguments)]
+pub async fn finish_rpa_task_run(
+    pool: &Pool<Db>,
+    run_uuid: Uuid,
+    status: &str,
+    completed_steps: i32,
+    failed_steps: i32,
+    duration_ms: i64,
+    result_summary: Option<&str>,
+    error_message: Option<&str>,
+    logs: &serde_json::Value,
+) -> Result<(), Error> {
+    let mut tx = pool.begin().await?;
+
+    let task_uuid: Option<Uuid> = sqlx::query_scalar(
+        r#"
+        UPDATE rpa_task_runs
+        SET status = $1,
+            completed_steps = $2,
+            failed_steps = $3,
+            duration_ms = $4,
+            result_summary = $5,
+            error_message = $6,
+            logs = $7,
+            finished_at = CURRENT_TIMESTAMP
+        WHERE uuid = $8 AND status = 'running'
+        RETURNING task_uuid;
+        "#,
+    )
+    .bind(status)
+    .bind(completed_steps)
+    .bind(failed_steps)
+    .bind(duration_ms)
+    .bind(result_summary)
+    .bind(error_message)
+    .bind(logs)
+    .bind(run_uuid)
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    if let (Some(task_uuid), "completed") = (task_uuid, status) {
+        sqlx::query("UPDATE rpa_tasks SET success_count = COALESCE(success_count, 0) + 1 WHERE uuid = $1")
+            .bind(task_uuid)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    tx.commit().await
+}
+
+/// 查询任务运行记录列表（列表不带日志和提取数据，详情里才有）
 pub async fn fetch_rpa_task_runs(
     pool: &Pool<Db>,
     task_uuid: Uuid,
@@ -428,34 +514,32 @@ pub async fn fetch_rpa_task_runs(
     offset: i64,
     limit: i64,
 ) -> Result<Vec<RpaTaskRunDto>, Error> {
-    let recs = sqlx::query_as::<_, RpaTaskRunDto>(
+    let statement = format!(
         r#"
-        SELECT id, uuid, task_uuid, status, total_steps, completed_steps, failed_steps,
-               started_at, finished_at, duration_ms, result_summary, error_message, logs
+        SELECT {RUN_COLUMNS}, NULL AS result_summary, error_message, NULL AS logs
         FROM rpa_task_runs
         WHERE task_uuid = $1
           AND ($2 IS NULL OR status = $2)
-        ORDER BY started_at DESC
+        ORDER BY id DESC
         LIMIT $3 OFFSET $4
-        "#,
-    )
-    .bind(task_uuid)
-    .bind(status)
-    .bind(limit)
-    .bind(offset)
-    .fetch_all(pool)
-    .await?;
-
-    Ok(recs)
+        "#
+    );
+    sqlx::query_as::<_, RpaTaskRunDto>(&statement)
+        .bind(task_uuid)
+        .bind(status)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await
 }
 
-/// 查询任务执行记录总数
+/// 查询任务运行记录总数
 pub async fn fetch_rpa_task_runs_count(
     pool: &Pool<Db>,
     task_uuid: Uuid,
     status: Option<&str>,
 ) -> Result<i64, Error> {
-    let count: i64 = sqlx::query_scalar(
+    sqlx::query_scalar(
         r#"
         SELECT COUNT(*) FROM rpa_task_runs
         WHERE task_uuid = $1
@@ -465,64 +549,96 @@ pub async fn fetch_rpa_task_runs_count(
     .bind(task_uuid)
     .bind(status)
     .fetch_one(pool)
-    .await?;
-
-    Ok(count)
+    .await
 }
 
-/// 根据 UUID 查询执行记录
+/// 根据 UUID 查询运行记录
 pub async fn fetch_rpa_task_run_by_uuid(
     pool: &Pool<Db>,
     run_uuid: Uuid,
 ) -> Result<Option<RpaTaskRunDto>, Error> {
-    let rec = sqlx::query_as::<_, RpaTaskRunDto>(
-        r#"
-        SELECT id, uuid, task_uuid, status, total_steps, completed_steps, failed_steps,
-               started_at, finished_at, duration_ms, result_summary, error_message, logs
-        FROM rpa_task_runs
-        WHERE uuid = $1
-        "#,
-    )
-    .bind(run_uuid)
-    .fetch_optional(pool)
-    .await?;
-
-    Ok(rec)
+    let statement = format!(
+        "SELECT {RUN_COLUMNS}, result_summary, error_message, logs FROM rpa_task_runs WHERE uuid = $1"
+    );
+    sqlx::query_as::<_, RpaTaskRunDto>(&statement)
+        .bind(run_uuid)
+        .fetch_optional(pool)
+        .await
 }
 
-/// 更新执行记录状态
-pub async fn update_rpa_task_run_status(
-    pool: &Pool<Db>,
-    run_uuid: Uuid,
-    status: &str,
-    completed_steps: i32,
-    failed_steps: i32,
-    result_summary: Option<&str>,
-    error_message: Option<&str>,
-) -> Result<(), Error> {
+/// 软件启动时收尾：上次没跑完的记录标记为中断，任务回到空闲
+pub async fn mark_interrupted_rpa_runs(pool: &Pool<Db>) -> Result<(), Error> {
+    let mut tx = pool.begin().await?;
     sqlx::query(
         r#"
         UPDATE rpa_task_runs
-        SET status = $1,
-            completed_steps = $2,
-            failed_steps = $3,
-            result_summary = $4,
-            error_message = $5,
-            finished_at = CASE WHEN $1 IN ('completed', 'failed', 'stopped') THEN CURRENT_TIMESTAMP ELSE finished_at END,
-            duration_ms = CASE WHEN $1 IN ('completed', 'failed', 'stopped')
-                          THEN (julianday(CURRENT_TIMESTAMP) - julianday(started_at)) * 86400000
-                          ELSE duration_ms END
-        WHERE uuid = $6
+        SET status = 'failed', error_message = 'INTERRUPTED', finished_at = CURRENT_TIMESTAMP
+        WHERE status = 'running'
         "#,
     )
-    .bind(status)
-    .bind(completed_steps)
-    .bind(failed_steps)
-    .bind(result_summary)
-    .bind(error_message)
-    .bind(run_uuid)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+    sqlx::query("UPDATE rpa_tasks SET status = 'idle' WHERE status = 'running'")
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await
+}
 
+/// 删除任务的全部运行记录
+pub async fn delete_rpa_task_runs(pool: &Pool<Db>, task_uuid: Uuid) -> Result<(), Error> {
+    sqlx::query("DELETE FROM rpa_task_runs WHERE task_uuid = $1")
+        .bind(task_uuid)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+// ============ 统计和定时 ============
+
+/// 全部任务的统计（不受分页和筛选影响）
+pub async fn fetch_rpa_task_stats(pool: &Pool<Db>) -> Result<RpaTaskStatsDto, Error> {
+    sqlx::query_as::<_, RpaTaskStatsDto>(
+        r#"
+        SELECT COUNT(*) AS total,
+               COALESCE(SUM(status = 'running'), 0) AS running,
+               COALESCE(SUM(status = 'completed'), 0) AS completed,
+               COALESCE(SUM(status = 'failed'), 0) AS failed,
+               COALESCE(SUM(trigger_type = 'scheduled'), 0) AS scheduled
+        FROM rpa_tasks
+        WHERE deleted_at IS NULL
+        "#,
+    )
+    .fetch_one(pool)
+    .await
+}
+
+/// 查询全部定时任务
+pub async fn fetch_scheduled_rpa_tasks(pool: &Pool<Db>) -> Result<Vec<RpaTaskDto>, Error> {
+    sqlx::query_as::<_, RpaTaskDto>(
+        r#"
+        SELECT id, uuid, name, description, tags, trigger_type,
+               schedule, cron_expression, run_mode, retry_count, retry_interval, timeout,
+               concurrency, stop_on_error, notify_on_complete, notify_on_error, status,
+               run_count, success_count, last_run_at, next_run_at, created_at, updated_at, deleted_at
+             , (SELECT COUNT(*) FROM rpa_task_environments rte WHERE rte.task_uuid = rpa_tasks.uuid) AS environment_count
+        FROM rpa_tasks
+        WHERE trigger_type = 'scheduled' AND deleted_at IS NULL
+        "#,
+    )
+    .fetch_all(pool)
+    .await
+}
+
+/// 写入下次运行时间
+pub async fn set_rpa_task_next_run<'e, E: Executor<'e, Database = Db>>(
+    pool: E,
+    task_uuid: Uuid,
+    next_run_at: Option<DateTime<Utc>>,
+) -> Result<(), Error> {
+    sqlx::query("UPDATE rpa_tasks SET next_run_at = $1 WHERE uuid = $2")
+        .bind(next_run_at)
+        .bind(task_uuid)
+        .execute(pool)
+        .await?;
     Ok(())
 }

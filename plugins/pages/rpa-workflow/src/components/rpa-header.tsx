@@ -34,17 +34,18 @@ export function RpaHeader({
     { value: 'running', label: t('tabs.running') },
     { value: 'scheduled', label: t('tabs.scheduled') },
     { value: 'completed', label: t('tabs.completed') },
+    { value: 'failed', label: t('tabs.failed') },
   ];
 
   return (
     <header className="space-y-4 px-6 pb-3 pt-5">
       <PageTitle
-        title={t('header.title', { defaultValue: 'RPA 任务流' })}
+        title={t('header.title')}
         actions={
           <>
             <Button variant="outline" size="sm" onClick={onImportTask}>
               <Upload className="h-4 w-4" />
-              {t('header.importTask', { defaultValue: '导入' })}
+              {t('header.importTask')}
             </Button>
             <Button size="sm" onClick={onCreateTask}>
               <Plus className="h-4 w-4" />
