@@ -133,7 +133,6 @@ pnpm rust:check
 - Kernels are verified on Windows x64 only.
 - RPA cannot act on elements inside cross-origin iframes.
 - Handling of lost proxies and failed detection is incomplete.
-- Datacenter IPs are flagged by IP-reputation databases; residential proxies are recommended.
 - Environments created by older versions keep their old hardware settings; only new environments use the new device profile.
 
 ## Data and Privacy
@@ -156,7 +155,7 @@ The original project's name and trademarks are not part of this project.
 
 Licensed under the [GNU Affero General Public License v3.0](./LICENSE) (AGPLv3), inherited from the original project, with its copyright and license notices kept.
 
-**You may** use, modify and redistribute it, personally or commercially, and you may charge for it.
+**You may** use, modify and redistribute it, personally or commercially.
 
 **You must**:
 
