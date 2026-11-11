@@ -75,7 +75,8 @@ pub async fn create_environment_service(
     create_environment_with(svc_ctx, payload, None, false).await
 }
 
-/// `uuid`：沿用的环境 ID（导入备份时），`keep_full_version`：保留配置里的 Client Hints 完整版本号
+/// `uuid`：沿用的环境 ID（导入备份时），`keep_full_version`：保留配置里的 Client Hints 完整版本号。
+/// 导入备份前已经确认具体内核在本机存在（见 environment_transfer::check_import_request）
 pub(crate) async fn create_environment_with(
     svc_ctx: &SvcCtx,
     payload: &CreateEnvironmentRequest,

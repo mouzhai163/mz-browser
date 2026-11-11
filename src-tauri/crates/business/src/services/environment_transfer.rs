@@ -19,9 +19,10 @@ use crate::svc_ctx::SvcCtx;
 
 pub const FORMAT: &str = "mz-browser-environments";
 pub const SCHEMA_VERSION: u32 = 1;
-const MAX_ENVIRONMENTS: usize = 1000;
+pub const MAX_ENVIRONMENTS: usize = 1000;
 /// 内核 ID 是本机内核目录里的 ID，换台电脑就对不上；导入时按内核名（如 Chrome 157）重新匹配
 const LOCAL_KERNEL_ID_KEY: &str = "kernel_id";
+const KERNEL_NAME_KEY: &str = "kernel";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnvironmentBundle {
@@ -125,6 +126,10 @@ pub async fn export_environments_service(
     if request.uuids.is_empty() {
         return Err("没有要导出的环境".to_string());
     }
+    // 和导入的上限一致，否则导出的文件导不回来
+    if request.uuids.len() > MAX_ENVIRONMENTS {
+        return Err(format!("一次最多导出 {MAX_ENVIRONMENTS} 个环境，请分批导出"));
+    }
     let mut exported = Vec::with_capacity(request.uuids.len());
     for uuid in &request.uuids {
         let detail = environments::get_environment_detail_service(svc_ctx, *uuid).await?;
@@ -132,8 +137,13 @@ pub async fn export_environments_service(
             .config
             .ok_or_else(|| format!("环境“{}”没有配置，无法导出", detail.environment.name))?;
         let mut window_info = config.window_info;
+        // 导入时按内核名匹配：写上实际绑定的内核名，老环境里的 "chrome" 之类的旧值不可靠
+        let kernel = crate::services::browser_kernels::resolve_requested_kernel(&svc_ctx.db, &window_info, true)
+            .await
+            .map_err(|error| format!("环境“{}”的内核无法识别，无法导出：{error}", detail.environment.name))?;
         if let Some(object) = window_info.as_object_mut() {
             object.remove(LOCAL_KERNEL_ID_KEY);
+            object.insert(KERNEL_NAME_KEY.to_string(), serde_json::Value::String(kernel.resource_name));
         }
         let secret = |value: Option<String>| if request.include_secrets { value } else { None };
         exported.push(PortableEnvironment {
@@ -220,6 +230,37 @@ fn validate(bundle: &EnvironmentBundle) -> Result<(), String> {
     Ok(())
 }
 
+/// 导入前的检查（文件格式、内核都在本机）。只读，不改动任何数据
+pub async fn check_import_request(svc_ctx: &SvcCtx, request: &ImportEnvironmentsRequest) -> Result<(), String> {
+    validate(&request.bundle)?;
+    check_kernels(svc_ctx, &request.bundle).await
+}
+
+/// 写了具体内核名的环境，这个内核在本机内核目录里都要有。找不到时不能换成默认内核：
+/// 浏览器类型和版本都会变，指纹就不再是原来的了。
+/// 只写着 "chrome" 或者没有内核名的旧备份没有版本可以对，沿用默认内核（和以前一样）
+async fn check_kernels(svc_ctx: &SvcCtx, bundle: &EnvironmentBundle) -> Result<(), String> {
+    let mut missing = std::collections::BTreeSet::new();
+    for environment in &bundle.environments {
+        let name = environment
+            .config
+            .window_info
+            .get(KERNEL_NAME_KEY)
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|name| !name.is_empty() && !name.eq_ignore_ascii_case("chrome"));
+        let Some(name) = name else { continue };
+        if crate::services::browser_kernels::find_browser_kernel_by_name(&svc_ctx.db, name).await?.is_none() {
+            missing.insert(name.to_string());
+        }
+    }
+    if missing.is_empty() {
+        return Ok(());
+    }
+    let names = missing.into_iter().collect::<Vec<_>>().join("、");
+    Err(format!("本机的内核目录里没有 {names}，请先在设置里更新内核后再导入"))
+}
+
 /// 本次导入新建的数据，失败时按这个撤销
 #[derive(Default)]
 struct Created {
@@ -228,6 +269,9 @@ struct Created {
     tags: Vec<Uuid>,
     proxies: Vec<Uuid>,
     accounts: Vec<Uuid>,
+    /// 复用的已有代理、账号原来没有密码，这次从文件里补上了；撤销时清回去
+    filled_proxy_passwords: Vec<Uuid>,
+    filled_account_passwords: Vec<Uuid>,
 }
 
 #[derive(Default)]
@@ -242,7 +286,7 @@ pub async fn import_environments_service(
     svc_ctx: &SvcCtx,
     request: &ImportEnvironmentsRequest,
 ) -> Result<Vec<ImportedEnvironment>, String> {
-    validate(&request.bundle)?;
+    check_import_request(svc_ctx, request).await?;
     let mut created = Created::default();
     match import_all(svc_ctx, &request.bundle, &mut created).await {
         Ok(imported) => Ok(imported),
@@ -328,10 +372,25 @@ async fn rollback(svc_ctx: &SvcCtx, created: &Created) {
     for uuid in &created.groups {
         let _ = groups::delete_group_service(svc_ctx, *uuid).await;
     }
+    for (table, uuids) in [
+        ("proxies", &created.filled_proxy_passwords),
+        ("platform_accounts", &created.filled_account_passwords),
+    ] {
+        for uuid in uuids {
+            let sql = format!("UPDATE {table} SET password = NULL WHERE uuid = $1");
+            if let Err(error) = sqlx::query(&sql).bind(*uuid).execute(&svc_ctx.db).await {
+                tracing::warn!("could not undo a password filled in by an import: {error}");
+            }
+        }
+    }
 }
 
-/// 回收站里的环境也算占用：恢复时会冲突
-async fn environment_uuid_taken(svc_ctx: &SvcCtx, uuid: Uuid) -> Result<bool, String> {
+fn has_text(value: Option<&str>) -> bool {
+    value.is_some_and(|value| !value.is_empty())
+}
+
+/// 回收站里的环境也算占用：恢复时会冲突。没被占用的 ID 导入时会沿用
+pub async fn environment_uuid_taken(svc_ctx: &SvcCtx, uuid: Uuid) -> Result<bool, String> {
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM environments WHERE uuid = $1")
         .bind(uuid)
         .fetch_one(&svc_ctx.db)
@@ -400,7 +459,8 @@ async fn resolve_tag(
     Ok(uuid)
 }
 
-/// 主机、端口、类型、用户名都一样的就是同一个代理，复用本机已有的（不改它的密码）
+/// 主机、端口、类型、用户名都一样的就是同一个代理，复用本机已有的。已有的有密码就不动；
+/// 没有密码（比如先导入过不带密码的文件）而文件里有，就补上
 async fn resolve_proxy(
     svc_ctx: &SvcCtx,
     proxy: &PortableProxy,
@@ -429,7 +489,17 @@ async fn resolve_proxy(
     .await
     .map_err(|e| e.to_string())?;
     let uuid = match found {
-        Some(uuid) => uuid,
+        Some(uuid) => {
+            if has_text(proxy.password.as_deref())
+                && !has_text(proxies::get_proxy_service(svc_ctx, uuid).await?.password.as_deref())
+            {
+                models::update_proxy(&svc_ctx.db, uuid, None, None, None, None, None, proxy.password.as_deref(), None, None)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                created.filled_proxy_passwords.push(uuid);
+            }
+            uuid
+        }
         None => {
             let uuid = proxies::create_proxy_service(
                 svc_ctx,
@@ -455,7 +525,7 @@ async fn resolve_proxy(
     Ok(uuid)
 }
 
-/// 平台地址和账号都一样的就是同一个账号
+/// 平台地址和账号都一样的就是同一个账号；已有的没有密码而文件里有，就补上
 async fn resolve_account(
     svc_ctx: &SvcCtx,
     account: &PortableAccount,
@@ -474,7 +544,26 @@ async fn resolve_account(
     let sql = "SELECT uuid FROM platform_accounts WHERE platform_url = $1 AND account = $2 \
                AND deleted_at IS NULL ORDER BY id LIMIT 1";
     let uuid = match existing_uuid(svc_ctx, sql, &[&platform_url, &name]).await? {
-        Some(uuid) => uuid,
+        Some(uuid) => {
+            if has_text(account.password.as_deref())
+                && !has_text(accounts::get_account_service(svc_ctx, uuid).await?.password.as_deref())
+            {
+                models::update_platform_account(
+                    &svc_ctx.db,
+                    uuid,
+                    None,
+                    None,
+                    None,
+                    account.password.as_deref(),
+                    None,
+                    None,
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+                created.filled_account_passwords.push(uuid);
+            }
+            uuid
+        }
         None => {
             let uuid = accounts::create_account_service(
                 svc_ctx,
@@ -681,6 +770,125 @@ mod tests {
         assert!(error.contains("Broken"), "{error}");
         assert_eq!(count(&ctx, "environments").await, 0);
         assert_eq!(count(&ctx, "groups").await, 1);
+    }
+
+    #[tokio::test]
+    async fn a_kernel_missing_here_refuses_the_import_instead_of_switching_kernels() {
+        let ctx = test_ctx().await;
+        let uuid = source_environment(&ctx).await;
+        let mut bundle = export(&ctx, uuid, false).await;
+        models::permanent_delete_environment(&ctx.db, uuid).await.unwrap();
+        bundle.environments[0].config.window_info["kernel"] = json!("Firefox 999");
+        let error = import(&ctx, &bundle).await.unwrap_err();
+        assert!(error.contains("Firefox 999"), "{error}");
+        assert_eq!(count(&ctx, "environments").await, 0);
+
+        // 旧备份写的是 "chrome"：没有版本可以对，沿用默认内核
+        bundle.environments[0].config.window_info["kernel"] = json!("chrome");
+        assert_eq!(import(&ctx, &bundle).await.unwrap().len(), 1);
+        assert_eq!(count(&ctx, "environments").await, 1);
+    }
+
+    #[tokio::test]
+    async fn an_export_whose_kernel_cannot_be_resolved_is_refused() {
+        let ctx = test_ctx().await;
+        let uuid = source_environment(&ctx).await;
+        sqlx::query("UPDATE environment_configs SET window_info = json_set(window_info, '$.kernel_id', 'missing-kernel') WHERE environment_uuid = $1")
+            .bind(uuid)
+            .execute(&ctx.db)
+            .await
+            .unwrap();
+        let error = export_environments_service(&ctx, &ExportEnvironmentsRequest { uuids: vec![uuid], include_secrets: false })
+            .await
+            .unwrap_err();
+        assert!(error.contains("无法导出"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn checking_an_import_changes_nothing() {
+        let ctx = test_ctx().await;
+        let uuid = source_environment(&ctx).await;
+        let bundle = export(&ctx, uuid, false).await;
+        models::permanent_delete_environment(&ctx.db, uuid).await.unwrap();
+        let mut broken = bundle.clone();
+        broken.environments[0].config.window_info["kernel"] = json!("Firefox 999");
+        assert!(check_import_request(&ctx, &ImportEnvironmentsRequest { bundle: broken }).await.is_err());
+        assert_eq!(count(&ctx, "environments").await, 0);
+        assert!(check_import_request(&ctx, &ImportEnvironmentsRequest { bundle }).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn the_export_names_the_bound_kernel_even_for_old_environments() {
+        let ctx = test_ctx().await;
+        let uuid = source_environment(&ctx).await;
+        sqlx::query("UPDATE environment_configs SET window_info = json_set(window_info, '$.kernel', 'chrome') WHERE environment_uuid = $1")
+            .bind(uuid)
+            .execute(&ctx.db)
+            .await
+            .unwrap();
+        let bundle = export(&ctx, uuid, false).await;
+        assert_eq!(bundle.environments[0].config.window_info["kernel"], "Chrome 157");
+    }
+
+    #[tokio::test]
+    async fn no_more_is_exported_than_one_import_takes() {
+        let ctx = test_ctx().await;
+        let uuids = (0..=MAX_ENVIRONMENTS).map(|_| Uuid::new_v4()).collect();
+        let request = ExportEnvironmentsRequest { uuids, include_secrets: false };
+        let error = export_environments_service(&ctx, &request).await.unwrap_err();
+        assert!(error.contains("分批"), "{error}");
+    }
+
+    async fn clear_passwords(ctx: &SvcCtx) {
+        for table in ["proxies", "platform_accounts"] {
+            sqlx::query(&format!("UPDATE {table} SET password = NULL")).execute(&ctx.db).await.unwrap();
+        }
+    }
+
+    async fn passwords(ctx: &SvcCtx, uuid: Uuid) -> (Option<String>, Option<String>) {
+        let detail = environments::get_environment_detail_service(ctx, uuid).await.unwrap();
+        (detail.proxy.unwrap().password, detail.accounts[0].password.clone())
+    }
+
+    #[tokio::test]
+    async fn passwords_are_filled_into_reused_items_that_have_none() {
+        let ctx = test_ctx().await;
+        let uuid = source_environment(&ctx).await;
+        let bundle = export(&ctx, uuid, true).await;
+        // 先导入过不带密码的文件：本机的代理和账号没有密码
+        models::permanent_delete_environment(&ctx.db, uuid).await.unwrap();
+        clear_passwords(&ctx).await;
+
+        let imported = import(&ctx, &bundle).await.unwrap();
+        let (proxy, account) = passwords(&ctx, imported[0].uuid).await;
+        assert_eq!(proxy.as_deref(), Some("proxy-secret"));
+        assert_eq!(account.as_deref(), Some("account-secret"));
+        assert_eq!(count(&ctx, "proxies").await, 1);
+        assert_eq!(count(&ctx, "platform_accounts").await, 1);
+
+        // 已有的密码不会被文件里的覆盖
+        let mut other = bundle.clone();
+        other.environments[0].proxy.as_mut().unwrap().password = Some("other".into());
+        other.environments[0].accounts[0].password = Some("other".into());
+        let again = import(&ctx, &other).await.unwrap();
+        let (proxy, account) = passwords(&ctx, again[0].uuid).await;
+        assert_eq!(proxy.as_deref(), Some("proxy-secret"));
+        assert_eq!(account.as_deref(), Some("account-secret"));
+    }
+
+    #[tokio::test]
+    async fn a_failed_import_takes_filled_passwords_back() {
+        let ctx = test_ctx().await;
+        let uuid = source_environment(&ctx).await;
+        let mut bundle = export(&ctx, uuid, true).await;
+        clear_passwords(&ctx).await;
+        let mut broken = bundle.environments[0].clone();
+        broken.source_uuid = Uuid::new_v4();
+        broken.cookies = vec![CookieGroupInput { site: "  ".into(), cookie_text: "a=b".into() }];
+        bundle.environments.push(broken);
+
+        assert!(import(&ctx, &bundle).await.is_err());
+        assert_eq!(passwords(&ctx, uuid).await, (None, None));
     }
 
     #[tokio::test]
