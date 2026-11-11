@@ -167,3 +167,7 @@ MZ指纹浏览器基于 Simprint 团队的 [Simprint](https://github.com/Simprin
 闭源分发或闭源服务需要取得全部版权人的单独授权。
 
 **第三方组件**各有自己的许可证：Chromium（BSD 风格及其第三方组件）、Firefox 和 Camoufox（MPL-2.0）、其余依赖主要为 MIT、Apache-2.0、BSD、MPL-2.0。Chrome、Firefox 等名称是各自权利人的商标。内核启用了 H.264、AAC 等专有编解码器，这些编解码器可能涉及专利授权。
+
+## Friend Links
+
+- [LINUX DO](https://linux.do)

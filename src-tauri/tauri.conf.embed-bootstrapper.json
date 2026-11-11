@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "MZ指纹浏览器",
-  "version": "0.1.5",
+  "version": "0.0.1",
   "identifier": "com.mzbrowser.app",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -62,7 +62,7 @@
       "endpoints": [
         "https://github.com/mouzhai163/mz-browser/releases/latest/download/latest.json"
       ],
-      "pubkey": "",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJFOEUxOUMwN0QxNjc0OUIKUldTYmRCWjl3Qm1PTHUvRjNOdjAwTkpNc2pYWi9GV0dPWTdRZTFZRXFmcUdNdnR1N0kvSngzT24K",
       "windows": {
         "installMode": "passive"
       }

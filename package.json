@@ -1,7 +1,7 @@
 {
   "name": "mz-browser",
   "private": true,
-  "version": "0.1.5",
+  "version": "0.0.1",
   "type": "module",
   "scripts": {
     "typecheck:regression": "tsc --noEmit -p tsconfig.regression.json",

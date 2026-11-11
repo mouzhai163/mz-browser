@@ -167,3 +167,7 @@ Licensed under the [GNU Affero General Public License v3.0](./LICENSE) (AGPLv3),
 Closed-source distribution or services require separate permission from all copyright holders.
 
 **Third-party components** have their own licenses: Chromium (BSD-style and its third-party components), Firefox and Camoufox (MPL-2.0), and other dependencies mainly under MIT, Apache-2.0, BSD and MPL-2.0. Chrome and Firefox are trademarks of their respective owners. The kernels enable proprietary codecs such as H.264 and AAC, which may require patent licenses.
+
+## Friend Links
+
+- [LINUX DO](https://linux.do)
