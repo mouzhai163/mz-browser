@@ -89,10 +89,16 @@ impl MihomoClient {
         }))
     }
 
-    pub async fn reload_config(&self, config_path: &str) -> Result<()> {
+    pub async fn reload_config(&self, config_yaml: &str) -> Result<()> {
+        if config_yaml.trim().is_empty() {
+            return Err(anyhow!("Mihomo 配置内容为空，拒绝重载"));
+        }
+        // Service-mode Mihomo uses a separate runtime directory. Send the YAML
+        // through the supported payload API instead of asking the service to
+        // read a user-directory path outside its allowed filesystem roots.
         let payload = serde_json::json!({
-            "path": config_path,
-            "payload": "",
+            "path": "",
+            "payload": config_yaml,
         });
         self.put_json_segments_without_body(
             &["configs"],
@@ -131,9 +137,8 @@ impl MihomoClient {
         let response = request
             .send()
             .await
-            .with_context(|| format!("请求 Mihomo 接口失败: {path_label}"))?
-            .error_for_status()
-            .with_context(|| format!("Mihomo 接口返回异常状态: {path_label}"))?;
+            .with_context(|| format!("请求 Mihomo 接口失败: {path_label}"))?;
+        let response = self.check_response(response, &path_label).await?;
 
         response
             .json::<T>()
@@ -172,11 +177,186 @@ impl MihomoClient {
         let response = request
             .send()
             .await
-            .with_context(|| format!("请求 Mihomo 接口失败: {path_label}"))?
-            .error_for_status()
-            .with_context(|| format!("Mihomo 接口返回异常状态: {path_label}"))?;
+            .with_context(|| format!("请求 Mihomo 接口失败: {path_label}"))?;
+        let response = self.check_response(response, &path_label).await?;
 
         let _ = response.bytes().await;
         Ok(())
+    }
+
+    async fn check_response(
+        &self,
+        mut response: reqwest::Response,
+        path_label: &str,
+    ) -> Result<reqwest::Response> {
+        let status = response.status();
+        if status.is_success() {
+            return Ok(response);
+        }
+
+        // Only retain a bounded error response, never a successful configuration
+        // document (which can contain credentials).
+        const MAX_ERROR_BYTES: usize = 8192;
+        let mut body = Vec::new();
+        while body.len() < MAX_ERROR_BYTES {
+            match response.chunk().await {
+                Ok(Some(chunk)) => {
+                    let remaining = MAX_ERROR_BYTES - body.len();
+                    body.extend_from_slice(&chunk[..chunk.len().min(remaining)]);
+                }
+                _ => break,
+            }
+        }
+        Err(anyhow!(format_api_error(
+            path_label,
+            status,
+            &body,
+            &self.secret
+        )))
+    }
+}
+
+fn format_api_error(path: &str, status: reqwest::StatusCode, body: &[u8], secret: &str) -> String {
+    // Mihomo returns {"message": "..."}. Do not expose arbitrary response fields
+    // or HTML bodies, and redact the controller secret if the server echoes it.
+    let message = serde_json::from_slice::<Value>(body)
+        .ok()
+        .and_then(|value| value.get("message").and_then(Value::as_str).map(str::to_owned))
+        .unwrap_or_default();
+    let message = if secret.is_empty() {
+        message
+    } else {
+        message.replace(secret, "[REDACTED]")
+    };
+    let message: String = message.chars().take(1024).collect();
+    if message.trim().is_empty() {
+        format!("Mihomo 接口返回异常状态: {path}，HTTP {status}")
+    } else {
+        format!("Mihomo 接口返回异常状态: {path}，HTTP {status}；{message}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TEST_YAML: &str = "mode: rule\nlisteners:\n  - name: mz-node-001\n    type: http\n    port: 17601\n    listen: 127.0.0.1\n    proxy: DIRECT\n";
+
+    async fn mock_controller(response: &'static str) -> MihomoClient {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0; 4096];
+            loop {
+                let size = stream.read(&mut buffer).await.unwrap();
+                assert!(size > 0, "request ended before its body arrived");
+                request.extend_from_slice(&buffer[..size]);
+                assert!(request.len() < 8192);
+                let Some(header_end) = request.windows(4).position(|part| part == b"\r\n\r\n")
+                else {
+                    continue;
+                };
+                let headers = String::from_utf8_lossy(&request[..header_end]);
+                assert!(headers.starts_with("PUT /configs?force=true "));
+                let body_len: usize = headers
+                    .lines()
+                    .find_map(|line| {
+                        let (name, value) = line.split_once(':')?;
+                        name.eq_ignore_ascii_case("content-length")
+                            .then(|| value.trim().parse().unwrap())
+                    })
+                    .unwrap();
+                let body_start = header_end + 4;
+                if request.len() < body_start + body_len {
+                    continue;
+                }
+                let body: Value =
+                    serde_json::from_slice(&request[body_start..body_start + body_len]).unwrap();
+                assert_eq!(body["path"], "");
+                assert_eq!(body["payload"], TEST_YAML);
+                break;
+            }
+            stream.write_all(response.as_bytes()).await.unwrap();
+        });
+        MihomoClient::new(&MihomoConnectionConfig {
+            controller: address.to_string(),
+            secret: String::new(),
+            config_path: "unused.yaml".to_string(),
+        })
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn reload_surfaces_controller_error_body() {
+        let client = mock_controller("HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"message\":\"path rejected by SAFE_PATHS\"}").await;
+        let error = client.reload_config(TEST_YAML).await.unwrap_err().to_string();
+        assert!(error.contains("HTTP 400"));
+        assert!(error.contains("path rejected by SAFE_PATHS"));
+    }
+
+    #[tokio::test]
+    async fn reload_accepts_no_content_success() {
+        let client = mock_controller("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n").await;
+        client.reload_config(TEST_YAML).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn reload_rejects_empty_payload_instead_of_reloading_default_path() {
+        let client = MihomoClient::new(&MihomoConnectionConfig {
+            controller: "127.0.0.1:9".to_string(),
+            secret: String::new(),
+            config_path: "unused.yaml".to_string(),
+        })
+        .unwrap();
+        let error = client.reload_config(" \n").await.unwrap_err().to_string();
+        assert!(error.contains("配置内容为空"));
+    }
+
+    #[test]
+    fn includes_http_status_and_mihomo_error_reason() {
+        let result = format_api_error(
+            "/configs",
+            reqwest::StatusCode::BAD_REQUEST,
+            br#"{"message":"path is not subpath of home directory or SAFE_PATHS"}"#,
+            "",
+        );
+        assert!(result.contains("HTTP 400"));
+        assert!(result.contains("SAFE_PATHS"));
+        assert!(result.contains("/configs"));
+    }
+
+    #[test]
+    fn preserves_status_when_body_is_not_json() {
+        let result = format_api_error(
+            "/configs",
+            reqwest::StatusCode::FORBIDDEN,
+            b"<html>denied</html>",
+            "",
+        );
+        assert!(result.contains("HTTP 403"));
+        assert!(!result.contains("<html>"));
+    }
+
+    #[test]
+    fn redacts_secret_and_ignores_other_fields() {
+        let result = format_api_error(
+            "/configs",
+            reqwest::StatusCode::UNAUTHORIZED,
+            br#"{"message":"invalid test-secret","secret":"other-sensitive-data"}"#,
+            "test-secret",
+        );
+        assert!(result.contains("[REDACTED]"));
+        assert!(!result.contains("test-secret"));
+        assert!(!result.contains("other-sensitive-data"));
+    }
+
+    #[test]
+    fn limits_error_message_length() {
+        let body = serde_json::to_vec(&serde_json::json!({"message": "x".repeat(5000)})).unwrap();
+        let result = format_api_error("/configs", reqwest::StatusCode::BAD_REQUEST, &body, "");
+        assert!(result.chars().count() < 1200);
     }
 }

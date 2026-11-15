@@ -1,4 +1,4 @@
-import { invoke } from '@/lib/tauri';
+import { invoke as rawInvoke } from '@/lib/tauri';
 import type {
   ApplyMihomoNodeSelectionRequest,
   MihomoConnectionConfig,
@@ -10,6 +10,16 @@ import type {
   MihomoStatus,
   UpdateMihomoLocalProxyRequest,
 } from './types';
+
+// Rust Result<T, String> rejects with a string, not an Error. Normalize it here
+// so Mihomo dialogs can display the backend's actual failure reason.
+async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  try {
+    return await rawInvoke<T>(command, args);
+  } catch (error) {
+    throw typeof error === 'string' ? new Error(error) : error;
+  }
+}
 
 export function testAndAttachMihomo(config: MihomoConnectionConfig): Promise<MihomoStatus> {
   return invoke<MihomoStatus>('test_and_attach_mihomo', { config });
