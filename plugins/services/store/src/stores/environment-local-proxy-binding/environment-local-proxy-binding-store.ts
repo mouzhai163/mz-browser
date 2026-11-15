@@ -23,6 +23,15 @@ export async function setEnvironmentLocalProxyBinding(
   envUuid: string,
   nodeName: string
 ): Promise<void> {
+  if (
+    typeof envUuid !== 'string' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(envUuid)
+  ) {
+    throw new Error('环境 UUID 无效，未写入本地代理绑定');
+  }
+  if (typeof nodeName !== 'string' || !nodeName.trim()) {
+    throw new Error('本地代理节点名称不能为空');
+  }
   const current = await getEnvironmentLocalProxyBindings();
   await setStoreKey(STORE_KEY, {
     ...current,
