@@ -411,8 +411,16 @@ export async function batchCreateEnvironments(
     throw new Error(result.message || '批量创建环境失败');
   }
 
-  // 后端返回的是 CreateEnvironmentResponse 数组
-  return (result.data?.data || result.data || []) as CreateEnvironmentResponse[];
+  // The local backend returns UUID strings, not { uuid } objects. Normalize at
+  // this boundary before the caller persists per-environment proxy bindings.
+  if (
+    !Array.isArray(result.data) ||
+    result.data.length !== configs.length ||
+    result.data.some((uuid) => typeof uuid !== 'string' || !uuid.trim())
+  ) {
+    throw new Error('批量创建环境返回的 UUID 列表无效，未写入本地代理绑定');
+  }
+  return result.data.map((uuid) => ({ uuid }));
 }
 
 /**

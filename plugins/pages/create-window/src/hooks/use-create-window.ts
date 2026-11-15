@@ -51,7 +51,11 @@ export interface UseCreateWindowReturn {
  * 新建环境的名称。只创建一个时原样使用输入的名称（没填则叫"窗口"）；
  * 一次创建多个时才加 _1、_2… 序号来区分。
  */
-export function buildEnvironmentName(name: string | undefined, index: number, total: number): string {
+export function buildEnvironmentName(
+  name: string | undefined,
+  index: number,
+  total: number
+): string {
   const base = name?.trim() || '窗口';
   return total > 1 ? `${base}_${index + 1}` : base;
 }
@@ -393,7 +397,8 @@ export function useCreateWindow(
     try {
       // 编辑模式：更新环境
       if (editUuid) {
-        const proxyUuid = selectedRemoteProxyUuids.length > 0 ? selectedRemoteProxyUuids[0] : undefined;
+        const proxyUuid =
+          selectedRemoteProxyUuids.length > 0 ? selectedRemoteProxyUuids[0] : undefined;
         const localProxyNodeName =
           selectedLocalProxyNodeNames.length > 0 ? selectedLocalProxyNodeNames[0] : undefined;
 
@@ -452,15 +457,14 @@ export function useCreateWindow(
         tagUuids: selectedTagUuids.length > 0 ? selectedTagUuids : undefined,
       });
       if (isLocalProxyMode && localProxyNodeNames.length > 0) {
-        await Promise.all(
-          results.map((result, index) => {
-            const nodeName = localProxyNodeNames[index];
-            if (!nodeName) {
-              return Promise.resolve();
-            }
-            return setEnvironmentLocalProxyBinding(result.uuid, nodeName);
-          })
-        );
+        // Each write reads and replaces the binding map. Serialize writes so
+        // batch creation cannot overwrite bindings from another environment.
+        for (const [index, result] of results.entries()) {
+          const nodeName = localProxyNodeNames[index];
+          if (nodeName) {
+            await setEnvironmentLocalProxyBinding(result.uuid, nodeName);
+          }
+        }
       }
       toast.success(
         (t('actions.batchCreateSuccess') || '成功创建 {count} 个窗口').replace(

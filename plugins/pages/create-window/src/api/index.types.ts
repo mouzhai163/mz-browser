@@ -88,8 +88,6 @@ export interface BatchCreateEnvironmentRequest {
 }
 
 /**
- * 批量创建环境响应（后端返回 CreateResponse 数组）
+ * 批量创建环境响应（后端返回 UUID 字符串数组）
  */
-export interface BatchCreateEnvironmentResponse {
-  data: CreateEnvironmentResponse[]; // 后端返回的是 CreateResponse 数组
-}
+export type BatchCreateEnvironmentResponse = string[];
