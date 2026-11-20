@@ -432,7 +432,7 @@ async fn sync_local_listeners(
             .map_err(|error| format!("写入 Mihomo 配置文件失败: {error}"))?;
     }
 
-    if let Err(error) = client.reload_config(config_path).await {
+    if let Err(error) = client.reload_config(&next).await {
         if next != original {
             let restore_result = tokio::fs::write(config_path, &original).await;
             return match restore_result {
