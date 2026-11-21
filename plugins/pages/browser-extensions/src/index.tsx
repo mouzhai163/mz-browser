@@ -6,9 +6,11 @@ import { toast } from 'sonner';
 import { extensionsResources } from './i18n/resources';
 import { LocalExtensionLibrary } from './components/local-extension-library';
 import { LocalExtensionImportDialog } from './components/local-extension-import-dialog';
+import { ExtensionMarketView } from './components/extension-market-view';
 import { ExtensionUninstallDialog } from './components/extension-uninstall-dialog';
 import { ExtensionToggleDialog } from './components/extension-toggle-dialog';
 import { ExtensionDetailDialog } from './components/extension-detail-dialog';
+import type { MarketExtensionItem } from './data/market-catalog';
 import {
   disableLocalExtension,
   enableLocalExtension,
@@ -55,6 +57,9 @@ const BrowserExtensionsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [importDefaultMode, setImportDefaultMode] = useState<'file' | 'storeUrl'>('file');
+  const [activeTab, setActiveTab] = useState<'market' | 'installed'>('market');
+  const [downloadingIds, setDownloadingIds] = useState<Set<string>>(new Set());
   const [removeTarget, setRemoveTarget] = useState<ExtensionItem | null>(null);
   const [toggleTarget, setToggleTarget] = useState<ExtensionItem | null>(null);
   const [toggleAction, setToggleAction] = useState<'disable' | 'enable'>('disable');
@@ -79,6 +84,39 @@ const BrowserExtensionsPage: React.FC = () => {
     () => new Map(extensions.map((extension) => [extension.id, extension])),
     [extensions]
   );
+
+  const installedExtensionIds = useMemo(
+    () =>
+      new Set(
+        extensions
+          .map((extension) => extension.extensionId)
+          .filter((id): id is string => Boolean(id))
+      ),
+    [extensions]
+  );
+
+  const handleDownloadMarketItem = async (item: MarketExtensionItem) => {
+    setDownloadingIds((prev) => new Set(prev).add(item.extensionId));
+    try {
+      const imported = await importLocalExtensionStoreUrl(item.extensionId);
+      // 下载完成后自动安装启用，开箱即用
+      if (imported.extension.status === 'available') {
+        await installLocalExtension(imported.extension.recordId || imported.extension.id);
+      }
+      toast.success(`「${item.name}」已下载并启用`);
+      await refresh();
+    } catch (reason) {
+      toast.error(
+        `下载「${item.name}」失败：${reason instanceof Error ? reason.message : String(reason)}`
+      );
+    } finally {
+      setDownloadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(item.extensionId);
+        return next;
+      });
+    }
+  };
 
   const recordId = (extension: ExtensionItem) => extension.recordId || extension.id;
 
@@ -145,27 +183,50 @@ const BrowserExtensionsPage: React.FC = () => {
               {t('error', { message: error })}
             </div>
           )}
-          <LocalExtensionLibrary
-            extensions={extensions}
-            importing={importing}
-            onImport={() => setImportOpen(true)}
-            onInstall={(extension) => void handleInstall(byId.get(extension.id) || extension)}
-            onDisable={(extension) => {
-              setToggleTarget(extension);
-              setToggleAction('disable');
+          <ExtensionMarketView
+            activeTab={activeTab}
+            installedCount={extensions.length}
+            installedExtensionIds={installedExtensionIds}
+            downloadingIds={downloadingIds}
+            onTabChange={setActiveTab}
+            onDownloadMarketItem={handleDownloadMarketItem}
+            onOpenChromeUrlImport={() => {
+              setImportDefaultMode('storeUrl');
+              setImportOpen(true);
             }}
-            onEnable={(extension) => {
-              setToggleTarget(extension);
-              setToggleAction('enable');
+            onOpenLocalFileImport={() => {
+              setImportDefaultMode('file');
+              setImportOpen(true);
             }}
-            onRemove={setRemoveTarget}
-            onViewDetails={setDetailTarget}
+            onRefresh={() => void refresh()}
+            installedContent={
+              <LocalExtensionLibrary
+                extensions={extensions}
+                importing={importing}
+                onImport={() => {
+                  setImportDefaultMode('file');
+                  setImportOpen(true);
+                }}
+                onInstall={(extension) => void handleInstall(byId.get(extension.id) || extension)}
+                onDisable={(extension) => {
+                  setToggleTarget(extension);
+                  setToggleAction('disable');
+                }}
+                onEnable={(extension) => {
+                  setToggleTarget(extension);
+                  setToggleAction('enable');
+                }}
+                onRemove={setRemoveTarget}
+                onViewDetails={setDetailTarget}
+              />
+            }
           />
         </>
       )}
 
       <LocalExtensionImportDialog
         open={importOpen}
+        defaultMode={importDefaultMode}
         importing={importing}
         onOpenChange={setImportOpen}
         onSubmit={handleImport}

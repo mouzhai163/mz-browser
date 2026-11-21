@@ -5,7 +5,6 @@ import { AppBackground } from './components/app-background';
 import { DownloadEventSubscriber } from './components/download-event-subscriber';
 import { KernelUpdateNotifier } from './components/kernel-update-notifier';
 import { RpaSchedulerMount } from './components/rpa-scheduler-mount';
-import { MihomoRuntimeSubscriber } from '../../../services/store/src';
 import './styles.css';
 import { extensionRegistry } from '@slotkitjs/core';
 import { appLayoutResources } from './i18n/resources';
@@ -16,7 +15,6 @@ const AppLayoutPlugin: React.FC = () => {
       <DownloadEventSubscriber />
       <KernelUpdateNotifier />
       <RpaSchedulerMount />
-      <MihomoRuntimeSubscriber />
       {/* 背景层 */}
       <AppBackground />
 

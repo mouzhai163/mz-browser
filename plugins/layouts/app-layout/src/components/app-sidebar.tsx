@@ -19,9 +19,7 @@ import { Link, useLocation, useNavigate } from 'react-router';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useTranslation } from 'react-i18next';
-import { getGeneralSettings, useMihomoRuntimeStore } from '../../../../services/store/src';
-import { ClashIcon } from '../../../../pages/proxy-center/src/mihomo/clash-icon';
-import { MihomoConnectDialog } from '../../../../pages/proxy-center/src/mihomo/mihomo-connect-dialog';
+import { getGeneralSettings } from '../../../../services/store/src';
 import { BatchCreateDialog } from '../../../../pages/create-window/src/components/batch-create-dialog';
 
 interface NavItemData {
@@ -259,11 +257,11 @@ interface NavGroupComponentProps {
   group: NavGroup;
   collapsed: boolean;
   currentPath: string;
-  proxyActionLabel: string;
-  proxyActionNode: ReactNode;
+  proxyActionLabel?: string;
+  proxyActionNode?: ReactNode;
   proxyActionButtonClassName?: string;
   proxyActionButtonAnimated?: boolean;
-  onProxyActionClick: () => void;
+  onProxyActionClick?: () => void;
 }
 
 /**
@@ -309,11 +307,11 @@ interface NavListProps {
   groups: NavGroup[];
   collapsed: boolean;
   currentPath: string;
-  proxyActionLabel: string;
-  proxyActionNode: ReactNode;
+  proxyActionLabel?: string;
+  proxyActionNode?: ReactNode;
   proxyActionButtonClassName?: string;
   proxyActionButtonAnimated?: boolean;
-  onProxyActionClick: () => void;
+  onProxyActionClick?: () => void;
 }
 
 /**
@@ -520,15 +518,10 @@ const SidebarPlaceholder: React.FC<SidebarPlaceholderProps> = ({ collapsed }) =>
  */
 export const AppSidebar: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const { t } = useTranslation('appLayout');
   const [collapsed, setCollapsed] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
-  const [mihomoDialogOpen, setMihomoDialogOpen] = useState(false);
-  const mihomoRunning = useMihomoRuntimeStore((state) => state.running);
-  const mihomoAttached = useMihomoRuntimeStore((state) => state.attached);
-  const mihomoCheckedAt = useMihomoRuntimeStore((state) => state.checkedAt);
 
   useEffect(() => {
     let cancelled = false;
@@ -551,28 +544,6 @@ export const AppSidebar: React.FC = () => {
     };
   }, []);
 
-  const handleOpenMihomo = async () => {
-    if (!mihomoRunning) {
-      navigate('/proxy?mode=local');
-      return;
-    }
-
-    await useMihomoRuntimeStore.getState().refresh();
-    const { running, attached } = useMihomoRuntimeStore.getState();
-
-    if (!running) {
-      navigate('/proxy?mode=local');
-      return;
-    }
-
-    if (attached) {
-      navigate('/proxy/mihomo');
-      return;
-    }
-
-    setMihomoDialogOpen(true);
-  };
-
   const handleToggle = () => {
     setIsAnimating(true);
     setCollapsed((prev) => !prev);
@@ -585,33 +556,6 @@ export const AppSidebar: React.FC = () => {
   if (!settingsLoaded) {
     return <SidebarPlaceholder collapsed={collapsed} />;
   }
-
-  const mihomoStatusTone = mihomoRunning
-    ? mihomoAttached
-      ? 'connected'
-      : 'warning'
-    : mihomoCheckedAt == null
-      ? 'unknown'
-      : 'offline';
-
-  const mihomoActionNode = (
-    <span className="relative flex items-center justify-center">
-      <ClashIcon className="h-4 w-4 text-current" />
-      {mihomoStatusTone === 'connected' ? (
-        <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border border-background bg-emerald-500" />
-      ) : mihomoStatusTone === 'warning' ? (
-        <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-background bg-amber-500 text-[9px] font-bold leading-none text-white">
-          !
-        </span>
-      ) : mihomoStatusTone === 'unknown' ? (
-        <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border border-background bg-muted-foreground/60" />
-      ) : (
-        <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-background bg-rose-500 text-[9px] font-bold leading-none text-white">
-          !
-        </span>
-      )}
-    </span>
-  );
 
   return (
     <aside
@@ -631,17 +575,6 @@ export const AppSidebar: React.FC = () => {
         groups={localizeNavGroups(t)}
         collapsed={collapsed}
         currentPath={location.pathname}
-        proxyActionLabel={t('nav.item.mihomo', { defaultValue: 'Mihomo' })}
-        proxyActionNode={mihomoActionNode}
-        proxyActionButtonClassName={
-          mihomoStatusTone === 'connected'
-            ? 'border-emerald-500/30 bg-background/90 text-emerald-600 hover:bg-muted hover:text-foreground'
-            : mihomoStatusTone === 'warning'
-              ? 'border-amber-500/30 bg-background/90 text-amber-600 hover:bg-muted hover:text-foreground'
-              : 'border-rose-500/30 bg-background/90 text-rose-600 hover:bg-muted hover:text-rose-600'
-        }
-        proxyActionButtonAnimated={!collapsed}
-        onProxyActionClick={handleOpenMihomo}
       />
 
         {/* 底部导航项（指纹审计、系统设置） */}
@@ -657,14 +590,6 @@ export const AppSidebar: React.FC = () => {
           <CollapseButton collapsed={collapsed} onToggle={handleToggle} />
         </div>
       </div>
-      <MihomoConnectDialog
-        open={mihomoDialogOpen}
-        onOpenChange={setMihomoDialogOpen}
-        onConnected={() => {
-          void useMihomoRuntimeStore.getState().refresh();
-          navigate('/proxy/mihomo');
-        }}
-      />
     </aside>
   );
 };

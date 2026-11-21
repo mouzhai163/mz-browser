@@ -20,8 +20,28 @@ impl ProxyService {
             config.port
         );
 
+        // 根据全局网络配置（直接连接 / 系统代理 / 中转节点）解析最终生效代理
+        let effective_config = match crate::app::handle::get_app_handle() {
+            Ok(app) => match crate::app::context::AppContext::get()
+                .network_relay_manager
+                .resolve_effective_infra_proxy(&app, config)
+                .await
+            {
+                Ok(resolved) => resolved,
+                Err(e) => {
+                    let result = ProxyTestResult::failure(e);
+                    log::warn!(
+                        "代理测试前解析网络配置失败: {}",
+                        result.error.as_deref().unwrap_or("未知错误")
+                    );
+                    return Ok(result);
+                }
+            },
+            Err(_) => config,
+        };
+
         // 构建代理客户端
-        let client = match build_proxy_client(&config, Some(15)) {
+        let client = match build_proxy_client(&effective_config, Some(15)) {
             Ok(c) => c,
             Err(e) => {
                 let result = ProxyTestResult::failure(e);

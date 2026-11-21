@@ -166,22 +166,27 @@ impl LocalExtensionService {
     }
 
     pub async fn import_store_url(app: &AppHandle, store_url: String) -> Result<LocalExtensionDto> {
-        let normalized_store_url = store_url.trim().to_string();
-        let extension_id = extract_extension_id(&normalized_store_url)?;
+        let raw_input = store_url.trim().to_string();
+        let extension_id = extract_extension_id(&raw_input)?;
+        let normalized_store_url = if EXTENSION_ID_REGEX.is_match(&raw_input) {
+            format!("https://chromewebstore.google.com/detail/{extension_id}")
+        } else {
+            raw_input
+        };
 
         if let Some(existing) = find_existing_store_import_result(app, &extension_id)? {
             return Ok(existing);
         }
 
-        let store_info = fetch_store_page_info(&normalized_store_url).await.unwrap_or(None);
-        let update_info = fetch_store_update_info(&normalized_store_url).await?;
+        let store_info = fetch_store_page_info(app, &normalized_store_url).await.unwrap_or(None);
+        let update_info = fetch_store_update_info(app, &normalized_store_url).await?;
         let temp_path = local_crx_dir(app)?.join(format!(
             ".tmp_{}_{}.crx",
             update_info.extension_id,
             Uuid::new_v4().simple()
         ));
 
-        download_crx_to_path(&update_info.codebase, &temp_path).await?;
+        download_crx_to_path(app, &update_info.codebase, &temp_path).await?;
 
         let file_hash = calculate_file_hash(&temp_path)?;
         if let Some(expected_hash) = update_info.hash_sha256.as_deref() {
@@ -420,17 +425,32 @@ fn extract_extension_id(input: &str) -> Result<String> {
     Err("无法从地址中提取扩展 ID".into())
 }
 
-async fn fetch_store_update_info(store_url: &str) -> Result<ChromeUpdateInfo> {
+async fn build_store_http_client(app: &AppHandle, timeout_secs: u64) -> Result<reqwest::Client> {
+    let mut builder = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36")
+        .timeout(std::time::Duration::from_secs(timeout_secs));
+
+    if let Some(proxy) = crate::app::context::AppContext::get()
+        .network_relay_manager
+        .resolve_effective_proxy(app, None)
+        .await?
+    {
+        let infra_proxy = proxy.to_infrastructure_proxy_config();
+        let proxy_url = infra_proxy.to_url().map_err(|e| -> crate::core::error::Error { e.into() })?;
+        builder = builder.proxy(reqwest::Proxy::all(&proxy_url)?);
+    }
+
+    Ok(builder.build()?)
+}
+
+async fn fetch_store_update_info(app: &AppHandle, store_url: &str) -> Result<ChromeUpdateInfo> {
     let extension_id = extract_extension_id(store_url)?;
     log::info!(
         "[local-extension-import] fetch store update info: url={}, extension_id={}",
         store_url,
         extension_id
     );
-    let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36")
-        .timeout(std::time::Duration::from_secs(60))
-        .build()?;
+    let client = build_store_http_client(app, 60).await?;
 
     let response = client
         .get(CHROME_UPDATE_URL)
@@ -457,11 +477,8 @@ async fn fetch_store_update_info(store_url: &str) -> Result<ChromeUpdateInfo> {
     parse_update_response(&extension_id, store_url, &xml)
 }
 
-async fn fetch_store_page_info(store_url: &str) -> Result<Option<StorePageInfo>> {
-    let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36")
-        .timeout(std::time::Duration::from_secs(60))
-        .build()?;
+async fn fetch_store_page_info(app: &AppHandle, store_url: &str) -> Result<Option<StorePageInfo>> {
+    let client = build_store_http_client(app, 30).await?;
 
     let response = client.get(store_url).send().await?;
     if !response.status().is_success() {
@@ -719,11 +736,12 @@ fn parse_update_response(
     })
 }
 
-async fn download_crx_to_path(download_url: &str, output_path: &Path) -> Result<()> {
-    let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36")
-        .timeout(std::time::Duration::from_secs(300))
-        .build()?;
+async fn download_crx_to_path(
+    app: &AppHandle,
+    download_url: &str,
+    output_path: &Path,
+) -> Result<()> {
+    let client = build_store_http_client(app, 300).await?;
 
     let response = client.get(download_url).send().await?;
     if !response.status().is_success() {
@@ -878,7 +896,9 @@ fn write_registry(_app: &AppHandle, registry: &LocalExtensionRegistry) -> Result
 
 fn parse_crx_metadata(path: &Path) -> Result<ParsedCrxMetadata> {
     let mut archive = open_crx_zip_archive(path)?;
-    let mut manifest_file = archive.by_name("manifest.json")?;
+    let manifest_entry_name = find_manifest_entry_name(&archive)
+        .ok_or("插件包内未找到 manifest.json，请确认是有效的 Chrome 扩展 .crx 或 .zip 包")?;
+    let mut manifest_file = archive.by_name(&manifest_entry_name)?;
     let mut manifest_content = String::new();
     manifest_file.read_to_string(&mut manifest_content)?;
     drop(manifest_file);
@@ -957,25 +977,60 @@ fn parse_manifest_author(value: &Value) -> Option<String> {
     None
 }
 
+fn find_manifest_entry_name(archive: &zip::ZipArchive<fs::File>) -> Option<String> {
+    let mut best: Option<String> = None;
+    for i in 0..archive.len() {
+        let Ok(name) = archive.name_for_index(i).ok_or(()) else {
+            continue;
+        };
+        let normalized = name.replace('\\', "/");
+        if normalized == "manifest.json" {
+            return Some(name.to_string());
+        }
+        if normalized.ends_with("/manifest.json") && !normalized.starts_with("__MACOSX/") {
+            let depth = normalized.matches('/').count();
+            if depth == 1 && best.is_none() {
+                best = Some(name.to_string());
+            }
+        }
+    }
+    best
+}
+
 fn open_crx_zip_archive(path: &Path) -> Result<zip::ZipArchive<fs::File>> {
     let mut file = fs::File::open(path)?;
     let mut magic = [0u8; 4];
     file.read_exact(&mut magic)?;
+
+    // 支持标准 ZIP 扩展包（PK\x03\x04 / PK\x05\x06）
+    if &magic[0..2] == b"PK" {
+        file.seek(std::io::SeekFrom::Start(0))?;
+        return Ok(zip::ZipArchive::new(file)?);
+    }
+
     if &magic != b"Cr24" {
-        return Err("不是有效的 CRX3 文件格式".into());
+        return Err("不是有效的 CRX 或 ZIP 扩展文件格式".into());
     }
 
     let mut version_bytes = [0u8; 4];
     file.read_exact(&mut version_bytes)?;
     let version = u32::from_le_bytes(version_bytes);
-    if version != 3 {
-        return Err(format!("暂不支持的 CRX 版本: {version}").into());
-    }
-
-    let mut header_len_bytes = [0u8; 4];
-    file.read_exact(&mut header_len_bytes)?;
-    let header_len = u32::from_le_bytes(header_len_bytes);
-    let zip_offset = 4 + 4 + 4 + header_len as u64;
+    let zip_offset = match version {
+        3 => {
+            let mut header_len_bytes = [0u8; 4];
+            file.read_exact(&mut header_len_bytes)?;
+            let header_len = u32::from_le_bytes(header_len_bytes);
+            4 + 4 + 4 + header_len as u64
+        }
+        2 => {
+            let mut pubkey_len_bytes = [0u8; 4];
+            let mut sig_len_bytes = [0u8; 4];
+            file.read_exact(&mut pubkey_len_bytes)?;
+            file.read_exact(&mut sig_len_bytes)?;
+            16 + u32::from_le_bytes(pubkey_len_bytes) as u64 + u32::from_le_bytes(sig_len_bytes) as u64
+        }
+        _ => return Err(format!("暂不支持的 CRX 版本: {version}").into()),
+    };
     file.seek(std::io::SeekFrom::Start(zip_offset))?;
 
     Ok(zip::ZipArchive::new(file)?)

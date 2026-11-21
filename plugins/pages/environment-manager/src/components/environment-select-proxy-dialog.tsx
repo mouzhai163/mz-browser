@@ -631,52 +631,6 @@ export function EnvironmentSelectProxyDialog({ onComplete }: EnvironmentSelectPr
 
           {/* 内容区域 */}
           <div className="p-4 space-y-3 flex-1 min-h-0 overflow-hidden flex flex-col">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 rounded-xl bg-secondary p-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setProxySourceMode('remote');
-                    setSearchQuery('');
-                    setPage(1);
-                    setSelectedProxyUuids(
-                      initialSelection.mode === 'remote'
-                        ? createSingleSelection(initialSelection.key)
-                        : createSingleSelection()
-                    );
-                  }}
-                  className={cn(
-                    'rounded-xl px-3 py-1.5 text-xs transition-all duration-200',
-                    proxySourceMode === 'remote'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                  )}
-                >
-                  {t('dialog.proxy.modeRemote', { defaultValue: '代理' })}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setProxySourceMode('local');
-                    setSearchQuery('');
-                    setPage(1);
-                    setSelectedProxyUuids(
-                      initialSelection.mode === 'local'
-                        ? createSingleSelection(initialSelection.key)
-                        : createSingleSelection()
-                    );
-                  }}
-                  className={cn(
-                    'rounded-xl px-3 py-1.5 text-xs transition-all duration-200',
-                    proxySourceMode === 'local'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                  )}
-                >
-                  {t('dialog.proxy.modeLocal', { defaultValue: '本地代理' })}
-                </button>
-              </div>
-            </div>
             {/* 工具栏：搜索（左上角）+ 检测（右上角） */}
             <div className="flex items-center justify-between gap-2">
               <div className="relative group w-[320px]">

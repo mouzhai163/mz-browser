@@ -53,6 +53,10 @@ pub async fn launch_environment(
     extensions: Option<Vec<crate::services::environment::ExtensionInfo>>,
     engine: Option<crate::domain::environment::KernelEngine>,
 ) -> Result<()> {
+    let effective_proxy = crate::app::context::AppContext::get()
+        .network_relay_manager
+        .resolve_effective_proxy(&app, proxy)
+        .await?;
     KernelService::launch_environment(
         app.clone(),
         exe_path,
@@ -61,7 +65,7 @@ pub async fn launch_environment(
         cache_path,
         cookies,
         urls,
-        proxy,
+        effective_proxy,
         fingerprint_config,
         accounts,
         extensions,
@@ -121,8 +125,16 @@ pub async fn stop_environment(env_uuid: String) -> Result<()> {
 }
 
 #[tauri::command]
-pub async fn refresh_environment_proxy(env_uuid: String, proxy: Option<ProxyConfig>) -> Result<()> {
-    KernelService::refresh_proxy(env_uuid, proxy).await
+pub async fn refresh_environment_proxy(
+    app: AppHandle,
+    env_uuid: String,
+    proxy: Option<ProxyConfig>,
+) -> Result<()> {
+    let effective_proxy = crate::app::context::AppContext::get()
+        .network_relay_manager
+        .resolve_effective_proxy(&app, proxy)
+        .await?;
+    KernelService::refresh_proxy(env_uuid, effective_proxy).await
 }
 
 #[tauri::command]

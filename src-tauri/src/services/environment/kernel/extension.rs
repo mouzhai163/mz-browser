@@ -294,59 +294,98 @@ fn verify_extension_hash(crx_path: &Path, expected_hash: &str) -> Result<()> {
     Ok(())
 }
 
-/// 解压 CRX 文件到目标目录
+/// 解压 CRX / ZIP 扩展文件到目标目录
 fn extract_crx_to_dir(crx_path: &Path, target_dir: &Path) -> Result<()> {
     use std::io::{Read, Seek};
 
     crate::log_info!(
         crate::core::logger::modules::KERNEL,
-        "开始解压 CRX 文件: {} -> {}",
+        "开始解压扩展文件: {} -> {}",
         crx_path.display(),
         target_dir.display()
     );
-
-    // CRX3 格式：
-    // - 前 4 字节: "Cr24" (magic number)
-    // - 接下来 4 字节: version (little-endian u32)
-    // - 接下来 4 字节: header length (little-endian u32)
-    // - header 数据
-    // - ZIP 数据
 
     let mut file = fs::File::open(crx_path)?;
     let mut magic = [0u8; 4];
     file.read_exact(&mut magic)?;
 
-    if &magic != b"Cr24" {
-        return Err("不是有效的 CRX3 文件格式".into());
-    }
+    let zip_offset = if &magic[0..2] == b"PK" {
+        0u64
+    } else if &magic == b"Cr24" {
+        let mut version_bytes = [0u8; 4];
+        file.read_exact(&mut version_bytes)?;
+        let version = u32::from_le_bytes(version_bytes);
+        match version {
+            3 => {
+                let mut header_len_bytes = [0u8; 4];
+                file.read_exact(&mut header_len_bytes)?;
+                12 + u32::from_le_bytes(header_len_bytes) as u64
+            }
+            2 => {
+                let mut pubkey_len_bytes = [0u8; 4];
+                let mut sig_len_bytes = [0u8; 4];
+                file.read_exact(&mut pubkey_len_bytes)?;
+                file.read_exact(&mut sig_len_bytes)?;
+                16 + u32::from_le_bytes(pubkey_len_bytes) as u64
+                    + u32::from_le_bytes(sig_len_bytes) as u64
+            }
+            _ => return Err(format!("暂不支持的 CRX 版本: {version}").into()),
+        }
+    } else {
+        return Err("不是有效的 CRX 或 ZIP 扩展文件格式".into());
+    };
 
-    // 读取 version
-    let mut version_bytes = [0u8; 4];
-    file.read_exact(&mut version_bytes)?;
-    let _version = u32::from_le_bytes(version_bytes);
-
-    // 读取 header length
-    let mut header_len_bytes = [0u8; 4];
-    file.read_exact(&mut header_len_bytes)?;
-    let header_len = u32::from_le_bytes(header_len_bytes);
-
-    // 跳过 header，定位到 ZIP 数据起始位置
-    let zip_offset = 4 + 4 + 4 + header_len as u64;
     file.seek(std::io::SeekFrom::Start(zip_offset))?;
 
     // 解压 ZIP 数据
     let mut archive = zip::ZipArchive::new(file)?;
     fs::create_dir_all(target_dir)?;
 
+    // 如果 manifest.json 位于单层子目录下（常见于手动压缩文件夹的 .zip），自动剥离该顶层目录前缀
+    let strip_prefix: Option<String> = {
+        let mut root_manifest = false;
+        let mut nested_prefix: Option<String> = None;
+        for i in 0..archive.len() {
+            if let Some(name) = archive.name_for_index(i) {
+                let normalized = name.replace('\\', "/");
+                if normalized == "manifest.json" {
+                    root_manifest = true;
+                    break;
+                }
+                if normalized.ends_with("/manifest.json")
+                    && !normalized.starts_with("__MACOSX/")
+                    && normalized.matches('/').count() == 1
+                {
+                    if let Some((prefix, _)) = normalized.split_once('/') {
+                        nested_prefix = Some(format!("{prefix}/"));
+                    }
+                }
+            }
+        }
+        if root_manifest { None } else { nested_prefix }
+    };
+
     crate::log_info!(
         crate::core::logger::modules::KERNEL,
-        "CRX 文件包含 {} 个文件",
+        "扩展包包含 {} 个文件",
         archive.len()
     );
 
+    let canonical_target = target_dir.canonicalize()?;
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
-        let file_name = file.name();
+        let raw_name = file.name().replace('\\', "/");
+        if raw_name.starts_with("__MACOSX/") {
+            continue;
+        }
+        let file_name = if let Some(prefix) = strip_prefix.as_deref() {
+            match raw_name.strip_prefix(prefix) {
+                Some(rest) if !rest.is_empty() => rest,
+                _ => continue,
+            }
+        } else {
+            raw_name.as_str()
+        };
 
         // 安全检查：防止路径遍历攻击
         if file_name.contains("..") || file_name.starts_with('/') || file_name.starts_with('\\') {
@@ -355,10 +394,8 @@ fn extract_crx_to_dir(crx_path: &Path, target_dir: &Path) -> Result<()> {
 
         let outpath = target_dir.join(file_name);
 
-        // 二次验证：确保解压路径在目标目录内（使用父目录进行验证）
-        let canonical_target = target_dir.canonicalize()?;
+        // 二次验证：确保解压路径在目标目录内
         if let Some(parent) = outpath.parent() {
-            // 创建父目录后再验证
             fs::create_dir_all(parent)?;
             if let Ok(canonical_parent) = parent.canonicalize() {
                 if !canonical_parent.starts_with(&canonical_target) {
@@ -369,28 +406,18 @@ fn extract_crx_to_dir(crx_path: &Path, target_dir: &Path) -> Result<()> {
 
         if file.is_dir() {
             fs::create_dir_all(&outpath)?;
-            crate::log_debug!(
-                crate::core::logger::modules::KERNEL,
-                "创建目录: {}",
-                outpath.display()
-            );
         } else {
             if let Some(parent) = outpath.parent() {
                 fs::create_dir_all(parent)?;
             }
             let mut outfile = fs::File::create(&outpath)?;
             std::io::copy(&mut file, &mut outfile)?;
-            crate::log_debug!(
-                crate::core::logger::modules::KERNEL,
-                "解压文件: {}",
-                outpath.display()
-            );
         }
     }
 
     crate::log_info!(
         crate::core::logger::modules::KERNEL,
-        "CRX 文件解压完成: {}",
+        "扩展文件解压完成: {}",
         target_dir.display()
     );
 

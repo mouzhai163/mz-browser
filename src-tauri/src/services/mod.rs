@@ -13,4 +13,5 @@ pub mod environment;
 pub mod file_system;
 pub mod local_extensions;
 pub mod mihomo;
+pub mod network_relay;
 pub mod window;

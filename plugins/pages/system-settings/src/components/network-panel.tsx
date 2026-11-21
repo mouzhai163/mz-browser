@@ -79,6 +79,15 @@ export const NetworkPanel: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/25 bg-primary/5 px-4 py-3 text-xs">
+        <div className="space-y-0.5">
+          <p className="font-medium text-foreground">需要配置「直接连接 / 系统代理 / 中转节点」？</p>
+          <p className="text-muted-foreground">
+            请前往左侧「代理中心 → 网络配置」管理机场订阅、中转节点与多级链式代理。
+          </p>
+        </div>
+      </div>
+
       {/* 网络设置 */}
       <SettingCard title={t('networkProxy')} icon={Wifi}>
         <SettingRow icon={Globe} title={t('enableProxy')} description={t('enableProxyDesc')}>

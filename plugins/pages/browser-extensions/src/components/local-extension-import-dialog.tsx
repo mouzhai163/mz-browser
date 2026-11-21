@@ -13,6 +13,7 @@ type ImportMode = 'file' | 'storeUrl';
 
 interface LocalExtensionImportDialogProps {
   open: boolean;
+  defaultMode?: ImportMode;
   importing: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (payload: { mode: ImportMode; crxPath?: string; storeUrl?: string }) => Promise<void>;
@@ -20,14 +21,17 @@ interface LocalExtensionImportDialogProps {
 
 export function LocalExtensionImportDialog({
   open,
+  defaultMode = 'file',
   importing,
   onOpenChange,
   onSubmit,
 }: LocalExtensionImportDialogProps) {
   const { t } = useTranslation('extensions');
-  const [mode, setMode] = useState<ImportMode>('file');
+  const [selectedMode, setSelectedMode] = useState<ImportMode | null>(null);
   const [crxPath, setCrxPath] = useState('');
   const [storeUrl, setStoreUrl] = useState('');
+
+  const mode = selectedMode ?? defaultMode;
 
   const canSubmit = useMemo(() => {
     if (importing) {
@@ -38,7 +42,7 @@ export function LocalExtensionImportDialog({
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
-      setMode('file');
+      setSelectedMode(null);
       setCrxPath('');
       setStoreUrl('');
     }
@@ -48,7 +52,7 @@ export function LocalExtensionImportDialog({
   const handlePickCrx = async () => {
     const selected = await openFileDialog({
       multiple: false,
-      filters: [{ name: 'Chrome Extension', extensions: ['crx'] }],
+      filters: [{ name: 'Chrome Extension (.crx / .zip)', extensions: ['crx', 'zip'] }],
     });
 
     if (!selected || Array.isArray(selected)) {
@@ -83,7 +87,7 @@ export function LocalExtensionImportDialog({
       contentPadding="p-5"
     >
       <div className="space-y-4">
-        <Tabs value={mode} onValueChange={(value) => setMode(value as ImportMode)}>
+        <Tabs value={mode} onValueChange={(value) => setSelectedMode(value as ImportMode)}>
           <TabsList className="h-9 bg-secondary w-full grid grid-cols-2">
             <TabsTrigger value="file" className="text-xs">
               {t('dialog.localImport.mode.file')}

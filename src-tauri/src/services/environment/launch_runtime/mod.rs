@@ -147,10 +147,15 @@ impl EnvironmentLaunchRuntimeService {
 
         // Resolve policy before downloads or process creation. Broken bindings
         // must never be interpreted as an explicit choice to use direct access.
-        let proxy = resolve_environment_proxy_config(&app, &env.uuid, detail.proxy.clone())?;
-        if proxy.is_none() && env.proxy_uuid.is_some() {
+        let base_proxy = resolve_environment_proxy_config(&app, &env.uuid, detail.proxy.clone())?;
+        if base_proxy.is_none() && env.proxy_uuid.is_some() {
             return Err("环境绑定的代理已不存在或不可访问，已阻止无代理启动".into());
         }
+        // 结合全局网络配置（直连 / 系统代理 / 中转节点）包装最终生效代理
+        let proxy = crate::app::context::AppContext::get()
+            .network_relay_manager
+            .resolve_effective_proxy(&app, base_proxy)
+            .await?;
 
         // 出口检测（语言/时区/定位“基于 IP”时要用）只依赖代理和指纹配置，和内核无关：
         // 跟内核校验（算 chrome.dll 哈希，必要时下载）同时做，不再排在它后面

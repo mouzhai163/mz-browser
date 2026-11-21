@@ -12,6 +12,7 @@ use crate::app::runtime::MzRuntimeManager;
 use crate::mcp::McpManager;
 use crate::services::environment::{EnvironmentPositionManager, EnvironmentStatusManager};
 use crate::services::mihomo::MihomoManager;
+use crate::services::network_relay::NetworkRelayManager;
 
 /// 应用上下文
 ///
@@ -28,6 +29,9 @@ pub struct AppContext {
 
     /// Mihomo 集成管理器
     pub mihomo_manager: Arc<MihomoManager>,
+
+    /// 网络中转配置管理器（直连 / 系统代理 / 中转节点）
+    pub network_relay_manager: Arc<NetworkRelayManager>,
 
     /// 内嵌环境运行时管理器
     pub mz_runtime_manager: Arc<MzRuntimeManager>,
@@ -51,6 +55,9 @@ impl AppContext {
         // 初始化 Mihomo 管理器
         let mihomo_manager = Arc::new(MihomoManager::new());
 
+        // 初始化网络中转配置管理器
+        let network_relay_manager = Arc::new(NetworkRelayManager::new());
+
         // 初始化内嵌环境运行时管理器
         let mz_runtime_manager = Arc::new(MzRuntimeManager::new());
 
@@ -59,6 +66,7 @@ impl AppContext {
             env_position_manager,
             mcp_manager,
             mihomo_manager,
+            network_relay_manager,
             mz_runtime_manager,
         })
     }

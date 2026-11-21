@@ -26,6 +26,7 @@ pub fn init_tauri_dependent(_app_handle: &AppHandle) -> Result<()> {
 /// 清理资源
 pub async fn shutdown() -> Result<()> {
     if let Some(ctx) = AppContext::try_get() {
+        ctx.network_relay_manager.shutdown().await;
         ctx.mcp_manager.stop().await;
         ctx.mz_runtime_manager.stop().await;
     }

@@ -9,6 +9,7 @@ pub mod logging;
 pub mod mcp;
 pub mod mihomo;
 pub mod network;
+pub mod network_relay;
 pub mod rpa;
 pub mod store;
 pub mod window;
@@ -109,6 +110,20 @@ pub fn register_handles() -> impl Fn(Invoke<tauri::Wry>) -> bool + Send + Sync +
         mihomo::get_local_mihomo_proxies,
         mihomo::ensure_mihomo_local_proxy_listeners,
         mihomo::update_local_mihomo_proxy,
+        // Network Relay commands
+        network_relay::get_network_relay_state,
+        network_relay::set_network_relay_mode,
+        network_relay::select_network_relay_node,
+        network_relay::add_network_relay_subscription,
+        network_relay::refresh_network_relay_subscription,
+        network_relay::add_network_relay_group,
+        network_relay::delete_network_relay_group,
+        network_relay::add_network_relay_nodes,
+        network_relay::delete_network_relay_node,
+        network_relay::install_network_relay_core,
+        network_relay::set_network_relay_core_path,
+        network_relay::test_network_relay_node_delay,
+        network_relay::test_network_relay_group_delays,
         // Store commands
         store::get_store_key,
         store::set_store_key,
