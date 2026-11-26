@@ -12,6 +12,7 @@ interface KernelPrepareStatusPayload {
   progress_percent?: number;
   downloaded?: number;
   total?: number;
+  download_state?: 'paused' | 'cancelled';
 }
 
 /**
@@ -23,12 +24,9 @@ export function DownloadEventSubscriber() {
     void useDownloadStore.getState().loadPersistedRecords();
 
     let unlistenFn: (() => void) | null = null;
-    const unlisten = listen<KernelPrepareStatusPayload>(
-      KERNEL_PREPARE_STATUS_EVENT,
-      (event) => {
-        useDownloadStore.getState().upsertKernelPrepare(event.payload);
-      }
-    );
+    const unlisten = listen<KernelPrepareStatusPayload>(KERNEL_PREPARE_STATUS_EVENT, (event) => {
+      useDownloadStore.getState().upsertKernelPrepare(event.payload);
+    });
     unlisten.then((fn) => {
       unlistenFn = fn;
     });

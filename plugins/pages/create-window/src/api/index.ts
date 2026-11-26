@@ -34,6 +34,8 @@ export interface BrowserKernelVersion {
   kernel_id: string;
   type_code: string;
   resource_name: string;
+  /** 内核实际安装/下载控制使用的目录名 */
+  install_dir_name?: string;
   version: string;
   name?: string;
   notes?: string;
@@ -245,6 +247,43 @@ export async function listBrowserKernels(
  */
 export async function updateBrowserKernel(kernelId: string): Promise<void> {
   await invoke('update_browser_kernel', { kernelId });
+}
+
+/** 手动下载未安装的内核。后端与内核更新共用同一套校验、解压和安装流程 */
+export async function downloadBrowserKernel(kernelId: string): Promise<void> {
+  await invoke('download_browser_kernel', { kernelId });
+}
+
+export type KernelDownloadProxyMode = 'system' | 'direct' | 'custom';
+export type KernelDownloadProxyProtocol = 'http' | 'https' | 'socks5';
+
+/** 与后端 camelCase 配置结构一致。proxyPassword 省略表示保留已保存密码，空字符串表示清除。 */
+export interface KernelDownloadSettingsInput {
+  proxyMode: KernelDownloadProxyMode;
+  proxyType: KernelDownloadProxyProtocol;
+  proxyHost: string;
+  proxyPort: string;
+  proxyUsername: string;
+  proxyPassword?: string;
+}
+
+export interface KernelDownloadSettingsView {
+  proxyMode: KernelDownloadProxyMode;
+  proxyType: KernelDownloadProxyProtocol;
+  proxyHost: string;
+  proxyPort: string;
+  proxyUsername: string;
+  hasProxyPassword: boolean;
+}
+
+export async function getKernelDownloadSettings(): Promise<KernelDownloadSettingsView> {
+  return invoke<KernelDownloadSettingsView>('get_kernel_download_settings');
+}
+
+export async function updateKernelDownloadSettings(
+  settings: KernelDownloadSettingsInput
+): Promise<KernelDownloadSettingsView> {
+  return invoke<KernelDownloadSettingsView>('update_kernel_download_settings', { settings });
 }
 
 /**

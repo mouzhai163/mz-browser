@@ -1,4 +1,4 @@
-import { Download, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Download, CheckCircle, XCircle, Loader2, Pause, Play, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   DropdownMenu,
@@ -19,18 +19,27 @@ export function DownloadMenu() {
   const tasks = useDownloadStore((s) => s.tasks);
 
   const activeCount = tasks.filter(
-    (d) => d.status === 'downloading' || d.status === 'pending'
+    (d) => d.status === 'downloading' || d.status === 'pending' || d.status === 'paused'
   ).length;
   const completedCount = tasks.filter(
-    (d) => d.status === 'completed' || d.status === 'failed'
+    (d) => d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled'
   ).length;
   const downloads = [...tasks].reverse();
   const clearCompleted = useDownloadStore((s) => s.clearCompleted);
+  const pauseTask = useDownloadStore((s) => s.pauseTask);
+  const resumeTask = useDownloadStore((s) => s.resumeTask);
+  const cancelTask = useDownloadStore((s) => s.cancelTask);
+
+  const runTaskAction = (action: Promise<void>) => {
+    action.catch((error) => console.warn('[download-menu] task action failed:', error));
+  };
 
   const getStatusIcon = (status: DownloadStatus) => {
     switch (status) {
       case 'downloading':
         return <Loader2 className="w-4 h-4 text-primary animate-spin" />;
+      case 'paused':
+        return <Pause className="w-4 h-4 text-muted-foreground" />;
       case 'completed':
         return <CheckCircle className="w-4 h-4 text-success" />;
       case 'failed':
@@ -80,30 +89,57 @@ export function DownloadMenu() {
                 {getStatusIcon(task.status)}
                 <div className="flex-1 min-w-0">
                   <div className="truncate text-sm font-medium">{task.name}</div>
-                  {(task.status === 'downloading' || task.status === 'pending') &&
-                    task.message && (
-                      <div className="text-xs text-muted-foreground truncate">
-                        {task.message}
-                      </div>
-                    )}
+                  {['downloading', 'pending', 'paused'].includes(task.status) && task.message && (
+                    <div className="text-xs text-muted-foreground truncate">{task.message}</div>
+                  )}
                 </div>
-                {(task.status === 'downloading' || task.status === 'pending') && (
+                {['downloading', 'pending', 'paused'].includes(task.status) && (
                   <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
                     {task.progress >= 0 && task.progress <= 100
                       ? `${Math.round(task.progress)}%`
                       : '—'}
                   </span>
                 )}
+                {(task.status === 'downloading' || task.status === 'pending') &&
+                  task.phase !== 'extracting' && (
+                    <button
+                      type="button"
+                      className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                      title={t('download.pause')}
+                      onClick={() => runTaskAction(pauseTask(task))}
+                    >
+                      <Pause className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                {task.status === 'paused' && (
+                  <button
+                    type="button"
+                    className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                    title={t('download.resume')}
+                    onClick={() => runTaskAction(resumeTask(task))}
+                  >
+                    <Play className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {['downloading', 'pending', 'paused'].includes(task.status) &&
+                  task.phase !== 'extracting' && (
+                    <button
+                      type="button"
+                      className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                      title={t('download.cancel')}
+                      onClick={() => runTaskAction(cancelTask(task))}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
               </div>
-              {(task.status === 'downloading' || task.status === 'pending') && (
+              {['downloading', 'pending', 'paused'].includes(task.status) && (
                 <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                   <div
                     className="h-full bg-primary transition-all duration-300"
                     style={{
                       width:
-                        task.progress >= 0 && task.progress <= 100
-                          ? `${task.progress}%`
-                          : '0%',
+                        task.progress >= 0 && task.progress <= 100 ? `${task.progress}%` : '0%',
                     }}
                   />
                 </div>

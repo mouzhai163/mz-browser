@@ -71,6 +71,9 @@ export const appLayoutResources = {
       empty: '暂无下载任务',
       active: '{{count}} 个进行中',
       clearCompleted: '清除已完成',
+      pause: '暂停',
+      resume: '恢复',
+      cancel: '取消',
     },
     update: {
       available: '发现新版本',
@@ -163,6 +166,9 @@ export const appLayoutResources = {
       empty: 'No download tasks',
       active: '{{count}} active',
       clearCompleted: 'Clear completed',
+      pause: 'Pause',
+      resume: 'Resume',
+      cancel: 'Cancel',
     },
     update: {
       available: 'Update available',

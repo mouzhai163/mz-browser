@@ -20,6 +20,14 @@ pub struct BrowserProxyConfigPayload {
     pub auth: Option<std::collections::HashMap<String, BrowserProxyAuthPayload>>,
 }
 
+/// 下载任务的控制状态。它不是浏览器环境生命周期状态，因此独立于 EnvironmentStatus 传递。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KernelDownloadEventState {
+    Paused,
+    Cancelled,
+}
+
 /// 内核准备状态事件 payload（前端监听 kernel-prepare-status）
 #[derive(Debug, Clone, Serialize)]
 pub struct KernelPrepareStatusPayload {
@@ -35,6 +43,8 @@ pub struct KernelPrepareStatusPayload {
     pub downloaded: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub total: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub download_state: Option<KernelDownloadEventState>,
 }
 
 pub type KernelStatusEmitter = Arc<dyn Fn(KernelPrepareStatusPayload) + Send + Sync>;

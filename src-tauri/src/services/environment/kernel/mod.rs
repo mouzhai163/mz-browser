@@ -9,6 +9,8 @@ use std::path::{Path, PathBuf};
 use tauri::Manager;
 use uuid::Uuid;
 
+pub mod download_control;
+pub mod download_settings;
 pub mod downloader;
 pub mod extension;
 mod gecko_profile;
@@ -24,7 +26,7 @@ pub mod verifier;
 // 重新导出常用类型
 pub use types::{
     AccountInfo, BatchLaunchRequest, BatchLaunchResult, CdpEndpointResponse, CookieGroup,
-    ExtensionInfo, KernelPrepareStatusPayload, KernelStatusEmitter, ProxyConfig, RpaTabCloseResult,
+    ExtensionInfo, KernelDownloadEventState, KernelPrepareStatusPayload, KernelStatusEmitter, ProxyConfig, RpaTabCloseResult,
     RpaTabInfo, RpaTabSelection, RpaTabsSnapshot,
 };
 
@@ -100,7 +102,7 @@ impl KernelService {
             requires_extract: kernel.requires_extract,
         };
 
-        let _prepare_guard = state::acquire_kernel_prepare_lock(&kernel_id).await;
+        let _prepare_guard = state::acquire_kernel_prepare_lock(&kernel.install_dir_name).await;
         let base = utils::resolve_profiles_base(&app, &profiles_path)?;
         let kernel_dir = utils::resolve_kernel_install_dir(&base, &kernel.install_dir_name)?;
         if utils::kernel_dir_in_use(&kernel_dir) {
@@ -141,7 +143,7 @@ impl KernelService {
             return Err("内核版本不能为空".into());
         }
 
-        let _prepare_guard = state::acquire_kernel_prepare_lock(&kernel_id).await;
+        let _prepare_guard = state::acquire_kernel_prepare_lock(&install_dir_name).await;
         let base = utils::resolve_profiles_base(&app, &profiles_path)?;
         let kernel_dir = utils::resolve_kernel_install_dir(&base, &install_dir_name)?;
         let exe_path = kernel_dir.join(utils::exe_name(kernel_detail.engine));

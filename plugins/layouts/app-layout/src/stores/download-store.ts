@@ -2,7 +2,13 @@ import { load } from '@tauri-apps/plugin-store';
 import { create } from 'zustand';
 import { invoke } from '@/lib/tauri';
 
-export type DownloadStatus = 'pending' | 'downloading' | 'completed' | 'failed';
+export type DownloadStatus =
+  | 'pending'
+  | 'downloading'
+  | 'paused'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
 
 export interface DownloadTask {
   id: string;
@@ -13,6 +19,10 @@ export interface DownloadTask {
   message?: string;
   /** 完成或失败时间戳，用于排序或后续清理 */
   updatedAt: number;
+  /** 后端下载控制使用的内核标识（目录名） */
+  controlId?: string;
+  /** 当前处于网络下载还是解压阶段；暂停/取消只作用于网络下载 */
+  phase?: 'downloading' | 'extracting';
 }
 
 const PERSIST_STORE_PATH = 'download-records.json';
@@ -51,14 +61,19 @@ interface DownloadActions {
     progress_percent?: number;
     downloaded?: number;
     total?: number;
+    download_state?: 'paused' | 'cancelled';
   }) => void;
+  pauseTask: (task: DownloadTask) => Promise<void>;
+  resumeTask: (task: DownloadTask) => Promise<void>;
+  cancelTask: (task: DownloadTask) => Promise<void>;
   removeTask: (id: string) => void;
   clearCompleted: () => void;
   /** 从持久化存储加载记录（布局挂载时调用） */
   loadPersistedRecords: () => Promise<void>;
 }
 
-function statusFromEvent(status: string): DownloadStatus | null {
+function statusFromEvent(status: string, downloadState?: string): DownloadStatus | null {
+  if (downloadState === 'paused') return 'paused';
   switch (status) {
     case 'downloading':
       return 'downloading';
@@ -72,10 +87,17 @@ function statusFromEvent(status: string): DownloadStatus | null {
 }
 
 export const useDownloadStore = create<DownloadState & DownloadActions>((set, get) => {
+  function scheduleSavePersistedRecords() {
+    // Zustand 的 set updater 尚未提交时不能立即读 get()；延后到当前更新落进 store 后再持久化。
+    setTimeout(() => {
+      void savePersistedRecords();
+    }, 0);
+  }
+
   async function savePersistedRecords() {
     const tasks = get().tasks;
     const toSave = tasks
-      .filter((t) => t.status === 'completed' || t.status === 'failed')
+      .filter((t) => t.status === 'completed' || t.status === 'failed' || t.status === 'cancelled')
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, PERSIST_MAX);
     try {
@@ -91,8 +113,9 @@ export const useDownloadStore = create<DownloadState & DownloadActions>((set, ge
     tasks: [],
 
     upsertKernelPrepare: (payload) => {
-      const status = statusFromEvent(payload.status);
-      const id = payload.env_uuid || payload.kernel_value;
+      const status = statusFromEvent(payload.status, payload.download_state);
+      // 下载是内核级任务；即使由不同环境触发，也按安装目录聚合，避免同一内核出现多个任务
+      const id = payload.kernel_value;
 
       // 如果是非下载阶段（校验、就绪等），检查是否有正在进行的下载任务
       if (status === null) {
@@ -108,7 +131,23 @@ export const useDownloadStore = create<DownloadState & DownloadActions>((set, ge
               message: '下载完成',
               updatedAt: Date.now(),
             };
-            void savePersistedRecords();
+            scheduleSavePersistedRecords();
+            return { tasks: next };
+          }
+          // 取消是用户主动结束，不按失败记录
+          if (
+            existing >= 0 &&
+            payload.status === 'error' &&
+            payload.download_state === 'cancelled'
+          ) {
+            const next = state.tasks.slice();
+            next[existing] = {
+              ...next[existing],
+              status: 'cancelled',
+              message: payload.message ?? '下载已取消',
+              updatedAt: Date.now(),
+            };
+            scheduleSavePersistedRecords();
             return { tasks: next };
           }
           // 如果存在正在下载的任务，且当前状态是 error，标记为失败
@@ -120,7 +159,7 @@ export const useDownloadStore = create<DownloadState & DownloadActions>((set, ge
               message: payload.message ?? '下载失败',
               updatedAt: Date.now(),
             };
-            void savePersistedRecords();
+            scheduleSavePersistedRecords();
             return { tasks: next };
           }
           return state;
@@ -131,14 +170,15 @@ export const useDownloadStore = create<DownloadState & DownloadActions>((set, ge
       // 下载/解压阶段：创建或更新任务
       set((state) => {
         const name = `内核 ${payload.kernel_value}`;
+        const existing = state.tasks.findIndex((t) => t.id === id);
+        const previous = existing >= 0 ? state.tasks[existing] : undefined;
         const progress =
           payload.progress_percent != null
             ? Math.min(100, Math.max(0, payload.progress_percent))
-            : 0;
-        const message = payload.message ?? undefined;
+            : (previous?.progress ?? 0);
+        const message = payload.message ?? previous?.message;
         const updatedAt = Date.now();
 
-        const existing = state.tasks.findIndex((t) => t.id === id);
         const newTask: DownloadTask = {
           id,
           name,
@@ -146,6 +186,8 @@ export const useDownloadStore = create<DownloadState & DownloadActions>((set, ge
           status,
           message,
           updatedAt,
+          controlId: payload.kernel_value,
+          phase: payload.status === 'extracting' ? 'extracting' : 'downloading',
         };
         let next: DownloadTask[];
         if (existing >= 0) {
@@ -158,6 +200,18 @@ export const useDownloadStore = create<DownloadState & DownloadActions>((set, ge
       });
     },
 
+    pauseTask: async (task) => {
+      await invoke('pause_kernel_download', { kernelValue: task.controlId ?? task.id });
+    },
+
+    resumeTask: async (task) => {
+      await invoke('resume_kernel_download', { kernelValue: task.controlId ?? task.id });
+    },
+
+    cancelTask: async (task) => {
+      await invoke('cancel_kernel_download', { kernelValue: task.controlId ?? task.id });
+    },
+
     removeTask: (id) =>
       set((state) => ({
         tasks: state.tasks.filter((t) => t.id !== id),
@@ -165,7 +219,9 @@ export const useDownloadStore = create<DownloadState & DownloadActions>((set, ge
 
     clearCompleted: () => {
       set((state) => ({
-        tasks: state.tasks.filter((t) => t.status === 'downloading' || t.status === 'pending'),
+        tasks: state.tasks.filter(
+          (t) => t.status === 'downloading' || t.status === 'pending' || t.status === 'paused'
+        ),
       }));
       void savePersistedRecords();
     },

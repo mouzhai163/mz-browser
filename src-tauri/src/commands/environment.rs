@@ -84,6 +84,52 @@ pub async fn update_browser_kernel(app: AppHandle, kernel_id: String) -> Result<
     .await
 }
 
+/// 手动下载内核（设置 → 浏览器内核里的“下载”按钮）。与更新共用同一套安装流程。
+#[tauri::command]
+pub async fn download_browser_kernel(app: AppHandle, kernel_id: String) -> Result<()> {
+    update_browser_kernel(app, kernel_id).await
+}
+
+#[tauri::command]
+pub async fn pause_kernel_download(kernel_value: String) -> Result<()> {
+    crate::services::environment::kernel::download_control::pause_kernel_download(&kernel_value)
+        .await
+        .map_err(crate::core::error::Error::from)
+}
+
+#[tauri::command]
+pub async fn resume_kernel_download(kernel_value: String) -> Result<()> {
+    crate::services::environment::kernel::download_control::resume_kernel_download(&kernel_value)
+        .await
+        .map_err(crate::core::error::Error::from)
+}
+
+#[tauri::command]
+pub async fn cancel_kernel_download(kernel_value: String) -> Result<()> {
+    crate::services::environment::kernel::download_control::cancel_kernel_download(&kernel_value)
+        .await
+        .map_err(crate::core::error::Error::from)
+}
+
+#[tauri::command]
+pub fn get_kernel_download_settings(
+    app: AppHandle,
+) -> Result<crate::services::environment::kernel::download_settings::KernelDownloadSettingsView> {
+    crate::services::environment::kernel::download_settings::get_kernel_download_settings_view(&app)
+        .map_err(crate::core::error::Error::from)
+}
+
+#[tauri::command]
+pub fn update_kernel_download_settings(
+    app: AppHandle,
+    settings: crate::services::environment::kernel::download_settings::KernelDownloadSettingsInput,
+) -> Result<crate::services::environment::kernel::download_settings::KernelDownloadSettingsView> {
+    crate::services::environment::kernel::download_settings::update_kernel_download_settings(
+        &app, settings,
+    )
+    .map_err(crate::core::error::Error::from)
+}
+
 #[tauri::command]
 pub async fn get_connected_environments() -> Result<Vec<String>> {
     KernelService::get_connected_environments().await

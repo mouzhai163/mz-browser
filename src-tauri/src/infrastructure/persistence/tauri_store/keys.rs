@@ -8,6 +8,9 @@ pub const STORAGE: &str = "storage";
 /// MCP 配置
 pub const MCP: &str = "mcp";
 
+/// 内核下载配置
+pub const KERNEL_DOWNLOAD: &str = "kernelDownload";
+
 /// 存储配置下的子键
 pub mod storage {
     pub const LOGS_PATH: &str = "logsPath";

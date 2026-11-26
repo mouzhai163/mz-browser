@@ -289,6 +289,7 @@ pub fn emit_status(
             progress_percent: progress_percent.filter(|&p| p >= 0.0 && p <= 100.0),
             downloaded,
             total,
+            download_state: None,
         });
     }
 }
