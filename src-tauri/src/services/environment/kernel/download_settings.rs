@@ -276,7 +276,7 @@ mod tests {
 
         assert_eq!(
             custom_proxy_url(&settings).unwrap(),
-            Some("socks5h://127.0.0.1:7890/".to_string())
+            Some("socks5h://127.0.0.1:7890".to_string())
         );
     }
 
