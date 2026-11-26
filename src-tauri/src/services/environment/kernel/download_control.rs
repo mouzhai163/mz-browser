@@ -132,6 +132,11 @@ async fn control_for(kernel_value: &str) -> Option<Arc<KernelDownloadControl>> {
     KERNEL_DOWNLOAD_CONTROLS.lock().await.get(kernel_value).cloned()
 }
 
+/// 是否还有已注册、尚未结束的下载控制句柄。暂停中的下载仍算未结束。
+pub async fn has_kernel_download_control(kernel_value: &str) -> bool {
+    control_for(kernel_value).await.is_some()
+}
+
 pub async fn pause_kernel_download(kernel_value: &str) -> Result<(), String> {
     let control = control_for(kernel_value)
         .await

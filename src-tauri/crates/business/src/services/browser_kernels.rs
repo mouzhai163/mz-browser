@@ -685,6 +685,28 @@ pub async fn installed_signature_for_dir(
     .map_err(|error| error.to_string())
 }
 
+/// 删除某个安装目录下所有内核的安装记录。不同构建可能共用同一个安装目录，
+/// 所以卸载按目录清理，而不是只删除发起卸载的那个 kernel_id。
+pub async fn delete_kernel_installations_for_dir(
+    pool: &DbPool,
+    install_dir_name: &str,
+) -> Result<u64, String> {
+    let result = sqlx::query(
+        r#"
+        DELETE FROM browser_kernel_installations
+        WHERE kernel_id IN (
+            SELECT kernel_id FROM browser_kernel_artifacts
+            WHERE COALESCE(install_dir_name, resource_name) = $1
+        )
+        "#,
+    )
+    .bind(install_dir_name.trim())
+    .execute(pool)
+    .await
+    .map_err(|error| error.to_string())?;
+    Ok(result.rows_affected())
+}
+
 pub async fn record_kernel_installation(
     pool: &DbPool,
     kernel_id: &str,
@@ -1041,5 +1063,32 @@ mod tests {
             stored.window_info["kernel_id"].as_str(),
             Some(bound.kernel_id.as_str())
         );
+    }
+
+    #[tokio::test]
+    async fn uninstalling_a_directory_removes_install_records_for_all_builds_sharing_it() {
+        let pool = test_pool().await;
+        let catalog = parse_default_catalog().unwrap();
+        import_catalog(&pool, &catalog).await.unwrap();
+        let first = &catalog.kernels[0];
+        let first_id = kernel_id(first).unwrap();
+        let dir = first.install_dir_name.clone().unwrap();
+        record_kernel_installation(
+            &pool,
+            &first_id,
+            "C:/kernels/example/mz.exe",
+            &first.signature,
+        )
+        .await
+        .unwrap();
+        assert!(installed_signature_for_dir(&pool, &dir).await.unwrap().is_some());
+
+        let removed = delete_kernel_installations_for_dir(&pool, &dir).await.unwrap();
+
+        assert_eq!(removed, 1);
+        assert!(installed_signature_for_dir(&pool, &dir).await.unwrap().is_none());
+        let listed = get_browser_kernel(&pool, &first_id).await.unwrap().unwrap();
+        assert!(!listed.installed);
+        assert!(!listed.update_available);
     }
 }

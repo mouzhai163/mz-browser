@@ -123,6 +123,94 @@ impl KernelService {
         Ok(())
     }
 
+    /// 卸载/删除内核：删除安装目录、残留的同名下载缓存以及安装记录。
+    /// 环境绑定本身保留；下次启动这些环境时会按绑定重新下载。
+    pub async fn uninstall_kernel(
+        app: tauri::AppHandle,
+        kernel_id: String,
+        profiles_path: String,
+    ) -> Result<()> {
+        let kernel_id = kernel_id.trim().to_string();
+        let context = app.state::<business::svc_ctx::SvcCtx>();
+        let kernel = business::services::browser_kernels::get_browser_kernel(&context.db, &kernel_id)
+            .await
+            .map_err(crate::core::error::Error::KernelUninstallFailed)?
+            .ok_or_else(|| {
+                crate::core::error::Error::KernelUninstallFailed(
+                    "内核不存在或已下线".to_string(),
+                )
+            })?;
+        let install_dir_name = kernel.install_dir_name.as_str();
+        if download_control::has_kernel_download_control(install_dir_name).await {
+            return Err(crate::core::error::Error::KernelUninstallFailed(
+                "这个内核还有进行中或已暂停的下载，请先取消下载".to_string(),
+            ));
+        }
+
+        let _prepare_guard = state::acquire_kernel_prepare_lock(install_dir_name).await;
+        let base = utils::resolve_profiles_base(&app, &profiles_path)?;
+        let kernel_dir = utils::resolve_kernel_install_dir(&base, install_dir_name)?;
+        if kernel_dir.exists() {
+            if !kernel_dir.is_dir() {
+                return Err(crate::core::error::Error::KernelUninstallFailed(format!(
+                    "内核安装路径不是目录: {}",
+                    kernel_dir.display()
+                )));
+            }
+            if utils::kernel_dir_in_use(&kernel_dir) {
+                return Err(crate::core::error::Error::KernelUninstallFailed(
+                    "有环境正在使用这个内核，请先关闭这些环境再卸载".to_string(),
+                ));
+            }
+            let remove_dir = kernel_dir.clone();
+            tokio::task::spawn_blocking(move || fs::remove_dir_all(remove_dir))
+                .await
+                .map_err(|error| {
+                    crate::core::error::Error::KernelUninstallFailed(format!(
+                        "内核删除任务异常: {error}"
+                    ))
+                })?
+                .map_err(|error| {
+                    crate::core::error::Error::KernelUninstallFailed(format!(
+                        "删除内核目录失败: {error}"
+                    ))
+                })?;
+        }
+
+        match crate::core::paths::PathManager::get_kernel_cache_dir(&app) {
+            Ok(cache_dir) => {
+                let removed = remove_cached_kernel_archives(&cache_dir, install_dir_name);
+                if removed > 0 {
+                    crate::log_info!(
+                        crate::core::logger::modules::KERNEL,
+                        "卸载内核时清理了 {} 个残留下载缓存: {}",
+                        removed,
+                        install_dir_name
+                    );
+                }
+            }
+            Err(error) => crate::log_warn!(
+                crate::core::logger::modules::KERNEL,
+                "卸载内核时无法读取下载缓存目录: {}",
+                error
+            ),
+        }
+
+        let removed_records = business::services::browser_kernels::delete_kernel_installations_for_dir(
+            &context.db,
+            install_dir_name,
+        )
+        .await
+        .map_err(crate::core::error::Error::KernelUninstallFailed)?;
+        crate::log_info!(
+            crate::core::logger::modules::KERNEL,
+            "内核已卸载: {}（清理安装记录 {} 条）",
+            install_dir_name,
+            removed_records
+        );
+        Ok(())
+    }
+
     /// Prepare a registry artifact while keeping its immutable identity
     /// separate from the backwards-compatible on-disk directory name.
     pub async fn ensure_kernel_ready_for_artifact(
@@ -405,12 +493,51 @@ async fn download_and_replace_kernel(
     Ok(kernel_dir.join(utils::exe_name(kernel_detail.engine)))
 }
 
+/// 删除与某个安装目录名匹配的残留 zip 缓存。缓存文件名格式为 `{目录名}-{hash前16位}.zip`。
+/// 这是清理动作，个别文件删除失败不阻断卸载。
+fn remove_cached_kernel_archives(cache_dir: &Path, install_dir_name: &str) -> usize {
+    let prefix = format!("{install_dir_name}-");
+    let mut removed = 0;
+    let Ok(entries) = fs::read_dir(cache_dir) else { return 0 };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() || path.extension().is_none_or(|ext| ext != "zip") {
+            continue;
+        }
+        let matches_kernel = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with(&prefix));
+        if !matches_kernel {
+            continue;
+        }
+        match fs::remove_file(&path) {
+            Ok(()) => removed += 1,
+            Err(error) => crate::log_warn!(
+                crate::core::logger::modules::KERNEL,
+                "卸载内核时删除残留下载缓存失败: {} - {}",
+                path.display(),
+                error
+            ),
+        }
+    }
+    removed
+}
+
 fn kernel_prepare_error(
-    error: impl std::fmt::Display,
+    error: crate::core::error::Error,
     staging_dir: &Path,
     kernel_dir: &Path,
 ) -> crate::core::error::Error {
     let _ = fs::remove_dir_all(staging_dir);
+    // 用户取消是明确的结果类型，不能包装成普通准备失败；否则生产环境只暴露 [080601]，
+    // 前端无法区分“取消”和真实失败。
+    if matches!(
+        error,
+        crate::core::error::Error::KernelDownloadCancelled
+    ) {
+        return error;
+    }
     let staging_path = staging_dir.to_string_lossy();
     let install_path = kernel_dir.to_string_lossy();
     let mut detail = error.to_string().replace(staging_path.as_ref(), install_path.as_ref());
@@ -443,10 +570,10 @@ mod tests {
         std::fs::create_dir_all(&staging_dir).unwrap();
 
         let error = kernel_prepare_error(
-            format!(
+            crate::core::error::Error::KernelPrepareFailed(format!(
                 "内核包不完整：缺少 {}",
                 staging_dir.join("chrome_crashpad_handler.exe").display()
-            ),
+            )),
             &staging_dir,
             &kernel_dir,
         )
@@ -486,6 +613,51 @@ mod tests {
             1
         );
         assert!(!error.contains("内核包准备失败："));
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn cancellation_is_not_rewritten_to_prepare_failure() {
+        let base = std::env::temp_dir().join(format!(
+            "mz-kernel-cancel-error-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let staging_dir = base.join(".Chrome 155.staging-test");
+        let kernel_dir = base.join("Chrome 155");
+        std::fs::create_dir_all(&staging_dir).unwrap();
+
+        let error = kernel_prepare_error(
+            crate::core::error::Error::KernelDownloadCancelled,
+            &staging_dir,
+            &kernel_dir,
+        );
+
+        assert!(matches!(
+            error,
+            crate::core::error::Error::KernelDownloadCancelled
+        ));
+        assert!(!staging_dir.exists());
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn uninstall_cache_cleanup_only_removes_matching_kernel_archives() {
+        let base = std::env::temp_dir().join(format!(
+            "mz-kernel-cache-clean-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&base).unwrap();
+        let matching = base.join("Chrome 155-e990e63769dac5dc.zip");
+        let other = base.join("Chrome 156-e990e63769dac5dc.zip");
+        let non_zip = base.join("Chrome 155-notes.txt");
+        std::fs::write(&matching, b"partial").unwrap();
+        std::fs::write(&other, b"other").unwrap();
+        std::fs::write(&non_zip, b"note").unwrap();
+
+        assert_eq!(super::remove_cached_kernel_archives(&base, "Chrome 155"), 1);
+        assert!(!matching.exists());
+        assert!(other.exists());
+        assert!(non_zip.exists());
         let _ = std::fs::remove_dir_all(base);
     }
 }

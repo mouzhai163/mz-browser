@@ -254,6 +254,11 @@ export async function downloadBrowserKernel(kernelId: string): Promise<void> {
   await invoke('download_browser_kernel', { kernelId });
 }
 
+/** 卸载/删除已安装内核。保留环境绑定，使用该内核的环境下次启动时会重新下载。 */
+export async function uninstallBrowserKernel(kernelId: string): Promise<void> {
+  await invoke('uninstall_browser_kernel', { kernelId });
+}
+
 export type KernelDownloadProxyMode = 'system' | 'direct' | 'custom';
 export type KernelDownloadProxyProtocol = 'http' | 'https' | 'socks5';
 

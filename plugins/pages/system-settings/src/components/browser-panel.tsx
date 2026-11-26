@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Cpu, Fingerprint, Globe, History, Network } from 'lucide-react';
+import { Cpu, Fingerprint, Globe, History, Loader2, Network, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { FormattedDialog, FormattedDialogFooter } from '@/components/formatted-dialog';
 import { SettingCard } from './setting-card';
 import { SettingRow } from './setting-row';
 import { fingerprintModes, type FingerprintMode } from '../config';
@@ -20,6 +21,7 @@ import {
   downloadBrowserKernel,
   getKernelDownloadSettings,
   listBrowserKernels,
+  uninstallBrowserKernel,
   updateBrowserKernel,
   updateKernelDownloadSettings,
   type BrowserKernelVersion,
@@ -55,6 +57,10 @@ export const BrowserPanel: React.FC = () => {
   const [browserSettingsLoaded, setBrowserSettingsLoaded] = useState(false);
   const [kernels, setKernels] = useState<BrowserKernelVersion[] | null>(null);
   const [updatingKernels, setUpdatingKernels] = useState<Set<string>>(() => new Set());
+  const [kernelPendingUninstall, setKernelPendingUninstall] = useState<BrowserKernelVersion | null>(
+    null
+  );
+  const [uninstallingKernel, setUninstallingKernel] = useState(false);
   const [proxyMode, setProxyMode] = useState<KernelDownloadProxyMode>('system');
   const [proxyProtocol, setProxyProtocol] = useState<KernelDownloadProxyProtocol>('http');
   const [proxyHost, setProxyHost] = useState('');
@@ -224,6 +230,23 @@ export const BrowserPanel: React.FC = () => {
     [loadKernels, t]
   );
 
+  const handleConfirmUninstallKernel = useCallback(async () => {
+    if (!kernelPendingUninstall) return;
+    setUninstallingKernel(true);
+    try {
+      await uninstallBrowserKernel(kernelPendingUninstall.kernel_id);
+      toast.success(t('kernelUninstalled', { name: kernelPendingUninstall.resource_name }));
+      setKernels(await loadKernels());
+      setKernelPendingUninstall(null);
+    } catch (error) {
+      toast.error(t('kernelUninstallFailed', { name: kernelPendingUninstall.resource_name }), {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setUninstallingKernel(false);
+    }
+  }, [kernelPendingUninstall, loadKernels, t]);
+
   useEffect(() => {
     let cancelled = false;
     void getBrowserSettings()
@@ -349,6 +372,17 @@ export const BrowserPanel: React.FC = () => {
                           : t('kernelDownload')}
                       </Button>
                     </>
+                  )}
+                  {kernel.installed && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2.5 text-xs text-destructive hover:text-destructive"
+                      disabled={updatingKernels.has(kernel.kernel_id) || uninstallingKernel}
+                      onClick={() => setKernelPendingUninstall(kernel)}
+                    >
+                      {t('kernelUninstall')}
+                    </Button>
                   )}
                 </div>
               </div>
@@ -518,6 +552,56 @@ export const BrowserPanel: React.FC = () => {
           </SettingRow>
         </div>
       </SettingCard>
+
+      <FormattedDialog
+        open={kernelPendingUninstall !== null}
+        onOpenChange={(open) => {
+          if (!open && !uninstallingKernel) setKernelPendingUninstall(null);
+        }}
+        minWidth="min-w-[440px]"
+        header={{
+          icon: Trash2,
+          iconColor: 'text-destructive',
+          title: t('kernelUninstallTitle'),
+          description: t('kernelUninstallDescription', {
+            name: kernelPendingUninstall?.resource_name ?? '',
+          }),
+          gradient: 'bg-gradient-to-r from-red-500/10 via-rose-500/10 to-red-500/10',
+          className: 'border-b border-destructive/20',
+        }}
+        contentPadding="p-5"
+      >
+        <p className="text-sm text-muted-foreground">{t('kernelUninstallWarning')}</p>
+        <FormattedDialogFooter>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setKernelPendingUninstall(null)}
+            disabled={uninstallingKernel}
+          >
+            <X className="h-4 w-4 mr-1.5" />
+            {t('cancel')}
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => void handleConfirmUninstallKernel()}
+            disabled={uninstallingKernel}
+          >
+            {uninstallingKernel ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                {t('kernelUninstalling')}
+              </>
+            ) : (
+              <>
+                <Trash2 className="h-4 w-4 mr-1.5" />
+                {t('kernelUninstallConfirm')}
+              </>
+            )}
+          </Button>
+        </FormattedDialogFooter>
+      </FormattedDialog>
     </div>
   );
 };

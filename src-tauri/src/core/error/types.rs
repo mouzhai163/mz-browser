@@ -249,6 +249,10 @@ pub enum Error {
     #[error("[080602] Kernel download cancelled")]
     KernelDownloadCancelled,
 
+    /// 080603: Kernel uninstall failed
+    #[error("[080603] Kernel uninstall failed: {0}")]
+    KernelUninstallFailed(String),
+
     // ==================== Application Lifecycle (09) ====================
     /// 090101: Application initialization failed
     #[error("[090101] Application initialization failed")]

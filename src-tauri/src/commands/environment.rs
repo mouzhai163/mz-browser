@@ -90,6 +90,13 @@ pub async fn download_browser_kernel(app: AppHandle, kernel_id: String) -> Resul
     update_browser_kernel(app, kernel_id).await
 }
 
+/// 卸载/删除已安装内核。保留环境绑定；对应环境下次启动时会重新下载。
+#[tauri::command]
+pub async fn uninstall_browser_kernel(app: AppHandle, kernel_id: String) -> Result<()> {
+    let paths = EnvironmentLaunchRuntimeService::resolve_launch_paths(&app)?;
+    KernelService::uninstall_kernel(app, kernel_id, paths.profiles_path).await
+}
+
 #[tauri::command]
 pub async fn pause_kernel_download(kernel_value: String) -> Result<()> {
     crate::services::environment::kernel::download_control::pause_kernel_download(&kernel_value)
