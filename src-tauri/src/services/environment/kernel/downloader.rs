@@ -214,6 +214,61 @@ fn emit_download_error(
     );
 }
 
+/// 用户取消后删除未完成缓存，避免下一次“下载”被误解为继续已取消任务。
+/// Windows 上文件句柄释放可能略滞后，所以做短重试；删除失败只记录日志，不把取消变成失败。
+async fn discard_cancelled_partial(zip_path: &Path) {
+    if !zip_path.exists() {
+        return;
+    }
+    for attempt in 0..10 {
+        match fs::remove_file(zip_path) {
+            Ok(()) => {
+                crate::log_info!(
+                    crate::core::logger::modules::KERNEL,
+                    "内核下载已取消，已删除未完成缓存: {}",
+                    zip_path.display()
+                );
+                return;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+            Err(error) if attempt < 9 => {
+                let _ = error;
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            Err(error) => {
+                crate::log_warn!(
+                    crate::core::logger::modules::KERNEL,
+                    "删除已取消的内核下载缓存失败: {} - {}",
+                    zip_path.display(),
+                    error
+                );
+                return;
+            }
+        }
+    }
+}
+
+fn proxy_settings_log_line(settings: &super::download_settings::KernelDownloadSettings) -> String {
+    use super::download_settings::KernelDownloadProxyMode;
+    match settings.proxy_mode {
+        KernelDownloadProxyMode::System => {
+            "跟随系统（环境变量优先，其次 Windows 系统代理，最后直连）".to_string()
+        }
+        KernelDownloadProxyMode::Direct => "直连（已禁用系统代理和环境变量代理）".to_string(),
+        KernelDownloadProxyMode::Custom => format!(
+            "自定义代理 {}://{}:{}（认证：{}）",
+            match settings.proxy_type {
+                super::download_settings::KernelDownloadProxyType::Http => "http",
+                super::download_settings::KernelDownloadProxyType::Https => "https",
+                super::download_settings::KernelDownloadProxyType::Socks5 => "socks5h",
+            },
+            settings.proxy_host,
+            settings.proxy_port,
+            if settings.proxy_username.is_empty() { "无" } else { "有" }
+        ),
+    }
+}
+
 /// 下载文件：连接和读取都有超时，失败自动重试，断点续传，支持用户暂停/恢复/取消
 async fn download_file(
     app: &tauri::AppHandle,
@@ -242,6 +297,11 @@ async fn download_file(
                 emit_download_error(status_emitter.as_ref(), env_uuid, kernel_value, &message);
                 message
             })?;
+        crate::log_info!(
+            crate::core::logger::modules::KERNEL,
+            "内核下载代理配置: {}",
+            proxy_settings_log_line(&settings)
+        );
         let client = super::download_settings::client_builder_for_settings(&settings)
             .map_err(|reason| {
                 let message = format!("内核下载代理配置无效：{reason}");
@@ -371,7 +431,8 @@ async fn download_file(
                             KernelDownloadEventState::Cancelled,
                             snapshot,
                         );
-                        return Err("内核下载已取消".into());
+                        discard_cancelled_partial(zip_path).await;
+                        return Err(crate::core::error::Error::KernelDownloadCancelled);
                     }
                     super::download_control::KernelDownloadControlState::PauseRequested
                     | super::download_control::KernelDownloadControlState::Paused => {
@@ -389,7 +450,8 @@ async fn download_file(
                     KernelDownloadEventState::Cancelled,
                     snapshot,
                 );
-                return Err("内核下载已取消".into());
+                discard_cancelled_partial(zip_path).await;
+                return Err(crate::core::error::Error::KernelDownloadCancelled);
             }
         }
     }
@@ -802,7 +864,10 @@ fn verify_core_dll_signature(
 
 #[cfg(test)]
 mod tests {
-    use super::{DownloadFailure, download_with_retries, parse_content_range, redact_download_url};
+    use super::{
+        DownloadFailure, download_with_retries, parse_content_range, proxy_settings_log_line,
+        redact_download_url,
+    };
     use crate::services::environment::kernel::download_control::KernelDownloadControl;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
@@ -983,6 +1048,23 @@ mod tests {
         assert_eq!(parse_content_range("bytes 4-9/*"), Some((Some(4), None)));
         assert_eq!(parse_content_range("bytes */10"), Some((None, Some(10))));
         assert_eq!(parse_content_range("items 1-2/3"), None);
+    }
+
+    #[test]
+    fn proxy_log_line_describes_mode_without_credentials() {
+        let settings = crate::services::environment::kernel::download_settings::KernelDownloadSettings {
+            proxy_mode: crate::services::environment::kernel::download_settings::KernelDownloadProxyMode::Custom,
+            proxy_type: crate::services::environment::kernel::download_settings::KernelDownloadProxyType::Socks5,
+            proxy_host: "127.0.0.1".to_string(),
+            proxy_port: "7890".to_string(),
+            proxy_username: "user".to_string(),
+            proxy_password: "secret".to_string(),
+        };
+        let line = proxy_settings_log_line(&settings);
+        assert!(line.contains("socks5h://127.0.0.1:7890"));
+        assert!(line.contains("认证：有"));
+        assert!(!line.contains("user"));
+        assert!(!line.contains("secret"));
     }
 
     #[test]

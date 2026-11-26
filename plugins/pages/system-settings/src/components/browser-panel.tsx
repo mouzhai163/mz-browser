@@ -27,9 +27,21 @@ import {
   type KernelDownloadProxyProtocol,
 } from '../../../create-window/src/api';
 
+function errorText(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    return String((error as { message?: unknown }).message ?? '');
+  }
+  return String(error);
+}
+
 function isKernelDownloadCancellation(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.includes('内核下载已取消');
+  const message = errorText(error);
+  return (
+    message.includes('080602') ||
+    message.includes('内核下载已取消') ||
+    message.toLowerCase().includes('kernel download cancelled')
+  );
 }
 
 /**
@@ -52,6 +64,13 @@ export const BrowserPanel: React.FC = () => {
   const [proxyPasswordConfigured, setProxyPasswordConfigured] = useState(false);
   const [clearProxyPassword, setClearProxyPassword] = useState(false);
   const [proxySaving, setProxySaving] = useState(false);
+  const [savedProxySettings, setSavedProxySettings] = useState<{
+    proxyMode: KernelDownloadProxyMode;
+    proxyType: KernelDownloadProxyProtocol;
+    proxyHost: string;
+    proxyPort: string;
+    proxyUsername: string;
+  } | null>(null);
 
   const loadKernels = useCallback(async () => {
     try {
@@ -86,6 +105,13 @@ export const BrowserPanel: React.FC = () => {
         setProxyUsername(settings.proxyUsername);
         setProxyPasswordConfigured(settings.hasProxyPassword);
         setClearProxyPassword(false);
+        setSavedProxySettings({
+          proxyMode: settings.proxyMode,
+          proxyType: settings.proxyType,
+          proxyHost: settings.proxyHost,
+          proxyPort: settings.proxyPort,
+          proxyUsername: settings.proxyUsername,
+        });
       })
       .catch(() => undefined);
     return () => {
@@ -107,15 +133,29 @@ export const BrowserPanel: React.FC = () => {
       const settings = await updateKernelDownloadSettings({
         proxyMode,
         proxyType: proxyProtocol,
-        proxyHost: proxyMode === 'custom' ? proxyHost.trim() : '',
-        proxyPort: proxyMode === 'custom' ? String(port) : '',
-        proxyUsername: proxyMode === 'custom' ? proxyUsername.trim() : '',
+        // 非自定义模式下隐藏输入框，但仍保留已填写的自定义代理，避免只是切换直连/系统就丢失配置。
+        proxyHost: proxyHost.trim(),
+        proxyPort: proxyMode === 'custom' ? String(port) : proxyPort.trim(),
+        proxyUsername: proxyUsername.trim(),
         // 省略密码字段表示保留原密码；只有用户显式勾选清除时才提交空字符串。
-        ...(proxyPassword ? { proxyPassword } : clearProxyPassword ? { proxyPassword: '' } : {}),
+        ...(proxyMode === 'custom'
+          ? proxyPassword
+            ? { proxyPassword }
+            : clearProxyPassword
+              ? { proxyPassword: '' }
+              : {}
+          : {}),
       });
       setProxyPassword('');
       setProxyPasswordConfigured(settings.hasProxyPassword);
       setClearProxyPassword(false);
+      setSavedProxySettings({
+        proxyMode: settings.proxyMode,
+        proxyType: settings.proxyType,
+        proxyHost: settings.proxyHost,
+        proxyPort: settings.proxyPort,
+        proxyUsername: settings.proxyUsername,
+      });
       toast.success(t('kernelProxySaved'));
     } catch (error) {
       toast.error(t('kernelProxySaveFailed'), {
@@ -218,6 +258,23 @@ export const BrowserPanel: React.FC = () => {
     void setBrowserSettings({ autoRestoreSession: checked });
   }, []);
 
+  const getProxyModeLabel = (mode: KernelDownloadProxyMode) => {
+    if (mode === 'direct') return t('kernelProxyDirect');
+    if (mode === 'custom') return t('kernelProxyCustom');
+    return t('kernelProxySystem');
+  };
+
+  const proxyDirty = savedProxySettings
+    ? proxyMode !== savedProxySettings.proxyMode ||
+      (proxyMode === 'custom' &&
+        (proxyProtocol !== savedProxySettings.proxyType ||
+          proxyHost.trim() !== savedProxySettings.proxyHost ||
+          proxyPort.trim() !== savedProxySettings.proxyPort ||
+          proxyUsername.trim() !== savedProxySettings.proxyUsername ||
+          proxyPassword.length > 0 ||
+          clearProxyPassword))
+    : false;
+
   const getFingerprintLabel = (id: string) => {
     const labels: Record<string, string> = {
       random: t('fingerprintRandom'),
@@ -307,7 +364,13 @@ export const BrowserPanel: React.FC = () => {
               <p className="text-xs text-muted-foreground">{t('kernelDownloadProxyDesc')}</p>
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-[150px_110px_1fr_110px_auto]">
+          <div
+            className={`grid grid-cols-1 gap-2 ${
+              proxyMode === 'custom'
+                ? 'md:grid-cols-[150px_110px_1fr_110px_auto]'
+                : 'md:grid-cols-[150px_auto]'
+            }`}
+          >
             <Select
               value={proxyMode}
               onValueChange={(v) => setProxyMode(v as KernelDownloadProxyMode)}
@@ -321,43 +384,53 @@ export const BrowserPanel: React.FC = () => {
                 <SelectItem value="custom">{t('kernelProxyCustom')}</SelectItem>
               </SelectContent>
             </Select>
-            <Select
-              value={proxyProtocol}
-              onValueChange={(v) => setProxyProtocol(v as KernelDownloadProxyProtocol)}
-              disabled={proxyMode !== 'custom'}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="http">HTTP</SelectItem>
-                <SelectItem value="https">HTTPS</SelectItem>
-                <SelectItem value="socks5">SOCKS5</SelectItem>
-              </SelectContent>
-            </Select>
-            <Input
-              value={proxyHost}
-              onChange={(e) => setProxyHost(e.target.value)}
-              placeholder={t('kernelProxyHost')}
-              disabled={proxyMode !== 'custom'}
-            />
-            <Input
-              value={proxyPort}
-              onChange={(e) => setProxyPort(e.target.value)}
-              placeholder={t('kernelProxyPort')}
-              disabled={proxyMode !== 'custom'}
-              inputMode="numeric"
-            />
+            {proxyMode === 'custom' && (
+              <>
+                <Select
+                  value={proxyProtocol}
+                  onValueChange={(v) => setProxyProtocol(v as KernelDownloadProxyProtocol)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="http">HTTP</SelectItem>
+                    <SelectItem value="https">HTTPS</SelectItem>
+                    <SelectItem value="socks5">SOCKS5</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  value={proxyHost}
+                  onChange={(e) => setProxyHost(e.target.value)}
+                  placeholder={t('kernelProxyHost')}
+                />
+                <Input
+                  value={proxyPort}
+                  onChange={(e) => setProxyPort(e.target.value)}
+                  placeholder={t('kernelProxyPort')}
+                  inputMode="numeric"
+                />
+              </>
+            )}
             <Button
               size="sm"
               variant="outline"
               className="h-9"
-              disabled={proxySaving}
+              disabled={proxySaving || !proxyDirty}
               onClick={() => void handleSaveKernelProxy()}
             >
               {proxySaving ? t('kernelProxySaving') : t('kernelProxySave')}
             </Button>
           </div>
+          {savedProxySettings && (
+            <p className={`mt-2 text-xs ${proxyDirty ? 'text-warning' : 'text-muted-foreground'}`}>
+              {proxyDirty
+                ? t('kernelProxyUnsaved', { mode: getProxyModeLabel(savedProxySettings.proxyMode) })
+                : t('kernelProxyCurrent', {
+                    mode: getProxyModeLabel(savedProxySettings.proxyMode),
+                  })}
+            </p>
+          )}
           {proxyMode === 'custom' && (
             <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
               <Input
