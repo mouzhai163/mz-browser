@@ -5,6 +5,7 @@
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type Locale = 'zh-CN' | 'en-US';
+export type WindowCloseAction = 'hide-to-tray' | 'quit-application';
 
 export interface GeneralSettings {
   /** 主题模式 */
@@ -17,6 +18,8 @@ export interface GeneralSettings {
   autoStart: boolean;
   /** 启动时最小化 */
   startMinimized: boolean;
+  /** 点击主窗口关闭按钮时的行为 */
+  windowCloseAction: WindowCloseAction;
   /** 记住窗口位置 */
   rememberWindowPosition: boolean;
   /** 桌面通知 */
@@ -33,6 +36,7 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   defaultCollapseSidebar: false,
   autoStart: false,
   startMinimized: false,
+  windowCloseAction: 'hide-to-tray',
   rememberWindowPosition: true,
   desktopNotification: true,
   soundEnabled: true,
@@ -41,3 +45,7 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
 
 export const THEME_OPTIONS: ThemeMode[] = ['light', 'dark', 'system'];
 export const LOCALE_OPTIONS: Locale[] = ['zh-CN', 'en-US'];
+export const WINDOW_CLOSE_ACTION_OPTIONS: WindowCloseAction[] = [
+  'hide-to-tray',
+  'quit-application',
+];

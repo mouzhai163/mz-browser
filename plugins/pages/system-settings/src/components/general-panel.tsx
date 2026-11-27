@@ -19,6 +19,7 @@ import {
   Pencil,
   Play,
   Loader2,
+  LogOut,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -44,7 +45,7 @@ import {
   getGeneralSettings,
   setGeneralSettings,
 } from '../../../../services/store/src';
-import type { ThemeMode, Locale } from '../../../../services/store/src';
+import type { ThemeMode, Locale, WindowCloseAction } from '../../../../services/store/src';
 
 /**
  * 通用设置面板（合并外观、语言、启动、通知设置）
@@ -57,6 +58,7 @@ export const GeneralPanel: React.FC = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [autoStart, setAutoStart] = useState(false);
   const [startMinimized, setStartMinimized] = useState(false);
+  const [windowCloseAction, setWindowCloseAction] = useState<WindowCloseAction>('hide-to-tray');
   const [rememberWindowPosition, setRememberWindowPosition] = useState(true);
   const [desktopNotification, setDesktopNotification] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -73,6 +75,7 @@ export const GeneralPanel: React.FC = () => {
           setSidebarCollapsed(s.defaultCollapseSidebar);
           setAutoStart(s.autoStart);
           setStartMinimized(s.startMinimized);
+          setWindowCloseAction(s.windowCloseAction);
           setRememberWindowPosition(s.rememberWindowPosition);
           setDesktopNotification(s.desktopNotification);
           setSoundEnabled(s.soundEnabled);
@@ -149,6 +152,12 @@ export const GeneralPanel: React.FC = () => {
   const handleStartMinimizedChange = useCallback((checked: boolean) => {
     setStartMinimized(checked);
     void setGeneralSettings({ startMinimized: checked });
+  }, []);
+
+  const handleWindowCloseActionChange = useCallback((value: string) => {
+    const next = value as WindowCloseAction;
+    setWindowCloseAction(next);
+    void setGeneralSettings({ windowCloseAction: next });
   }, []);
 
   const handleRememberWindowPositionChange = useCallback((checked: boolean) => {
@@ -309,6 +318,25 @@ export const GeneralPanel: React.FC = () => {
             onCheckedChange={handleStartMinimizedChange}
             disabled={!generalSettingsLoaded}
           />
+        </SettingRow>
+        <SettingRow
+          icon={LogOut}
+          title={t('windowCloseAction')}
+          description={t('windowCloseActionDesc')}
+        >
+          <Select
+            value={windowCloseAction}
+            onValueChange={handleWindowCloseActionChange}
+            disabled={!generalSettingsLoaded}
+          >
+            <SelectTrigger className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="hide-to-tray">{t('windowCloseHideToTray')}</SelectItem>
+              <SelectItem value="quit-application">{t('windowCloseQuitApplication')}</SelectItem>
+            </SelectContent>
+          </Select>
         </SettingRow>
         <SettingRow
           icon={AppWindow}

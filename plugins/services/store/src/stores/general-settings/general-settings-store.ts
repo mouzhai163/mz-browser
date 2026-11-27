@@ -6,7 +6,9 @@ import {
   DEFAULT_GENERAL_SETTINGS,
   LOCALE_OPTIONS,
   THEME_OPTIONS,
+  WINDOW_CLOSE_ACTION_OPTIONS,
   type GeneralSettings,
+  type WindowCloseAction,
 } from './general-settings.types';
 
 const STORE_KEY = 'general';
@@ -17,6 +19,10 @@ function isValidTheme(v: unknown): v is GeneralSettings['theme'] {
 
 function isValidLocale(v: unknown): v is GeneralSettings['language'] {
   return typeof v === 'string' && LOCALE_OPTIONS.includes(v as GeneralSettings['language']);
+}
+
+function isValidWindowCloseAction(v: unknown): v is WindowCloseAction {
+  return typeof v === 'string' && WINDOW_CLOSE_ACTION_OPTIONS.includes(v as WindowCloseAction);
 }
 
 /**
@@ -41,6 +47,9 @@ export async function getGeneralSettings(): Promise<GeneralSettings> {
       typeof raw.startMinimized === 'boolean'
         ? raw.startMinimized
         : DEFAULT_GENERAL_SETTINGS.startMinimized,
+    windowCloseAction: isValidWindowCloseAction(raw.windowCloseAction)
+      ? raw.windowCloseAction
+      : DEFAULT_GENERAL_SETTINGS.windowCloseAction,
     rememberWindowPosition:
       typeof raw.rememberWindowPosition === 'boolean'
         ? raw.rememberWindowPosition

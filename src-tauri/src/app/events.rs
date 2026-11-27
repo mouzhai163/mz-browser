@@ -1,13 +1,16 @@
-use tauri::{AppHandle, RunEvent, Window, WindowEvent};
+use tauri::{AppHandle, Manager, RunEvent, Window, WindowEvent};
 
 /// 窗口事件处理
 pub fn window_event_handle(window: &Window, event: &WindowEvent) {
     match event {
         tauri::WindowEvent::CloseRequested { api, .. } => {
-            // 窗口如果是main，则阻止关闭
             if window.label() == "main" {
-                api.prevent_close();
-                let _ = window.hide();
+                if crate::app::close_behavior::should_quit_on_main_window_close(window.app_handle()) {
+                    crate::app::close_behavior::request_application_quit(window.app_handle());
+                } else {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
             }
             // 同步器窗口是唯一的操作入口，窗口关了不能让同步继续在后台跑
             if window.label() == "syncer" {
@@ -26,7 +29,9 @@ pub fn window_event_handle(window: &Window, event: &WindowEvent) {
 pub fn run_event_handle(_app_handle: &AppHandle, event: RunEvent) {
     match event {
         tauri::RunEvent::ExitRequested { api, .. } => {
-            api.prevent_exit();
+            if !crate::app::close_behavior::explicit_quit_requested() {
+                api.prevent_exit();
+            }
         }
         tauri::RunEvent::Exit => {
             tauri::async_runtime::spawn(async {

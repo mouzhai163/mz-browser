@@ -62,9 +62,7 @@ pub fn menu_handler(app: &AppHandle, event: MenuEvent) {
             });
         }
         "quit" => {
-            println!("quit menu item was clicked");
-            app.cleanup_before_exit();
-            std::process::exit(0);
+            crate::app::close_behavior::request_application_quit(app);
         }
         _ => {
             println!("menu item {:?} not handled", event.id);

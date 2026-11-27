@@ -1,3 +1,4 @@
+pub mod close_behavior;
 pub mod components;
 pub mod context;
 #[cfg(feature = "desktop-e2e")]
