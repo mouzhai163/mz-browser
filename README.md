@@ -48,7 +48,7 @@ Data stays on your machine by default. There are no user accounts, no cloud serv
 | Chromium (customized) | 155, 156, 157 | Windows x64 |
 | Firefox (based on Camoufox) | 158 | Windows x64 |
 
-Kernels are downloaded on demand from the Releases of [browser-kernel](https://github.com/mouzhai163/browser-kernel) and verified. New versions are announced under Settings → Browser & Automation → Browser Kernels and installed manually.
+Kernels are downloaded on demand from the Releases of [browser-kernel](https://github.com/mouzhai163/browser-kernel) and verified. Missing kernels can be downloaded manually under Settings → Browser & Automation → Browser Kernels, where new versions are also announced and installed manually. Download tasks can be paused, resumed and cancelled, and kernel downloads can follow the system proxy, connect directly or use a custom HTTP/HTTPS/SOCKS5 proxy.
 
 ### Fingerprint
 
@@ -227,7 +227,7 @@ print(resp.json())
 
 ### Install
 
-Run `MZ指纹浏览器_x.y.z_x64-setup.exe`, open the app and click Create Environment. The required kernel is downloaded the first time an environment starts.
+Run `MZ指纹浏览器_x.y.z_x64-setup.exe`, open the app and click Create Environment. The required kernel is downloaded the first time an environment starts, or it can be downloaded ahead of time under Settings → Browser & Automation → Browser Kernels.
 
 Requires Windows 10 or 11 x64.
 

@@ -48,7 +48,7 @@ MZ指纹浏览器是一款运行在你自己电脑上的桌面软件，用来创
 | Chromium（定制） | 155、156、157 | Windows x64 |
 | Firefox（基于 Camoufox） | 158 | Windows x64 |
 
-内核按需从 [browser-kernel](https://github.com/mouzhai163/browser-kernel) 的 Releases 下载并校验。有新版本时在“设置 → 浏览器与自动化 → 浏览器内核”提示，手动更新。
+内核按需从 [browser-kernel](https://github.com/mouzhai163/browser-kernel) 的 Releases 下载并校验。未安装的内核可在“设置 → 浏览器与自动化 → 浏览器内核”手动下载；有新版本时也会在这里提示并手动更新。下载任务支持暂停、恢复和取消，并可单独选择跟随系统代理、直连或自定义 HTTP/HTTPS/SOCKS5 代理。
 
 ### 指纹
 
@@ -227,7 +227,7 @@ print(resp.json())
 
 ### 使用
 
-运行安装包 `MZ指纹浏览器_x.y.z_x64-setup.exe`，打开后点“创建环境”。首次启动环境时会自动下载所需内核。
+运行安装包 `MZ指纹浏览器_x.y.z_x64-setup.exe`，打开后点“创建环境”。首次启动环境时会自动下载所需内核，也可以提前在“设置 → 浏览器与自动化 → 浏览器内核”中手动下载。
 
 系统要求：Windows 10 / 11 x64。
 

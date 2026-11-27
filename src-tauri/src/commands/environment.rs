@@ -84,6 +84,91 @@ pub async fn update_browser_kernel(app: AppHandle, kernel_id: String) -> Result<
     .await
 }
 
+/// 手动下载内核（设置 → 浏览器内核里的“下载”按钮）。与更新共用同一套安装流程。
+#[tauri::command]
+pub async fn download_browser_kernel(app: AppHandle, kernel_id: String) -> Result<()> {
+    update_browser_kernel(app, kernel_id).await
+}
+
+/// 查询内核卸载确认信息：完整安装路径和当前安装版/便携版/自定义目录形态。
+#[tauri::command]
+pub async fn get_browser_kernel_install_info(
+    app: AppHandle,
+    kernel_id: String,
+) -> Result<crate::services::environment::kernel::BrowserKernelInstallInfo> {
+    let paths = EnvironmentLaunchRuntimeService::resolve_launch_paths(&app)?;
+    KernelService::get_kernel_install_info(app, kernel_id, paths.profiles_path).await
+}
+
+/// 卸载/删除已安装内核。保留环境绑定；对应环境下次启动时会重新下载。
+#[tauri::command]
+pub async fn uninstall_browser_kernel(app: AppHandle, kernel_id: String) -> Result<()> {
+    let paths = EnvironmentLaunchRuntimeService::resolve_launch_paths(&app)?;
+    KernelService::uninstall_kernel(app, kernel_id, paths.profiles_path).await
+}
+
+#[tauri::command]
+pub async fn pause_kernel_download(kernel_value: String) -> Result<()> {
+    crate::services::environment::kernel::download_control::pause_kernel_download(&kernel_value)
+        .await
+        .map_err(crate::core::error::Error::from)
+}
+
+#[tauri::command]
+pub async fn resume_kernel_download(kernel_value: String) -> Result<()> {
+    crate::services::environment::kernel::download_control::resume_kernel_download(&kernel_value)
+        .await
+        .map_err(crate::core::error::Error::from)
+}
+
+#[tauri::command]
+pub async fn cancel_kernel_download(kernel_value: String) -> Result<()> {
+    crate::services::environment::kernel::download_control::cancel_kernel_download(&kernel_value)
+        .await
+        .map_err(crate::core::error::Error::from)
+}
+
+#[tauri::command]
+pub fn get_kernel_download_settings(
+    app: AppHandle,
+) -> Result<crate::services::environment::kernel::download_settings::KernelDownloadSettingsView> {
+    crate::services::environment::kernel::download_settings::get_kernel_download_settings_view(&app)
+        .map_err(crate::core::error::Error::from)
+}
+
+#[tauri::command]
+pub async fn update_kernel_download_settings(
+    app: AppHandle,
+    settings: crate::services::environment::kernel::download_settings::KernelDownloadSettingsInput,
+) -> Result<crate::services::environment::kernel::download_settings::KernelDownloadSettingsView> {
+    let before = crate::services::environment::kernel::download_settings::load_kernel_download_settings(
+        &app,
+    )
+    .map_err(crate::core::error::Error::from)?;
+    let view = crate::services::environment::kernel::download_settings::update_kernel_download_settings(
+        &app, settings,
+    )
+    .map_err(crate::core::error::Error::from)?;
+    let after = crate::services::environment::kernel::download_settings::load_kernel_download_settings(
+        &app,
+    )
+    .map_err(crate::core::error::Error::from)?;
+
+    // 配置真正变化时，让正在进行的下载尽快断开当前连接；外层循环会保留分片，
+    // 重新读取配置、重建 client，并用 Range 从未完成位置继续。
+    if before != after {
+        let restarted = crate::services::environment::kernel::download_control::restart_all_kernel_downloads().await;
+        if restarted > 0 {
+            crate::log_info!(
+                crate::core::logger::modules::KERNEL,
+                "内核下载代理配置已更新，已通知 {} 个下载任务重新连接",
+                restarted
+            );
+        }
+    }
+    Ok(view)
+}
+
 #[tauri::command]
 pub async fn get_connected_environments() -> Result<Vec<String>> {
     KernelService::get_connected_environments().await
