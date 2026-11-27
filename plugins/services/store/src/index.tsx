@@ -24,7 +24,12 @@ export {
   THEME_OPTIONS,
   LOCALE_OPTIONS,
 } from './stores/general-settings';
-export type { GeneralSettings, ThemeMode, Locale } from './stores/general-settings';
+export type {
+  GeneralSettings,
+  ThemeMode,
+  Locale,
+  WindowCloseAction,
+} from './stores/general-settings';
 export {
   getBrowserSettings,
   setBrowserSettings,
