@@ -254,6 +254,23 @@ export async function downloadBrowserKernel(kernelId: string): Promise<void> {
   await invoke('download_browser_kernel', { kernelId });
 }
 
+export type KernelInstallScope = 'standard' | 'portable' | 'custom';
+
+/** 卸载确认前展示的内核安装信息。installPath 与后端实际删除时使用同一路径解析链。 */
+export interface BrowserKernelInstallInfo {
+  kernelId: string;
+  installDirName: string;
+  installPath: string;
+  scope: KernelInstallScope;
+  dirExists: boolean;
+}
+
+export async function getBrowserKernelInstallInfo(
+  kernelId: string
+): Promise<BrowserKernelInstallInfo> {
+  return invoke<BrowserKernelInstallInfo>('get_browser_kernel_install_info', { kernelId });
+}
+
 /** 卸载/删除已安装内核。保留环境绑定，使用该内核的环境下次启动时会重新下载。 */
 export async function uninstallBrowserKernel(kernelId: string): Promise<void> {
   await invoke('uninstall_browser_kernel', { kernelId });

@@ -46,6 +46,7 @@ pub fn register_handles() -> impl Fn(Invoke<tauri::Wry>) -> bool + Send + Sync +
         environment::update_browser_kernel,
         environment::download_browser_kernel,
         environment::uninstall_browser_kernel,
+        environment::get_browser_kernel_install_info,
         environment::pause_kernel_download,
         environment::resume_kernel_download,
         environment::cancel_kernel_download,

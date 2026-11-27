@@ -396,6 +396,22 @@ async fn download_file(
                 emit_download_error(status_emitter.as_ref(), env_uuid, kernel_value, &message);
                 return Err(format!("内核下载失败：{reason}").into());
             }
+            Err(DownloadFailure::Restart) => {
+                let snapshot =
+                    progress_snapshot.lock().map(|snapshot| *snapshot).unwrap_or_default();
+                control.acknowledge_restart();
+                emit_status(
+                    status_emitter.as_ref(),
+                    env_uuid,
+                    kernel_value,
+                    EnvironmentStatus::Downloading,
+                    Some("代理配置已更新，正在重新连接…"),
+                    snapshot.percent,
+                    Some(snapshot.downloaded),
+                    snapshot.total,
+                );
+                continue;
+            }
             Err(DownloadFailure::Paused) => {
                 control.mark_paused();
                 let snapshot =
@@ -421,6 +437,10 @@ async fn download_file(
                             snapshot.total,
                         );
                         // 恢复时重新读取代理配置并重建 client；partial 文件会让下一次请求带 Range。
+                        continue;
+                    }
+                    super::download_control::KernelDownloadControlState::RestartRequested => {
+                        control.acknowledge_restart();
                         continue;
                     }
                     super::download_control::KernelDownloadControlState::Cancelled => {
@@ -462,6 +482,8 @@ enum AttemptFailure {
     Retryable(String),
     /// 地址失效、磁盘写不进去，再试也没用
     Fatal(String),
+    /// 代理配置已更新；当前响应会断开，保留分片并用新配置重连
+    Restart,
     /// 用户请求暂停；当前响应会断开，下次用 Range 接着下
     Paused,
     /// 用户取消整个下载任务
@@ -471,6 +493,7 @@ enum AttemptFailure {
 #[derive(Debug, PartialEq, Eq)]
 enum DownloadFailure {
     Failed(String),
+    Restart,
     Paused,
     Cancelled,
 }
@@ -481,6 +504,7 @@ fn attempt_interruption(
     use super::download_control::KernelDownloadControlState as State;
     match state {
         State::Running => None,
+        State::RestartRequested => Some(AttemptFailure::Restart),
         State::PauseRequested | State::Paused => Some(AttemptFailure::Paused),
         State::Cancelled => Some(AttemptFailure::Cancelled),
     }
@@ -492,6 +516,7 @@ fn download_interruption(
     use super::download_control::KernelDownloadControlState as State;
     match state {
         State::Cancelled => DownloadFailure::Cancelled,
+        State::RestartRequested => DownloadFailure::Restart,
         State::PauseRequested | State::Paused | State::Running => DownloadFailure::Paused,
     }
 }
@@ -554,6 +579,7 @@ where
         let reason = match fetch_once(client, url, path, control.clone(), &mut on_progress).await {
             Ok(()) => return Ok(()),
             Err(AttemptFailure::Fatal(reason)) => return Err(DownloadFailure::Failed(reason)),
+            Err(AttemptFailure::Restart) => return Err(DownloadFailure::Restart),
             Err(AttemptFailure::Paused) => return Err(DownloadFailure::Paused),
             Err(AttemptFailure::Cancelled) => return Err(DownloadFailure::Cancelled),
             Err(AttemptFailure::Retryable(reason)) => reason,
@@ -575,7 +601,7 @@ where
 
         let interrupted = tokio::select! {
             _ = tokio::time::sleep(delay) => None,
-            state = control.wait_for_pause_or_cancel() => Some(state),
+            state = control.wait_for_interruption() => Some(state),
         };
         if let Some(state) = interrupted {
             return Err(download_interruption(state));
@@ -601,7 +627,7 @@ where
     }
     // 连接建立期间也监听控制状态；否则慢速或不可达代理会把暂停/取消卡住几十秒。
     let response = tokio::select! {
-        state = control.wait_for_pause_or_cancel() => {
+        state = control.wait_for_interruption() => {
             return Err(attempt_interruption(state).unwrap_or(AttemptFailure::Paused));
         }
         response = timeout(RESPONSE_TIMEOUT, request.send()) => {
@@ -1010,6 +1036,39 @@ mod tests {
         .expect("pause should interrupt the retry backoff promptly");
 
         assert_eq!(result, Err(DownloadFailure::Paused));
+        assert_eq!(std::fs::read(&path).unwrap(), b"0123");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[tokio::test]
+    async fn a_proxy_restart_interrupts_the_download_without_discarding_partial_bytes() {
+        let (url, _) = serve(vec![
+            b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\nConnection: close\r\n\r\n0123".to_vec(),
+        ])
+        .await;
+        let path = temp_file();
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let control = std::sync::Arc::new(KernelDownloadControl::new());
+        let restarting_control = control.clone();
+        let restart_on_retry = move |_: u32, _: &str| restarting_control.restart();
+
+        let result = tokio::time::timeout(
+            Duration::from_millis(500),
+            download_with_retries(
+                &client,
+                &url,
+                &path,
+                3,
+                Duration::from_secs(60),
+                control,
+                |_, _| {},
+                restart_on_retry,
+            ),
+        )
+        .await
+        .expect("proxy restart should interrupt the retry backoff promptly");
+
+        assert_eq!(result, Err(DownloadFailure::Restart));
         assert_eq!(std::fs::read(&path).unwrap(), b"0123");
         let _ = std::fs::remove_file(&path);
     }

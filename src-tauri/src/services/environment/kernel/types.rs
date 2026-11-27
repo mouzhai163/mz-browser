@@ -49,6 +49,26 @@ pub struct KernelPrepareStatusPayload {
 
 pub type KernelStatusEmitter = Arc<dyn Fn(KernelPrepareStatusPayload) + Send + Sync>;
 
+/// 当前运行的数据目录形态。便携版和安装版使用彼此独立的内核目录与安装记录。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum KernelInstallScope {
+    Standard,
+    Portable,
+    Custom,
+}
+
+/// 卸载确认前展示给用户的内核安装位置。路径必须与后端实际卸载时使用的解析逻辑一致。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserKernelInstallInfo {
+    pub kernel_id: String,
+    pub install_dir_name: String,
+    pub install_path: String,
+    pub scope: KernelInstallScope,
+    pub dir_exists: bool,
+}
+
 /// 代理配置结构体
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProxyConfig {

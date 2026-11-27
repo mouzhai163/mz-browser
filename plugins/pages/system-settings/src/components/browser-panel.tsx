@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Cpu, Fingerprint, Globe, History, Loader2, Network, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -19,11 +19,13 @@ import { fingerprintModes, type FingerprintMode } from '../config';
 import { getBrowserSettings, setBrowserSettings } from '../../../../services/store/src';
 import {
   downloadBrowserKernel,
+  getBrowserKernelInstallInfo,
   getKernelDownloadSettings,
   listBrowserKernels,
   uninstallBrowserKernel,
   updateBrowserKernel,
   updateKernelDownloadSettings,
+  type BrowserKernelInstallInfo,
   type BrowserKernelVersion,
   type KernelDownloadProxyMode,
   type KernelDownloadProxyProtocol,
@@ -61,6 +63,10 @@ export const BrowserPanel: React.FC = () => {
     null
   );
   const [uninstallingKernel, setUninstallingKernel] = useState(false);
+  const [kernelInstallInfo, setKernelInstallInfo] = useState<BrowserKernelInstallInfo | null>(null);
+  const [kernelInstallInfoLoading, setKernelInstallInfoLoading] = useState(false);
+  const [kernelInstallInfoError, setKernelInstallInfoError] = useState<string | null>(null);
+  const uninstallInfoRequestRef = useRef(0);
   const [proxyMode, setProxyMode] = useState<KernelDownloadProxyMode>('system');
   const [proxyProtocol, setProxyProtocol] = useState<KernelDownloadProxyProtocol>('http');
   const [proxyHost, setProxyHost] = useState('');
@@ -230,6 +236,37 @@ export const BrowserPanel: React.FC = () => {
     [loadKernels, t]
   );
 
+  const closeKernelUninstallDialog = useCallback(() => {
+    if (uninstallingKernel) return;
+    uninstallInfoRequestRef.current += 1;
+    setKernelPendingUninstall(null);
+    setKernelInstallInfo(null);
+    setKernelInstallInfoError(null);
+    setKernelInstallInfoLoading(false);
+  }, [uninstallingKernel]);
+
+  const handleOpenUninstallKernel = useCallback((kernel: BrowserKernelVersion) => {
+    const requestId = uninstallInfoRequestRef.current + 1;
+    uninstallInfoRequestRef.current = requestId;
+    setKernelPendingUninstall(kernel);
+    setKernelInstallInfo(null);
+    setKernelInstallInfoError(null);
+    setKernelInstallInfoLoading(true);
+    void getBrowserKernelInstallInfo(kernel.kernel_id)
+      .then((info) => {
+        if (uninstallInfoRequestRef.current !== requestId) return;
+        setKernelInstallInfo(info);
+      })
+      .catch((error) => {
+        if (uninstallInfoRequestRef.current !== requestId) return;
+        setKernelInstallInfoError(errorText(error));
+      })
+      .finally(() => {
+        if (uninstallInfoRequestRef.current !== requestId) return;
+        setKernelInstallInfoLoading(false);
+      });
+  }, []);
+
   const handleConfirmUninstallKernel = useCallback(async () => {
     if (!kernelPendingUninstall) return;
     setUninstallingKernel(true);
@@ -237,7 +274,10 @@ export const BrowserPanel: React.FC = () => {
       await uninstallBrowserKernel(kernelPendingUninstall.kernel_id);
       toast.success(t('kernelUninstalled', { name: kernelPendingUninstall.resource_name }));
       setKernels(await loadKernels());
+      uninstallInfoRequestRef.current += 1;
       setKernelPendingUninstall(null);
+      setKernelInstallInfo(null);
+      setKernelInstallInfoError(null);
     } catch (error) {
       toast.error(t('kernelUninstallFailed', { name: kernelPendingUninstall.resource_name }), {
         description: error instanceof Error ? error.message : String(error),
@@ -379,7 +419,7 @@ export const BrowserPanel: React.FC = () => {
                       variant="outline"
                       className="h-7 px-2.5 text-xs text-destructive hover:text-destructive"
                       disabled={updatingKernels.has(kernel.kernel_id) || uninstallingKernel}
-                      onClick={() => setKernelPendingUninstall(kernel)}
+                      onClick={() => handleOpenUninstallKernel(kernel)}
                     >
                       {t('kernelUninstall')}
                     </Button>
@@ -556,7 +596,7 @@ export const BrowserPanel: React.FC = () => {
       <FormattedDialog
         open={kernelPendingUninstall !== null}
         onOpenChange={(open) => {
-          if (!open && !uninstallingKernel) setKernelPendingUninstall(null);
+          if (!open) closeKernelUninstallDialog();
         }}
         minWidth="min-w-[440px]"
         header={{
@@ -571,12 +611,53 @@ export const BrowserPanel: React.FC = () => {
         }}
         contentPadding="p-5"
       >
-        <p className="text-sm text-muted-foreground">{t('kernelUninstallWarning')}</p>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">{t('kernelUninstallWarning')}</p>
+          <div className="rounded-md border border-border bg-muted/40 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-muted-foreground">{t('kernelUninstallScope')}</span>
+              {kernelInstallInfo && (
+                <span
+                  className={`rounded border px-1.5 text-xs leading-5 ${
+                    kernelInstallInfo.scope === 'portable'
+                      ? 'border-primary/30 bg-primary/10 text-primary'
+                      : kernelInstallInfo.scope === 'custom'
+                        ? 'border-warning/30 bg-warning/10 text-warning'
+                        : 'border-success/30 bg-success/10 text-success'
+                  }`}
+                >
+                  {kernelInstallInfo.scope === 'portable'
+                    ? t('kernelInstallScopePortable')
+                    : kernelInstallInfo.scope === 'custom'
+                      ? t('kernelInstallScopeCustom')
+                      : t('kernelInstallScopeStandard')}
+                </span>
+              )}
+            </div>
+            <div className="mt-2">
+              <span className="text-xs text-muted-foreground">{t('kernelUninstallPath')}</span>
+              {kernelInstallInfoLoading ? (
+                <p className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  {t('kernelInstallInfoLoading')}
+                </p>
+              ) : kernelInstallInfoError ? (
+                <p className="mt-1 text-xs text-destructive">
+                  {t('kernelInstallInfoFailed')}：{kernelInstallInfoError}
+                </p>
+              ) : (
+                <p className="mt-1 break-all rounded bg-background/70 px-2 py-1.5 font-mono text-xs text-foreground">
+                  {kernelInstallInfo?.installPath ?? '—'}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
         <FormattedDialogFooter>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setKernelPendingUninstall(null)}
+            onClick={closeKernelUninstallDialog}
             disabled={uninstallingKernel}
           >
             <X className="h-4 w-4 mr-1.5" />
@@ -586,7 +667,7 @@ export const BrowserPanel: React.FC = () => {
             variant="destructive"
             size="sm"
             onClick={() => void handleConfirmUninstallKernel()}
-            disabled={uninstallingKernel}
+            disabled={uninstallingKernel || kernelInstallInfoLoading || !kernelInstallInfo}
           >
             {uninstallingKernel ? (
               <>

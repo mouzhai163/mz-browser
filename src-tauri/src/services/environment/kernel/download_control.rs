@@ -10,6 +10,8 @@ use tokio::sync::{Mutex, watch};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KernelDownloadControlState {
     Running,
+    /// 代理配置已更新：尽快断开当前连接，但保留分片并用新配置重连。
+    RestartRequested,
     PauseRequested,
     Paused,
     Cancelled,
@@ -36,8 +38,29 @@ impl KernelDownloadControl {
 
     pub fn pause(&self) {
         self.sender.send_modify(|state| {
-            if matches!(*state, KernelDownloadControlState::Running) {
+            if matches!(
+                *state,
+                KernelDownloadControlState::Running | KernelDownloadControlState::RestartRequested
+            ) {
                 *state = KernelDownloadControlState::PauseRequested;
+            }
+        });
+    }
+
+    /// 请求下载尽快断开并用最新配置重连。只在运行中有意义；暂停中的下载恢复时本来就会重读配置。
+    pub fn restart(&self) {
+        self.sender.send_modify(|state| {
+            if matches!(*state, KernelDownloadControlState::Running) {
+                *state = KernelDownloadControlState::RestartRequested;
+            }
+        });
+    }
+
+    /// 外层下载循环已经观察到重连请求，恢复 Running 后继续下一轮循环。
+    pub fn acknowledge_restart(&self) {
+        self.sender.send_modify(|state| {
+            if matches!(*state, KernelDownloadControlState::RestartRequested) {
+                *state = KernelDownloadControlState::Running;
             }
         });
     }
@@ -65,14 +88,16 @@ impl KernelDownloadControl {
         self.sender.send_replace(KernelDownloadControlState::Cancelled);
     }
 
-    /// 等到用户请求暂停或取消。用于重试退避等“下载仍在跑但没有在读流”的位置。
-    pub async fn wait_for_pause_or_cancel(&self) -> KernelDownloadControlState {
+    /// 等到需要中断当前网络活动的控制请求。用于重试退避等“下载仍在跑但没有在读流”的位置。
+    pub async fn wait_for_interruption(&self) -> KernelDownloadControlState {
         let mut receiver = self.subscribe();
         loop {
             let state = *receiver.borrow();
             if matches!(
                 state,
-                KernelDownloadControlState::PauseRequested | KernelDownloadControlState::Cancelled
+                KernelDownloadControlState::RestartRequested
+                    | KernelDownloadControlState::PauseRequested
+                    | KernelDownloadControlState::Cancelled
             ) {
                 return state;
             }
@@ -88,7 +113,9 @@ impl KernelDownloadControl {
         loop {
             let state = *receiver.borrow();
             match state {
-                KernelDownloadControlState::Running | KernelDownloadControlState::Cancelled => {
+                KernelDownloadControlState::Running
+                | KernelDownloadControlState::RestartRequested
+                | KernelDownloadControlState::Cancelled => {
                     return state;
                 }
                 KernelDownloadControlState::PauseRequested | KernelDownloadControlState::Paused => {
@@ -135,6 +162,23 @@ async fn control_for(kernel_value: &str) -> Option<Arc<KernelDownloadControl>> {
 /// 是否还有已注册、尚未结束的下载控制句柄。暂停中的下载仍算未结束。
 pub async fn has_kernel_download_control(kernel_value: &str) -> bool {
     control_for(kernel_value).await.is_some()
+}
+
+/// 让所有已注册、尚未结束的下载尽快使用最新代理配置重连。返回实际触发重连的运行中任务数。
+pub async fn restart_all_kernel_downloads() -> usize {
+    let controls: Vec<Arc<KernelDownloadControl>> = {
+        let guard = KERNEL_DOWNLOAD_CONTROLS.lock().await;
+        guard.values().cloned().collect()
+    };
+    let mut restarted = 0;
+    for control in controls {
+        let was_running = matches!(control.current(), KernelDownloadControlState::Running);
+        control.restart();
+        if was_running && matches!(control.current(), KernelDownloadControlState::RestartRequested) {
+            restarted += 1;
+        }
+    }
+    restarted
 }
 
 pub async fn pause_kernel_download(kernel_value: &str) -> Result<(), String> {
@@ -192,7 +236,7 @@ mod tests {
     async fn pause_interrupts_retry_backoff_waiters() {
         let control = Arc::new(KernelDownloadControl::new());
         let waiting_control = control.clone();
-        let waiter = tokio::spawn(async move { waiting_control.wait_for_pause_or_cancel().await });
+        let waiter = tokio::spawn(async move { waiting_control.wait_for_interruption().await });
 
         tokio::time::sleep(Duration::from_millis(10)).await;
         control.pause();
@@ -220,5 +264,24 @@ mod tests {
             .expect("resume should wake the waiter")
             .expect("waiter should join");
         assert_eq!(state, KernelDownloadControlState::Running);
+    }
+
+    #[tokio::test]
+    async fn restart_interrupts_a_running_download_and_can_be_acknowledged() {
+        let control = Arc::new(KernelDownloadControl::new());
+        let waiting_control = control.clone();
+        let waiter = tokio::spawn(async move { waiting_control.wait_for_interruption().await });
+
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        control.restart();
+
+        let state = tokio::time::timeout(Duration::from_millis(200), waiter)
+            .await
+            .expect("restart should wake the waiter")
+            .expect("waiter should join");
+        assert_eq!(state, KernelDownloadControlState::RestartRequested);
+
+        control.acknowledge_restart();
+        assert_eq!(control.current(), KernelDownloadControlState::Running);
     }
 }

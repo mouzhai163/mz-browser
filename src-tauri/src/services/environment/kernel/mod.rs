@@ -25,13 +25,22 @@ pub mod verifier;
 
 // 重新导出常用类型
 pub use types::{
-    AccountInfo, BatchLaunchRequest, BatchLaunchResult, CdpEndpointResponse, CookieGroup,
-    ExtensionInfo, KernelDownloadEventState, KernelPrepareStatusPayload, KernelStatusEmitter, ProxyConfig, RpaTabCloseResult,
-    RpaTabInfo, RpaTabSelection, RpaTabsSnapshot,
+    AccountInfo, BatchLaunchRequest, BatchLaunchResult, BrowserKernelInstallInfo, CdpEndpointResponse,
+    CookieGroup, ExtensionInfo, KernelDownloadEventState, KernelInstallScope, KernelPrepareStatusPayload,
+    KernelStatusEmitter, ProxyConfig, RpaTabCloseResult, RpaTabInfo, RpaTabSelection, RpaTabsSnapshot,
 };
 
 /// 内核服务
 pub struct KernelService;
+
+fn resolve_kernel_install_dir_for(
+    app: &tauri::AppHandle,
+    profiles_path: &str,
+    install_dir_name: &str,
+) -> Result<std::path::PathBuf> {
+    let base = utils::resolve_profiles_base(app, profiles_path)?;
+    utils::resolve_kernel_install_dir(&base, install_dir_name)
+}
 
 async fn record_ready_installation(
     app: &tauri::AppHandle,
@@ -123,6 +132,36 @@ impl KernelService {
         Ok(())
     }
 
+    /// 卸载确认前查询内核的实际安装路径和当前数据目录形态。
+    /// 这里必须使用与 uninstall_kernel 相同的路径解析链，避免 UI 显示的位置和实际删除的位置不一致。
+    pub async fn get_kernel_install_info(
+        app: tauri::AppHandle,
+        kernel_id: String,
+        profiles_path: String,
+    ) -> Result<BrowserKernelInstallInfo> {
+        let kernel_id = kernel_id.trim().to_string();
+        let context = app.state::<business::svc_ctx::SvcCtx>();
+        let kernel = business::services::browser_kernels::get_browser_kernel(&context.db, &kernel_id)
+            .await?
+            .ok_or("内核不存在或已下线")?;
+        let kernel_dir =
+            resolve_kernel_install_dir_for(&app, &profiles_path, &kernel.install_dir_name)?;
+        let scope = if crate::core::paths::PathManager::is_portable() {
+            KernelInstallScope::Portable
+        } else if std::env::var_os("MZ_ROOT_DIR").is_some() {
+            KernelInstallScope::Custom
+        } else {
+            KernelInstallScope::Standard
+        };
+        Ok(BrowserKernelInstallInfo {
+            kernel_id,
+            install_dir_name: kernel.install_dir_name,
+            install_path: kernel_dir.to_string_lossy().to_string(),
+            scope,
+            dir_exists: kernel_dir.is_dir(),
+        })
+    }
+
     /// 卸载/删除内核：删除安装目录、残留的同名下载缓存以及安装记录。
     /// 环境绑定本身保留；下次启动这些环境时会按绑定重新下载。
     pub async fn uninstall_kernel(
@@ -148,8 +187,7 @@ impl KernelService {
         }
 
         let _prepare_guard = state::acquire_kernel_prepare_lock(install_dir_name).await;
-        let base = utils::resolve_profiles_base(&app, &profiles_path)?;
-        let kernel_dir = utils::resolve_kernel_install_dir(&base, install_dir_name)?;
+        let kernel_dir = resolve_kernel_install_dir_for(&app, &profiles_path, install_dir_name)?;
         if kernel_dir.exists() {
             if !kernel_dir.is_dir() {
                 return Err(crate::core::error::Error::KernelUninstallFailed(format!(
